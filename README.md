@@ -2,7 +2,7 @@
 **Hyper-local Visual Search for Physical Retail**
 
 ## Team
-* Your Name
+* Tatiana Nohra
 * Marc Nawar
 
 ## Overview
