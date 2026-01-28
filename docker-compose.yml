@@ -1,1 +1,45 @@
 # LOCUS: docker-compose.yml
+version: '3.8'
+
+services:
+  # 1. The Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # 2. The Gateway (External Endpoint)
+  gateway:
+    build: ./gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      - visual_engine
+      - ranking_engine
+    environment:
+      - VISUAL_HOST=http://visual_engine:8001
+      - RANKING_HOST=http://ranking_engine:8002
+      - QDRANT_HOST=http://qdrant:6333
+    volumes:
+      - ./gateway:/app
+
+  # 3. Visual Engine (Internal Endpoint 1)
+  visual_engine:
+    build: ./visual_engine
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./visual_engine:/app
+
+  # 4. Ranking Engine (Internal Endpoint 2)
+  ranking_engine:
+    build: ./ranking_engine
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./ranking_engine:/app
+
+volumes:
+  qdrant_data:

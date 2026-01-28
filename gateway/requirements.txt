@@ -1,1 +1,5 @@
 # LOCUS: requirements.txt
+fastapi
+uvicorn
+requests
+python-dotenv
