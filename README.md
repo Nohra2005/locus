@@ -1,2 +1,9 @@
-# locus
-MLOps service that enables the user to scan a piece of clothing/product from a mall, and Locus will return similar items with their location in the specific shopping center
+# LOCUS 📍
+**Hyper-local Visual Search for Physical Retail**
+
+## Team
+* Your Name
+* Marc Nawar
+
+## Overview
+Locus bridges the gap between online visual search and physical store inventory.
