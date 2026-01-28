@@ -1,1 +1,9 @@
 # LOCUS: requirements.txt
+fastapi
+uvicorn
+python-multipart
+torch
+transformers
+pillow
+numpy
+requests
