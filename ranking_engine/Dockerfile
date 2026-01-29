@@ -1,10 +1,13 @@
-# LOCUS: Dockerfile
 FROM python:3.9-slim
 
 WORKDIR /app
 
-# We will add requirements later
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the application code
 COPY . .
 
-# Simple command to keep it alive for now
-CMD ["python", "-c", "import time; print('Ranking Engine Online'); time.sleep(3600)"]
+# Start the Ranking Engine on port 8002
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]

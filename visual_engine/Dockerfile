@@ -1,10 +1,20 @@
-# LOCUS: Dockerfile
 FROM python:3.9-slim
 
 WORKDIR /app
 
-# We will add requirements later
+# Install system dependencies for image processing
+# Switched 'libgl1-mesa-glx' to 'libgl1' for newer Debian versions
+RUN apt-get update && apt-get install -y \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the application code
 COPY . .
 
-# Simple command to keep it alive for now
-CMD ["python", "-c", "import time; print('Visual Engine Online'); time.sleep(3600)"]
+# Start the Visual Engine on port 8001
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
