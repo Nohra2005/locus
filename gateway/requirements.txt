@@ -1,5 +1,6 @@
-# LOCUS: requirements.txt
 fastapi
 uvicorn
 requests
 python-dotenv
+python-multipart
+qdrant-client
