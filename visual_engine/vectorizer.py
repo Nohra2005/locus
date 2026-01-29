@@ -7,8 +7,8 @@ class LocusVisualizer:
     def __init__(self):
         print("⏳ Loading CLIP model... (this may take a moment)")
         # Load the pre-trained model and processor
-        self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        self.model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
+        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
         print("✅ CLIP model loaded successfully!")
 
     def get_vector(self, image_path):

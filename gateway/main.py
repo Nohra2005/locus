@@ -27,7 +27,7 @@ def startup_event():
     if not client.collection_exists(collection_name=COLLECTION_NAME):
         client.create_collection(
             collection_name=COLLECTION_NAME,
-            vectors_config=VectorParams(size=512, distance=Distance.COSINE),
+            vectors_config=VectorParams(size=768, distance=Distance.COSINE),
         )
         print(f"Created collection: {COLLECTION_NAME}")
 
