@@ -3,4 +3,4 @@ uvicorn
 requests
 python-dotenv
 python-multipart
-qdrant-client
+qdrant-client==1.10.0
