@@ -1,0 +1,9 @@
+{
+  "ABC Achrafieh": {
+    "Zara": {"level": "L2", "wing": "North"},
+    "Bershka": {"level": "L1", "wing": "East"},
+    "Mike Sport": {"level": "L3", "wing": "Sports Zone"},
+    "Louis Vuitton": {"level": "L0", "wing": "Luxury"},
+    "Virgin": {"level": "L4", "wing": "Tech"}
+  }
+}

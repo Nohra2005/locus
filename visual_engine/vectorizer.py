@@ -8,8 +8,8 @@ import io
 class LocusVisualizer:
     def __init__(self):
         print("⏳ Loading CLIP and RemBG models...")
-        self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
+        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
         print("✅ Models loaded successfully!")
 
     def get_vector(self, image_path):
