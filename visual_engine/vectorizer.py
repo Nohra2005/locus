@@ -2,48 +2,39 @@
 import torch
 from PIL import Image
 from transformers import CLIPProcessor, CLIPModel
+from rembg import remove
+import io
 
 class LocusVisualizer:
     def __init__(self):
-        print("⏳ Loading CLIP model... (this may take a moment)")
-        # Load the pre-trained model and processor
-        self.model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
-        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-large-patch14")
-        print("✅ CLIP model loaded successfully!")
+        print("⏳ Loading CLIP and RemBG models...")
+        self.model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+        self.processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+        print("✅ Models loaded successfully!")
 
     def get_vector(self, image_path):
         """
-        Takes an image file path, processes it, and returns a vector (list of floats).
+        Removes background and then generates a 512-dim vector.
         """
         try:
             # 1. Open the image
-            image = Image.open(image_path)
+            input_image = Image.open(image_path).convert("RGBA")
 
-            # 2. Process the image (resize, normalize) for the model
-            inputs = self.processor(images=image, return_tensors="pt")
+            # 2. THE FIX: Strip the background (the noisy street, cars, etc.)
+            # This makes the non-dress areas transparent
+            output_image = remove(input_image)
 
-            # 3. Generate the "embedding" (the vector)
+            # 3. Create a white background (CLIP performs better on white than transparency)
+            white_bg = Image.new("RGB", output_image.size, (255, 255, 255))
+            white_bg.paste(output_image, mask=output_image.split()[3]) 
+
+            # 4. Generate the vector from the CLEANED image
+            inputs = self.processor(images=white_bg, return_tensors="pt")
             with torch.no_grad():
                 outputs = self.model.get_image_features(**inputs)
 
-            # 4. Convert to a simple list of numbers
-            # outputs[0] grabs the first (and only) vector
-            vector = outputs[0].tolist()
-            
-            return vector
+            return outputs[0].tolist()
             
         except Exception as e:
-            print(f"❌ Error vectorizing image: {e}")
+            print(f"❌ Error during preprocessing/vectorization: {e}")
             return None
-
-# Simple test to run if this file is executed directly
-if __name__ == "__main__":
-    # Create a dummy image just to test the model
-    img = Image.new('RGB', (100, 100), color = 'red')
-    img.save("test_image.jpg")
-    
-    viz = LocusVisualizer()
-    vector = viz.get_vector("test_image.jpg")
-    
-    print(f"Vector generated with length: {len(vector)}")
-    print(f"First 5 numbers: {vector[:5]}")

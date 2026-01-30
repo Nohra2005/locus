@@ -31,8 +31,17 @@ services:
     ports:
       - "8001:8001"
     volumes:
+      # Map only the visual_engine folder to /app inside the container
       - ./visual_engine:/app
-
+      # This maps your local model cache to avoid redownloading CLIP
+      - ${USERPROFILE}/.cache/huggingface:/root/.cache/huggingface
+    environment:
+      - TRANSFORMERS_CACHE=/root/.cache/huggingface
+    # This helps the container find the internet for the first-time rembg download
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+      
   # 4. Ranking Engine (Internal Endpoint 2)
   ranking_engine:
     build: ./ranking_engine

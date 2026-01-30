@@ -1,9 +1,10 @@
-# LOCUS: requirements.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.6.0+cpu
+torchvision>=0.21.0+cpu
+transformers>=4.48.0
+pillow
+rembg
+onnxruntime
 fastapi
 uvicorn
 python-multipart
-torch
-transformers
-pillow
-numpy
-requests
