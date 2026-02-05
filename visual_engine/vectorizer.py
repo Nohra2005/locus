@@ -85,7 +85,7 @@ class LocusVisualizer:
             confidence_score = values[0].item()
             best_label = self.labels[indices[0]]
 
-            # STRICT THRESHOLD: 35%
+            # STRICT THRESHOLD: 45%
             # Rejects inputs that don't look like *any* of our categories
             if confidence_score < 0.45: 
                 print(f"⚠️ Edge Case: Ambiguous Object. Best guess '{best_label}' was only {confidence_score:.2f} confident.")
