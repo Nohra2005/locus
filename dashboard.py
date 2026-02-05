@@ -4,7 +4,7 @@ from PIL import Image
 import io
 import base64
 import os
-from streamlit_cropper import st_cropper
+from streamlit_cropper import st_cropper 
 
 st.set_page_config(layout="wide", page_title="Locus Lens")
 
@@ -17,28 +17,20 @@ uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg
 if uploaded_file:
     img = Image.open(uploaded_file)
     
-    # --- CROPPER SECTION ---
+    # [PARTNER LOGIC] The Cropping Tool
     st.subheader("1. Select the Item")
-    # This draws the box on the image
     cropped_img = st_cropper(img, realtime_update=True, box_color='#FF0000', aspect_ratio=None)
-    
     st.caption("Adjust the red box to frame the item perfectly.")
 
-    # --- SEARCH BUTTON ---
+    # Search Button
     if st.button("🔍 Search This Selection", type="primary"):
         
-        # Prepare the cropped image to send to backend
+        # Convert crop to bytes
         img_byte_arr = io.BytesIO()
         cropped_img.save(img_byte_arr, format='PNG')
         img_bytes = img_byte_arr.getvalue()
 
-        # --- RESULTS SECTION ---
         st.divider()
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("Your Selection")
-            st.image(cropped_img, caption="What you selected", width=300)
 
         with st.spinner("🚀 AI is analyzing your selection..."):
             try:
@@ -50,18 +42,29 @@ if uploaded_file:
                     data = response.json()
                     matches = data.get("matches", [])
                     debug_image_b64 = data.get("debug_image")
+                    
+                    # [YOUR LOGIC] The Category Banner
+                    category = data.get("detected_category")
+                    if category:
+                        st.success(f"👁️ AI Identified: **{category.upper()}** (Filtering active)")
+                    else:
+                        st.warning("👁️ AI Identified: **Unsure** (Showing all categories)")
 
-                    # Show AI Vision (The Double Check)
+                    # [PARTNER LOGIC] Show AI Vision
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.subheader("Your Selection")
+                        st.image(cropped_img, caption="Cropped Input", width=300)
+                    
                     with col2:
-                        st.subheader("AI Vision (Background Removed)")
+                        st.subheader("AI Vision")
                         if debug_image_b64:
                             image_data = base64.b64decode(debug_image_b64)
                             ai_image = Image.open(io.BytesIO(image_data))
-                            st.image(ai_image, caption="What the AI actually saw", width=300)
-                    
-                    # Show Matches
+                            st.image(ai_image, caption="Background Removed", width=300)
+
+                    # Results Grid
                     st.header(f"🎯 Top Matches ({len(matches)})")
-                    
                     if matches:
                         cols = st.columns(5)
                         for idx, item in enumerate(matches):
@@ -69,18 +72,17 @@ if uploaded_file:
                                 local_path = os.path.join("demo_images", item['image_filename'])
                                 if os.path.exists(local_path):
                                     st.image(local_path, use_container_width=True)
-                                    if idx == 0:
-                                        st.markdown(f"**🥇 {item['name']}**")
-                                    else:
-                                        st.markdown(f"**{item['name']}**")
                                     
-                                    # Color Score
+                                    # Info
+                                    if idx == 0: st.markdown(f"**🥇 {item['name']}**")
+                                    else: st.markdown(f"**{item['name']}**")
+                                    
                                     score = item['score']
                                     color = "green" if score > 0.8 else "orange"
                                     st.markdown(f":{color}[Score: {score:.3f}]")
                                     st.caption(f"{item['store']} • {item['level']}")
                                 else:
-                                    st.error(f"Missing file: {item['image_filename']}")
+                                    st.error(f"Missing: {item['image_filename']}")
                     else:
                         st.warning("No matches found.")
                 else:
