@@ -1,59 +1,90 @@
 import streamlit as st
 import requests
 from PIL import Image
+import io
+import base64
 import os
+from streamlit_cropper import st_cropper
 
-st.set_page_config(layout="wide")
-st.title("LOCUS: Mall Visual Search Debugger")
+st.set_page_config(layout="wide", page_title="Locus Lens")
 
-# 1. Image Upload
-uploaded_file = st.file_uploader("Upload a photo to search...", type=["jpg", "png", "jpeg"])
+st.title("🔎 Locus Lens: Select & Search")
+st.markdown("Upload a photo, **draw a box** around the item you want, and hit Search.")
 
-if uploaded_file is not None:
-    # Display the query image
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        st.image(uploaded_file, caption="Query Image", use_container_width=True) # <--- FIXED
+# 1. Upload
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
+
+if uploaded_file:
+    img = Image.open(uploaded_file)
     
-    # 2. Send to API
-    with st.spinner("Analyzing visuals & Searching Inventory..."):
-        files = {"file": uploaded_file.getvalue()}
-        try:
-            # Note: We use the Gateway URL directly
-            response = requests.post("http://localhost:8000/search", files=files)
-            # We look for "matches" because that is what your API returns now
-            results = response.json().get("matches", [])
-        except Exception as e:
-            st.error(f"Connection Error: {e}")
-            results = []
+    # --- CROPPER SECTION ---
+    st.subheader("1. Select the Item")
+    # This draws the box on the image
+    cropped_img = st_cropper(img, realtime_update=True, box_color='#FF0000', aspect_ratio=None)
+    
+    st.caption("Adjust the red box to frame the item perfectly.")
 
-    # 3. Display Results in a Grid
-    if not results:
-        st.warning("Found 0 Matches. (Check if your Docker containers are running)")
-    else:
-        st.subheader(f"Found {len(results)} Matches")
+    # --- SEARCH BUTTON ---
+    if st.button("🔍 Search This Selection", type="primary"):
         
-        # Create rows of 4 images
-        cols = st.columns(4)
-        for idx, item in enumerate(results):
-            # OPTIONAL: Hide results that are less than 75% similar
-            # if item['score'] < 0.75: continue 
+        # Prepare the cropped image to send to backend
+        img_byte_arr = io.BytesIO()
+        cropped_img.save(img_byte_arr, format='PNG')
+        img_bytes = img_byte_arr.getvalue()
 
-            with cols[idx % 4]:
-                # Construct the path to the local image
-                # We assume the images are in the 'demo_images' folder relative to this script
-                local_image_path = os.path.join("demo_images", item['image_filename'])
+        # --- RESULTS SECTION ---
+        st.divider()
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Your Selection")
+            st.image(cropped_img, caption="What you selected", width=300)
+
+        with st.spinner("🚀 AI is analyzing your selection..."):
+            try:
+                # Send the CROPPED image to the backend
+                files = {"file": ("crop.png", img_bytes, "image/png")}
+                response = requests.post("http://localhost:8000/search", files=files)
                 
-                try:
-                    # Check if file exists first to avoid crashing
-                    if os.path.exists(local_image_path):
-                        img = Image.open(local_image_path)
-                        st.image(img, use_container_width=True) # <--- FIXED
-                        
-                        # Display Metadata clearly
-                        st.markdown(f"**{item['store']}** ({item['level']})")
-                        st.caption(f"Score: {item['score']:.2f} | {item['name']}")
+                if response.status_code == 200:
+                    data = response.json()
+                    matches = data.get("matches", [])
+                    debug_image_b64 = data.get("debug_image")
+
+                    # Show AI Vision (The Double Check)
+                    with col2:
+                        st.subheader("AI Vision (Background Removed)")
+                        if debug_image_b64:
+                            image_data = base64.b64decode(debug_image_b64)
+                            ai_image = Image.open(io.BytesIO(image_data))
+                            st.image(ai_image, caption="What the AI actually saw", width=300)
+                    
+                    # Show Matches
+                    st.header(f"🎯 Top Matches ({len(matches)})")
+                    
+                    if matches:
+                        cols = st.columns(5)
+                        for idx, item in enumerate(matches):
+                            with cols[idx % 5]:
+                                local_path = os.path.join("demo_images", item['image_filename'])
+                                if os.path.exists(local_path):
+                                    st.image(local_path, use_container_width=True)
+                                    if idx == 0:
+                                        st.markdown(f"**🥇 {item['name']}**")
+                                    else:
+                                        st.markdown(f"**{item['name']}**")
+                                    
+                                    # Color Score
+                                    score = item['score']
+                                    color = "green" if score > 0.8 else "orange"
+                                    st.markdown(f":{color}[Score: {score:.3f}]")
+                                    st.caption(f"{item['store']} • {item['level']}")
+                                else:
+                                    st.error(f"Missing file: {item['image_filename']}")
                     else:
-                        st.error(f"Image not found: {item['image_filename']}")
-                except Exception as e:
-                    st.warning(f"Could not load image: {e}")
+                        st.warning("No matches found.")
+                else:
+                    st.error(f"Backend Error: {response.status_code}")
+
+            except Exception as e:
+                st.error(f"Connection Error: {e}")

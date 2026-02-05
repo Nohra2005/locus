@@ -103,28 +103,24 @@ async def add_item(
 
 @app.post("/search")
 async def search(file: UploadFile = File(...)):
-    """
-    Vectorizes query and returns Top 25 matches with Location info.
-    """
-    # --- Step 1: Vectorize Query (Async) ---
+    # 1. Vectorize Query (and get the debug image)
     async with httpx.AsyncClient() as http_client:
         files = {"file": (file.filename, await file.read(), file.content_type)}
-        try:
-            vis_response = await http_client.post(VISUAL_URL, files=files, timeout=30.0)
-            vis_response.raise_for_status()
-            query_vector = vis_response.json().get("vector")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Visual Engine Error: {e}")
+        # Increase timeout because we are sending back image data
+        vis_response = await http_client.post(VISUAL_URL, files=files, timeout=40.0)
+        
+        data = vis_response.json()
+        query_vector = data.get("vector")
+        processed_image = data.get("processed_image") # <--- Capture it
 
-    # --- Step 2: Search Qdrant ---
-    # We now ask for limit=25
+    # 2. Search Qdrant
     search_result = client.search(
         collection_name=COLLECTION_NAME,
         query_vector=query_vector,
-        limit=10
+        limit=25
     )
     
-    # --- Step 3: Format for Frontend/PWA ---
+    # 3. Format matches
     matches = []
     for hit in search_result:
         matches.append({
@@ -132,12 +128,12 @@ async def search(file: UploadFile = File(...)):
             "store": hit.payload.get("store_name", "Unknown"),
             "level": hit.payload.get("floor_level", "Unknown"),
             "mall": hit.payload.get("mall_name", "Unknown"),
-            "score": round(hit.score, 3),
+            "score": round(hit.score, 3), 
             "image_filename": hit.payload.get("filename")
         })
         
     return {
-        "query_image": file.filename,
         "count": len(matches),
-        "matches": matches
+        "matches": matches,
+        "debug_image": processed_image # <--- Send to Frontend
     }
