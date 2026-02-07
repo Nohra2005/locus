@@ -60,10 +60,15 @@ To design and develop a clothing recommendation system that returns similar item
 
 ## 7. Assumptions & Risks
 * **Assumption:** User photos will have reasonable lighting and resolution.
-* **Risk:** Background removal might fail on white-on-white images.
-* **Mitigation:** Implemented alpha-channel check to detect "ghost" images.
-
----
-**Questions & Notes:**
-* **Feedback Loop:** When the system fails to detect category or wrongly classifies, user can correct the ML, which will be used for feedback.
-* **Inventory Tracking:** How will we be able to keep track of inventory? (To be determined via shop owner dashboard integration).
+* **Risk 1: Background Removal Failure.**
+    * **Issue:** `rembg` might fail on white-on-white images or complex textures.
+    * **Mitigation:** Implemented alpha-channel check to detect "ghost" images and reject them early.
+* **Risk 2: Inventory Desynchronization (Ghost Stock).**
+    * **Issue:** Physical sales in stores may not be immediately reflected in the digital database, leading users to drive to a store for an item that was just sold.
+    * **Mitigation:**
+        * **Timestamp Transparency:** Display "Last Updated: [Date]" prominently on every item card.
+        * **"Call to Reserve" CTA:** A primary button connecting the user directly to the shop's Phone/WhatsApp to confirm availability before driving.
+        * **Weekly Refresh Model:** Shop owners are required to upload a fresh Excel/CSV export weekly rather than real-time syncing.
+* **Risk 3: Model Misclassification.**
+    * **Issue:** The AI might wrongly classify a specific item (e.g., labeling a "Skirt" as a "Dress").
+    * **Mitigation (Feedback Loop):** A "Report/Correct" feature allows users to flag incorrect categories. These corrections are stored and used to fine-tune the model or exclude specific items from future search results.
