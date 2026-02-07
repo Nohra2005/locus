@@ -1,119 +1,69 @@
-# 📍 Locus: Intelligent Visual Search Engine
+# Project Scope Statement: Locus Visual Search Engine
 
-> **Bridging the gap between digital inspiration and local availability.**
+## 1. Problem Statement (The "Why")
+**Current Issue:**
+Online shopping has become a major part of today’s fashion industry. The main inconvenience is clients buy without trying/seeing the product and have to wait for shipping. While many shoppers really enjoy going out to the mall, physical shopping is unarguably draining, inefficient and often unfruitful: shoppers can spend countless hours looking for a specific product they have in mind or they have found on Pinterest/Instagram but have no idea where to find it. Some countries like Lebanon lack a centralized marketplace where people can easily order from a wide variety of products. This emphasizes the need for Lebanese shoppers to physically go out to malls.
 
-**Locus** is a domain-specific visual search engine designed to retrieve fashion inventory based on visual similarity. It addresses the "Inspiration-Availability Gap" in Lebanon by allowing users to upload photos of clothing and instantly find the closest matching items available in local physical stores.
+**Impact:**
+Locus merges best of both worlds: convenience and precision of online shopping with the product experience of physical shopping.
 
----
+## 2. Project Objective (The "What")
+To design and develop a clothing recommendation system that returns similar items ranked by similarity and nearness that allows users to upload an image and retrieve visually similar inventory items with a focus on accuracy and speed.
 
-## 📖 Table of Contents
-- [Problem Statement](#-problem-statement)
-- [Project Objective](#-project-objective)
-- [Key Features](#-key-features)
-- [System Architecture](#-system-architecture)
-- [Technical Constraints](#-technical-constraints)
-- [Success Metrics](#-success-metrics)
-- [Roadmap & Future Work](#-roadmap--future-work)
+## 3. In-Scope (Features & Functionalities)
 
----
+### Core Functionality (The "What")
+* **Visual Search Pipeline:** End-to-end processing of user uploads, including automatic background removal, object isolation (ROI Normalization), and vectorization.
+* **Multi-View Product Indexing:** Indexes inventory items as multi-vector "folders" (Front, Back, Lifestyle) to ensure accurate retrieval regardless of the input angle.
+* **Inventory Localization:** Maps visual search results to specific physical store locations to solve the "shipping delay" pain point.
+* **Smart Categorization:** Automatically identifies clothing categories (e.g., "Dress", "Coat") to filter search results.
+* **User Authentication:** To keep track of search/purchase history for recommendation engines.
 
-## 🚩 Problem Statement
+### Algorithmic Capabilities (The "How")
+* **Hybrid Retrieval Engine:** Combines Vector Similarity (Visual Match) with Hard Filters (Category, Location, Price) for high-precision results.
+* **Adversarial Input Robustness:**
+    * Rejects empty/ghost images where background removal failed.
+    * Filters out predictions with <45% confidence.
 
-### The Context
-Online shopping dominates the global fashion industry, but the experience remains fragmented for consumers in Lebanon.
-1.  **Logistical Barriers:** International shipping is often slow, expensive, or unavailable.
-2.  **The "Try-On" Risk:** Users cannot verify fit, fabric quality, or sizing before purchase.
-3.  **Inefficient Physical Retail:** While local malls possess the inventory, finding a specific item seen on social media (Pinterest/Instagram) requires hours of fruitless physical searching.
+### Recommendation & Personalization Engines
+* **"User Persona" History Recommendations:**
+    * **Concept:** Builds a dynamic "Taste Profile" for each user based on their interaction history.
+    * **Mechanism:** The system cycles through items in a user's history to generate recommendations (Stochastic Sampling).
+* **"Vibe-Check" Outfit Completion:**
+    * **Concept:** Suggests complementary items (e.g., accessories) that match the aesthetic of the current search.
+    * **Mechanism:** Uses Zero-Shot Style Anchoring (via CLIP) to classify the search item's style (e.g., "Bohemian", "Minimalist"). The system then queries the inventory for complementary categories (e.g., Shoes) that share that specific style tag, ensuring a coherent outfit suggestion.
 
-### The Impact
-Shoppers are trapped between "unobtainable inspiration" online and "unsearchable inventory" locally. Locus merges the convenience of online search with the instant gratification and reliability of physical retail.
+### User Interface
+* **Visual Dashboard:** A responsive web interface featuring:
+    * **Smart Crop Tool:** Allows users to manually adjust the focus area.
+    * **AI Vision Debugger:** Transparent view of the background-removed input.
+    * **Local Availability Map:** Displays store locations for matched items.
+    * **Recommendation Engine:** Recommends based on search history.
+* **Dashboard for Shop Owners:** To upload their inventory.
 
----
+## 4. Out-of-Scope (The "No-Go" Zone)
+* Multi-object detection (detecting a hat and shoes simultaneously).
+* Mobile app development (Web only).
+* Integration with live payment gateways.
+* A system that can 100% detect the category of random inserted objects and affirm with certainty that it is not a piece of clothing (not crucial).
 
-## 🎯 Project Objective
+## 5. Technical Constraints & Requirements
+* **Performance:** Search latency can be compromised but to a certain extent. The model should be able to find similar looking items and especially “exact match”. We need more accuracy than latency.
+* **Infrastructure:** Gateway is for uploading the image, visual engines prepare the image and detect the category, and the ranking search through the quadrant database for the best match.
+* **Data:** Retailers catalogue.
+* **Hardware:** Must run on standard CPU architecture (no GPU requirement).
 
-To design and develop a **Hybrid Visual Recommendation System** that ranks inventory by **Visual Similarity** and **Geographic Nearness**. The system prioritizes **Accuracy over Speed**, ensuring that users find the exact "look" they want within a drivable distance.
+## 6. Success Metrics (KPIs)
+* **Accuracy:** System correctly categorize items in precise groups and return accurate similar items. At least 8 pictures over 10 are similar to what I am looking for.
+* **Robustness:** System successfully rejects low confidence predictions (with 45% resemblance and less).
+* **Speed:** End-to-end processing must take maximum 15s.
 
----
-
-## ⚡ Key Features
-
-### 1. Core Visual Pipeline
-* **Automatic Pre-Processing:** Utilizes `rembg` (U2Net) to remove background noise and isolate the garment.
-* **Smart ROI Normalization:** Automatically crops the image to the object's bounding box to improve embedding accuracy.
-* **Multi-View Indexing (The "Digital Twin"):** Products are indexed as "folders" containing multiple angles (Front, Back, Lifestyle). If a user uploads a photo of the *back* of a shirt, Locus matches it to the "Back View" vector of the product rather than failing on the "Front View."
-
-### 2. Algorithmic Capabilities
-* **Hybrid Retrieval Engine:** Combines **Vector Similarity** (via CLIP embeddings) with **Hard Filters** (Category, Location, Price).
-* **Smart Categorization:** Automatically classifies inputs (e.g., "Dress", "Coat") to narrow the search space.
-* **Adversarial Robustness:**
-    * **Ghost Check:** Rejects empty images where background removal failed.
-    * **Confidence Thresholding:** Filters out predictions with <45% confidence to prevent "hallucinated" matches.
-    * **Negative Anchors:** Explicitly rejects non-fashion objects (e.g., cars, animals, food).
-
-### 3. Recommendation & Personalization
-* **"User Persona" History (Stochastic Sampling):** Instead of averaging user tastes into a generic mix, the system cycles through the user's interaction history. If a user likes *Leather Jackets* and *Summer Dresses*, the home feed will dynamically alternate between recommending these distinct styles.
-* **"Vibe-Check" Outfit Completion:** Uses **Zero-Shot Style Anchoring** to classify the aesthetic of a search (e.g., "Bohemian", "Minimalist") and suggests accessories that strictly match that visual vibe.
-
-### 4. User Interface
-* **Visual Dashboard:** Responsive web app with a "Vision Debugger" showing users exactly what the AI "sees."
-* **Smart Crop Tool:** Manual override for users to adjust the focus area.
-* **Local Availability Map:** Visually displays the nearest store stocking the matched item.
-* **Shop Owner Portal:** A dedicated dashboard for retailers to bulk-upload inventory and manage stock levels.
-
----
-
-## 🏗 System Architecture
-
-The system follows a microservices architecture running on Docker:
-
-| Service | Technology | Purpose |
-| :--- | :--- | :--- |
-| **Gateway** | FastAPI | Orchestrates requests, handles uploads, and manages user auth. |
-| **Visual Engine** | PyTorch / CLIP | Handles image processing, embedding generation, and classification. |
-| **Vector DB** | Qdrant | Stores high-dimensional embeddings for fast similarity search. |
-| **Dashboard** | Streamlit / React | Frontend interface for Users and Shop Owners. |
+## 7. Assumptions & Risks
+* **Assumption:** User photos will have reasonable lighting and resolution.
+* **Risk:** Background removal might fail on white-on-white images.
+* **Mitigation:** Implemented alpha-channel check to detect "ghost" images.
 
 ---
-
-## ⚠️ Technical Constraints & Scope
-
-### In-Scope
-* **Platform:** Web-based application (PWA optimized).
-* **Hardware:** Optimized for standard CPU architecture (No GPU dependency for inference).
-* **Latency:** End-to-end processing allowed up to **15 seconds** (Prioritizing accuracy over real-time speed).
-
-### Out-of-Scope
-* **Multi-Object Detection:** The system assumes one primary item per search (no simultaneous Hat + Shoe detection).
-* **Mobile App:** Native iOS/Android development is excluded.
-* **Payment Gateways:** Transactions happen physically in-store; Locus is a discovery tool.
-
----
-
-## 📊 Success Metrics (KPIs)
-
-1.  **Accuracy:** In a set of 10 results, at least 8 must be visually relevant to the query.
-2.  **Robustness:** 100% rejection rate for low-confidence inputs (<45%) or non-fashion objects.
-3.  **Speed:** Complete search pipeline (Upload -> Crop -> Embed -> Rank) must complete in under **15s**.
-
----
-
-## 🛣 Roadmap & Future Work
-
-* **Human-in-the-Loop Feedback:** Implementing a mechanism where users can correct the AI's classification (e.g., "This is a skirt, not a dress"). These corrections will be stored to fine-tune the model in future iterations.
-* **Real-Time Inventory Sync:** API integration with retailer POS systems to update stock levels automatically, replacing the manual Shop Owner upload.
-* **AR Virtual Try-On:** Overlaying retrieved items onto the user's camera feed using generative AI.
-
----
-
-## 🛠 Setup & Installation
-
-```bash
-# Clone the repository
-git clone [https://github.com/your-username/locus.git](https://github.com/your-username/locus.git)
-
-# Navigate to directory
-cd locus
-
-# Start the services
-docker-compose up --build
+**Questions & Notes:**
+* **Feedback Loop:** When the system fails to detect category or wrongly classifies, user can correct the ML, which will be used for feedback.
+* **Inventory Tracking:** How will we be able to keep track of inventory? (To be determined via shop owner dashboard integration).
