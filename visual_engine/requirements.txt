@@ -9,3 +9,4 @@ fastapi
 uvicorn
 python-multipart
 ultralytics
+huggingface_hub
