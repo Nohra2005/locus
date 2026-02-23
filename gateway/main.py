@@ -1,11 +1,13 @@
 import os
 import uuid
+import io
 import httpx
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.staticfiles import StaticFiles
 from qdrant_client import QdrantClient
-from qdrant_client.http import models # <--- Logic for filtering
+from qdrant_client.http import models
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
+from PIL import Image
 
 app = FastAPI()
 
@@ -19,7 +21,7 @@ except Exception:
     pass
 
 # Config
-VISUAL_URL = "http://visual_engine:8001/vectorize"
+VISUAL_URL = "http://visual_engine:8001"
 QDRANT_HOST = "qdrant"
 QDRANT_PORT = 6333
 COLLECTION_NAME = "locus_items"
@@ -38,6 +40,99 @@ def startup_event():
 def read_root():
     return {"status": "online", "service": "Locus Gateway"}
 
+@app.post("/detect")
+async def detect_objects(file: UploadFile = File(...)):
+    """
+    NEW ENDPOINT: Pass-through to visual engine's /detect.
+    Step 1 of the new flow: user uploads photo, we return all detected items.
+    """
+    async with httpx.AsyncClient() as http_client:
+        files = {"file": (file.filename, await file.read(), file.content_type)}
+        response = await http_client.post(
+            f"{VISUAL_URL}/detect", files=files, timeout=60.0
+        )
+        response.raise_for_status()
+        return response.json()
+
+@app.post("/search")
+async def search(
+    file: UploadFile = File(...),
+    # Optional bounding box — if provided, we crop to that region first
+    x1: int = Form(None),
+    y1: int = Form(None),
+    x2: int = Form(None),
+    y2: int = Form(None),
+):
+    """
+    Updated /search endpoint.
+    Now accepts an optional bounding box (x1,y1,x2,y2).
+    If a bbox is provided, we crop the image to that region before vectorizing.
+    This is how the user's selected object is isolated.
+    """
+    image_bytes = await file.read()
+
+    # If the user selected a specific detected object, crop to it
+    if all(v is not None for v in [x1, y1, x2, y2]):
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img = img.crop((x1, y1, x2, y2))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        image_bytes = buf.getvalue()
+        filename = "cropped_selection.png"
+        content_type = "image/png"
+    else:
+        filename = file.filename
+        content_type = file.content_type
+
+    # 1. Vectorize the (possibly cropped) image
+    async with httpx.AsyncClient() as http_client:
+        files = {"file": (filename, image_bytes, content_type)}
+        vis_response = await http_client.post(
+            f"{VISUAL_URL}/vectorize", files=files, timeout=40.0
+        )
+        data = vis_response.json()
+        query_vector = data.get("vector")
+        processed_image = data.get("processed_image")
+        detected_category = data.get("category")
+
+    if not query_vector:
+        raise HTTPException(status_code=400, detail="Could not vectorize image")
+
+    # 2. Build Filter
+    query_filter = None
+    if detected_category:
+        print(f"🎯 Filter: {detected_category}")
+        query_filter = models.Filter(
+            should=[models.FieldCondition(
+                key="name", match=models.MatchText(text=detected_category)
+            )]
+        )
+
+    # 3. Search Qdrant
+    search_result = client.search(
+        collection_name=COLLECTION_NAME,
+        query_vector=query_vector,
+        query_filter=query_filter,
+        limit=25
+    )
+    
+    matches = []
+    for hit in search_result:
+        matches.append({
+            "name": hit.payload.get("name", "Unknown"),
+            "store": hit.payload.get("store_name", "Unknown"),
+            "level": hit.payload.get("floor_level", "Unknown"),
+            "mall": hit.payload.get("mall_name", "Unknown"),
+            "score": round(hit.score, 3), 
+            "image_filename": hit.payload.get("filename")
+        })
+        
+    return {
+        "matches": matches,
+        "debug_image": processed_image,
+        "detected_category": detected_category
+    }
+
 @app.post("/add")
 async def add_item(
     name: str = Form(...),
@@ -48,7 +143,9 @@ async def add_item(
 ):
     async with httpx.AsyncClient() as http_client:
         files = {"file": (file.filename, await file.read(), file.content_type)}
-        vis_response = await http_client.post(VISUAL_URL, files=files, timeout=30.0)
+        vis_response = await http_client.post(
+            f"{VISUAL_URL}/vectorize", files=files, timeout=30.0
+        )
         vis_response.raise_for_status()
         data = vis_response.json()
         vector = data.get("vector")
@@ -66,48 +163,3 @@ async def add_item(
         points=[PointStruct(id=point_id, vector=vector, payload=payload)]
     )
     return {"status": "saved", "item": name}
-
-@app.post("/search")
-async def search(file: UploadFile = File(...)):
-    # 1. Vectorize Query
-    async with httpx.AsyncClient() as http_client:
-        files = {"file": (file.filename, await file.read(), file.content_type)}
-        vis_response = await http_client.post(VISUAL_URL, files=files, timeout=40.0)
-        
-        data = vis_response.json()
-        query_vector = data.get("vector")
-        processed_image = data.get("processed_image") # Partner's Debug Image
-        detected_category = data.get("category")      # Your Category
-
-    # 2. Build Filter (YOUR LOGIC)
-    query_filter = None
-    if detected_category:
-        print(f"🎯 Filter: {detected_category}")
-        query_filter = models.Filter(
-            should=[models.FieldCondition(key="name", match=models.MatchText(text=detected_category))]
-        )
-
-    # 3. Search Qdrant
-    search_result = client.search(
-        collection_name=COLLECTION_NAME,
-        query_vector=query_vector,
-        query_filter=query_filter, # <--- Apply Filter
-        limit=25
-    )
-    
-    matches = []
-    for hit in search_result:
-        matches.append({
-            "name": hit.payload.get("name", "Unknown"),
-            "store": hit.payload.get("store_name", "Unknown"),
-            "level": hit.payload.get("floor_level", "Unknown"),
-            "mall": hit.payload.get("mall_name", "Unknown"),
-            "score": round(hit.score, 3), 
-            "image_filename": hit.payload.get("filename")
-        })
-        
-    return {
-        "matches": matches,
-        "debug_image": processed_image,      # Send to UI
-        "detected_category": detected_category # Send to UI
-    }

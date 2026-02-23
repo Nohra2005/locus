@@ -8,3 +8,4 @@ onnxruntime
 fastapi
 uvicorn
 python-multipart
+ultralytics
