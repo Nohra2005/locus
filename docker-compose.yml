@@ -35,6 +35,7 @@ services:
       - ./visual_engine:/app
       # This maps your local model cache to avoid redownloading CLIP
       - ${USERPROFILE}/.cache/huggingface:/root/.cache/huggingface
+      - rembg_cache:/root/.u2net 
     environment:
       - TRANSFORMERS_CACHE=/root/.cache/huggingface
     # This helps the container find the internet for the first-time rembg download
@@ -52,3 +53,4 @@ services:
 
 volumes:
   qdrant_data:
+  rembg_cache:
