@@ -4,8 +4,11 @@ from PIL import Image, ImageDraw
 import io
 import base64
 import os
+import time
 
 st.set_page_config(layout="wide", page_title="Locus Lens")
+
+GATEWAY_URL = "http://localhost:8000"
 
 # ─── Styling ─────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -14,7 +17,6 @@ st.markdown("""
 
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     h1, h2, h3 { font-family: 'Syne', sans-serif; }
-
     .stApp { background: #0d0d0d; color: #f0ede8; }
 
     .step-badge {
@@ -44,6 +46,52 @@ st.markdown("""
         letter-spacing: 0.05em;
     }
     div[data-testid="stButton"] button:hover { background: #f0d060; }
+
+    .loading-card {
+        background: #141414;
+        border: 1px solid #2a2a2a;
+        border-radius: 10px;
+        padding: 32px 40px;
+        margin: 40px auto;
+        max-width: 600px;
+        text-align: center;
+    }
+    .service-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #1f1f1f;
+        font-size: 0.9rem;
+    }
+    .service-row:last-child { border-bottom: none; }
+    .badge-ready {
+        background: #1a3a1a;
+        color: #47e8a3;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 2px 10px;
+        border-radius: 20px;
+        letter-spacing: 0.05em;
+    }
+    .badge-loading {
+        background: #3a2a00;
+        color: #e8c547;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 2px 10px;
+        border-radius: 20px;
+        letter-spacing: 0.05em;
+    }
+    .badge-error {
+        background: #3a1a1a;
+        color: #e87447;
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 2px 10px;
+        border-radius: 20px;
+        letter-spacing: 0.05em;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -51,6 +99,76 @@ st.markdown("""
 st.markdown("<h1 style='font-size:2.5rem; margin-bottom:0'>🔎 LOCUS LENS</h1>", unsafe_allow_html=True)
 st.markdown("<p style='color:#888; margin-top:4px; font-size:0.95rem;'>Upload a photo — AI detects every item — click what you want to find</p>", unsafe_allow_html=True)
 st.divider()
+
+
+# ─── Health Check ─────────────────────────────────────────────────────────────
+def check_health():
+    """Polls the gateway /health endpoint. Returns (is_ready, services_dict)."""
+    try:
+        resp = requests.get(f"{GATEWAY_URL}/health", timeout=3)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("ready", False), data.get("services", {})
+    except Exception:
+        pass
+    return False, {}
+
+
+def render_loading_screen(services):
+    """Renders the loading screen with per-service status badges."""
+
+    service_labels = {
+        "gateway":       "🌐 Gateway",
+        "visual_engine": "🧠 AI Vision Engine (CLIP + DeepFashion2 + YOLOv8)",
+        "qdrant":        "🗄️  Vector Database",
+    }
+
+    rows_html = ""
+    for key, label in service_labels.items():
+        status = services.get(key, "loading")
+        if status == "ready":
+            badge = "<span class='badge-ready'>● READY</span>"
+        elif status == "loading":
+            badge = "<span class='badge-loading'>● LOADING</span>"
+        else:
+            badge = "<span class='badge-error'>● ERROR</span>"
+        rows_html += f"""
+            <div class='service-row'>
+                <span style='color:#ccc;'>{label}</span>
+                {badge}
+            </div>
+        """
+
+    st.markdown(f"""
+        <div class='loading-card'>
+            <div style='font-family:Syne,sans-serif; font-size:1.8rem; font-weight:800; color:#e8c547; margin-bottom:6px;'>
+                ⏳ AI Models Loading
+            </div>
+            <div style='color:#666; font-size:0.85rem; margin-bottom:28px;'>
+                The AI vision engine is warming up. This takes 3–5 minutes on first launch
+                while models load into memory. Subsequent startups are faster.
+            </div>
+            <div style='text-align:left;'>
+                {rows_html}
+            </div>
+            <div style='color:#555; font-size:0.75rem; margin-top:20px;'>
+                Page refreshes automatically every 5 seconds
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+
+# ─── Check if backend is ready ───────────────────────────────────────────────
+is_ready, services = check_health()
+
+if not is_ready:
+    render_loading_screen(services)
+    # Auto-refresh every 5 seconds until ready
+    time.sleep(5)
+    st.rerun()
+    st.stop()
+
+# ─── Backend is ready — show the main app ────────────────────────────────────
 
 # ─── Session State ────────────────────────────────────────────────────────────
 if "detections" not in st.session_state:
@@ -83,10 +201,10 @@ if uploaded_file:
     if not st.session_state.detections:
         st.markdown("<span class='step-badge'>STEP 2</span> AI is scanning the image for items…", unsafe_allow_html=True)
 
-        with st.spinner("🔍 Detecting fashion items with DeepFashion2..."):
+        with st.spinner("🔍 Detecting fashion items..."):
             try:
                 files = {"file": (uploaded_file.name, new_bytes, uploaded_file.type)}
-                resp = requests.post("http://localhost:8000/detect", files=files, timeout=120)
+                resp = requests.post(f"{GATEWAY_URL}/detect", files=files, timeout=120)
 
                 if resp.status_code == 200:
                     result = resp.json()
@@ -105,7 +223,6 @@ if st.session_state.detections and st.session_state.original_image:
     detections = st.session_state.detections
     orig_img = st.session_state.original_image
 
-    # Draw bounding boxes on the annotated image
     annotated = orig_img.copy()
     draw = ImageDraw.Draw(annotated)
     COLORS = ["#e8c547", "#47c5e8", "#e847a3", "#47e8a3", "#e87447", "#a347e8"]
@@ -131,7 +248,6 @@ if st.session_state.detections and st.session_state.original_image:
             x1, y1, x2, y2 = det["bbox"]
             color = COLORS[i % len(COLORS)]
 
-            # Crop thumbnail for this detection
             patch = orig_img.crop((x1, y1, x2, y2))
             patch_buf = io.BytesIO()
             patch.save(patch_buf, format="PNG")
@@ -141,20 +257,19 @@ if st.session_state.detections and st.session_state.original_image:
             border_style = f"3px solid {color}" if is_selected else f"2px solid #2a2a2a"
             bg = "#1f1f1f" if is_selected else "#141414"
 
-            # Display label (DeepFashion2) + search label (CLIP) if different
-            display_label = det['label'].upper()
-            search_label = det.get('search_label', det['label'])
+            source = det.get("source", "")
+            source_tag = "👗 DeepFashion2" if source == "deepfashion2" else ("👟 YOLO COCO" if source == "yolo_coco" else "🔍 CLIP")
 
             st.markdown(f"""
                 <div style="border:{border_style}; border-radius:6px; overflow:hidden; margin-bottom:10px; background:{bg};">
                     <img src="data:image/png;base64,{patch_b64}" style="width:100%; display:block; max-height:120px; object-fit:cover;">
                     <div style="padding:6px 10px;">
                         <span style="font-family:Syne,sans-serif; font-weight:700; font-size:0.8rem; color:{color};">
-                            {i+1}. {display_label}
+                            {i+1}. {det['label'].upper()}
                         </span>
-                        <span style="font-size:0.65rem; color:#666; margin-left:8px;">
-                            {int(det['score']*100)}% confidence
-                        </span>
+                        <br>
+                        <span style="font-size:0.6rem; color:#555;">{source_tag}</span>
+                        <span style="font-size:0.65rem; color:#666; margin-left:8px;">{int(det['score']*100)}% conf</span>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
@@ -185,7 +300,7 @@ if st.session_state.detections and st.session_state.original_image:
                         files = {"file": ("image.png", st.session_state.uploaded_bytes, "image/png")}
                         data = {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
                         resp = requests.post(
-                            "http://localhost:8000/search",
+                            f"{GATEWAY_URL}/search",
                             files=files,
                             data=data,
                             timeout=60
@@ -221,7 +336,6 @@ if st.session_state.detections and st.session_state.original_image:
                         st.image(ai_img, use_container_width=True)
 
                 with col_c:
-                    # Show both the DeepFashion2 label and CLIP search category
                     df2_label = selected['label'].upper()
                     if detected_category:
                         st.markdown(f"""

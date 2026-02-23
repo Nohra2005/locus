@@ -40,6 +40,42 @@ def startup_event():
 def read_root():
     return {"status": "online", "service": "Locus Gateway"}
 
+@app.get("/health")
+async def health_check():
+    """
+    Checks if all backend services are ready to accept requests.
+    Dashboard polls this endpoint on startup to show a loading screen
+    instead of a confusing connection error.
+
+    Returns:
+        ready: true only when the visual engine is fully loaded
+        services: individual status of each service
+    """
+    status = {
+        "gateway":       "ready",
+        "visual_engine": "not_ready",
+        "qdrant":        "not_ready",
+    }
+
+    # Check visual engine
+    try:
+        async with httpx.AsyncClient() as http_client:
+            resp = await http_client.get(f"{VISUAL_URL}/", timeout=3.0)
+            if resp.status_code == 200:
+                status["visual_engine"] = "ready"
+    except Exception:
+        status["visual_engine"] = "loading"
+
+    # Check Qdrant
+    try:
+        client.get_collections()
+        status["qdrant"] = "ready"
+    except Exception:
+        status["qdrant"] = "loading"
+
+    all_ready = all(v == "ready" for v in status.values())
+    return {"ready": all_ready, "services": status}
+
 @app.post("/detect")
 async def detect_objects(file: UploadFile = File(...)):
     """
