@@ -1,84 +1,196 @@
 # =============================================================================
 # detector_accessories.py
-# Model 2: YOLOv8n COCO
-# Detects accessories and footwear: shoes, bags, ties, suitcases
-# Does NOT detect clothing items (shirts, pants, dresses, etc.)
+# Model 2: YOLOS-Fashionpedia
+#
+# Replaces the broken YOLOv8 COCO model which only knew "handbag" and "sneaker".
+#
+# YOLOS-Fashionpedia was fine-tuned on 46,781 fashion images and detects
+# 46 categories including all the accessories we need:
+#   glasses · hat · watch · belt · shoe · bag/wallet
+#   scarf · glove · sock · headband · tie · umbrella
+#   + all clothing categories (handled by DeepFashion2 but overlaps are fine)
+#
+# Architecture: YOLOS (Vision Transformer), NOT YOLOv8.
+# Uses HuggingFace transformers library instead of ultralytics.
 # =============================================================================
 
-from ultralytics import YOLO
+import torch
 from PIL import Image
+from transformers import YolosForObjectDetection, YolosImageProcessor
 
-# COCO class IDs we care about — everything else is ignored
-COCO_FASHION_CLASSES = {
-    24: "handbag",
-    25: "handbag",   # umbrella — sometimes catches tote bags
-    27: "tie",
-    28: "suitcase",
-    66: "shoes",     # sneaker in COCO
+# Full list of 46 Fashionpedia categories (index = class id)
+FASHIONPEDIA_CATS = [
+    'shirt, blouse',
+    'top, t-shirt, sweatshirt',
+    'sweater',
+    'cardigan',
+    'jacket',
+    'vest',
+    'pants',
+    'shorts',
+    'skirt',
+    'coat',
+    'dress',
+    'jumpsuit',
+    'cape',
+    'glasses',
+    'hat',
+    'headband, head covering, hair accessory',
+    'tie',
+    'glove',
+    'watch',
+    'belt',
+    'leg warmer',
+    'tights, stockings',
+    'sock',
+    'shoe',
+    'bag, wallet',
+    'scarf',
+    'umbrella',
+    'hood',
+    'collar',
+    'lapel',
+    'epaulette',
+    'sleeve',
+    'pocket',
+    'neckline',
+    'buckle',
+    'zipper',
+    'applique',
+    'bead',
+    'bow',
+    'flower',
+    'fringe',
+    'ribbon',
+    'rivet',
+    'ruffle',
+    'sequin',
+    'tassel',
+]
+
+# We only care about accessories — DeepFashion2 already handles clothing.
+# This set filters out clothing categories to avoid showing duplicates
+# to the user (e.g. both models detecting the same shirt).
+ACCESSORY_ONLY_IDS = {
+    13,  # glasses
+    14,  # hat
+    15,  # headband, head covering, hair accessory
+    16,  # tie
+    17,  # glove
+    18,  # watch
+    19,  # belt
+    20,  # leg warmer
+    21,  # tights, stockings
+    22,  # sock
+    23,  # shoe
+    24,  # bag, wallet
+    25,  # scarf
+    26,  # umbrella
 }
 
-MIN_CONFIDENCE = 0.30
-MIN_AREA = 1500  # px²
+MIN_CONFIDENCE = 0.50   # YOLOS tends to be verbose — higher threshold reduces noise
+MIN_AREA       = 1500   # px² — ignore tiny false positives
 
 
 class AccessoryDetector:
     def __init__(self):
         print("=" * 50)
-        print("Loading Model 2: YOLOv8 COCO (Shoes & Bags)")
-        print("Covers: shoes, handbags, ties, suitcases")
+        print("Loading Model 2: YOLOS-Fashionpedia (Accessories)")
+        print("Covers: glasses, hat, watch, belt, shoe, bag,")
+        print("        scarf, glove, sock, tie, headband, umbrella")
+        print("Model size: ~123MB (downloads once, then cached)")
         print("=" * 50)
-        # Downloads yolov8n.pt automatically (~6MB) on first run
-        self.model = YOLO("yolov8n.pt")
+
+        # Downloads ~123MB on first run, cached in HuggingFace cache after that
+        self.processor = YolosImageProcessor.from_pretrained(
+            "valentinafeve/yolos-fashionpedia"
+        )
+        self.model = YolosForObjectDetection.from_pretrained(
+            "valentinafeve/yolos-fashionpedia"
+        )
+        self.model.eval()   # Set to inference mode (disables dropout etc.)
         print("Model 2 ready.")
 
     def detect(self, pil_image, classify_fn):
         """
-        Runs YOLOv8 COCO on a PIL image, filtering to fashion accessories only.
+        Runs YOLOS-Fashionpedia on a PIL image.
+        Only returns accessory detections — clothing is handled by DeepFashion2.
 
         Args:
             pil_image:   PIL.Image — the full photo to scan
             classify_fn: function(pil_image) -> (label, confidence)
-                         Provided by the orchestrator (CLIP).
-                         Used to refine the coarse COCO label.
+                         CLIP function passed in from the orchestrator.
+                         Used to get a consistent search label from the
+                         raw Fashionpedia label.
 
         Returns:
             list of dicts: bbox, label, search_label, score, source
         """
         detections = []
         try:
-            results = self.model(pil_image, conf=MIN_CONFIDENCE, verbose=False)[0]
+            # ── Preprocess ───────────────────────────────────────────────────
+            # YOLOS needs the image in a specific format.
+            # The processor handles resizing and normalization automatically.
+            inputs = self.processor(images=pil_image, return_tensors="pt")
+            img_w, img_h = pil_image.size
 
-            for box in results.boxes:
-                class_id = int(box.cls[0])
+            # ── Inference ────────────────────────────────────────────────────
+            with torch.no_grad():
+                outputs = self.model(**inputs)
 
-                # Ignore everything that isn't a fashion accessory
-                if class_id not in COCO_FASHION_CLASSES:
+            # ── Post-process: convert raw outputs to bounding boxes ───────────
+            # target_sizes tells the processor the original image dimensions
+            # so it can scale the boxes back to pixel coordinates.
+            target_sizes = torch.tensor([[img_h, img_w]])
+            results = self.processor.post_process_object_detection(
+                outputs,
+                threshold=MIN_CONFIDENCE,
+                target_sizes=target_sizes
+            )[0]
+
+            # ── Filter and format results ─────────────────────────────────────
+            for score, label_id, box in zip(
+                results["scores"],
+                results["labels"],
+                results["boxes"]
+            ):
+                class_id = int(label_id)
+                conf     = float(score)
+
+                # Only keep accessories — skip clothing (DeepFashion2 handles those)
+                if class_id not in ACCESSORY_ONLY_IDS:
                     continue
 
-                conf = float(box.conf[0])
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                # Convert box from [cx, cy, w, h] → [x1, y1, x2, y2] pixel coords
+                x1, y1, x2, y2 = map(int, box.tolist())
 
-                # Skip boxes that are too small to be meaningful
+                # Clamp to image bounds (YOLOS occasionally predicts outside)
+                x1 = max(0, x1); y1 = max(0, y1)
+                x2 = min(img_w, x2); y2 = min(img_h, y2)
+
+                # Skip boxes that are too small
                 if (x2 - x1) * (y2 - y1) < MIN_AREA:
                     continue
 
-                coco_label = COCO_FASHION_CLASSES[class_id]
+                # Get the human-readable Fashionpedia label
+                fashionpedia_label = FASHIONPEDIA_CATS[class_id]
 
-                # Use CLIP (passed in as classify_fn) to refine the label
-                crop = pil_image.crop((x1, y1, x2, y2))
+                # Use CLIP to get a consistent search label that matches
+                # what's indexed in Qdrant (e.g. "bag, wallet" → "bag")
+                crop       = pil_image.crop((x1, y1, x2, y2))
                 clip_label, _ = classify_fn(crop)
 
                 detections.append({
                     "bbox":         [x1, y1, x2, y2],
-                    "label":        coco_label,  # shown to user: "shoes" / "handbag"
-                    "search_label": clip_label,  # used for Qdrant filter
+                    "label":        fashionpedia_label,  # shown to user: "bag, wallet"
+                    "search_label": clip_label,          # used for Qdrant: "bag"
                     "score":        round(conf, 3),
-                    "source":       "yolo_coco"
+                    "source":       "yolos_fashionpedia"
                 })
 
-            print(f"  YOLOv8 COCO: {len(detections)} accessories found")
+            print(f"  YOLOS-Fashionpedia: {len(detections)} accessories found")
 
         except Exception as e:
-            print(f"  YOLOv8 COCO error: {e}")
+            print(f"  YOLOS-Fashionpedia error: {e}")
 
         return detections

@@ -275,7 +275,7 @@ if st.session_state.detections and st.session_state.original_image:
             bg           = "#141414" if is_selected else "#0f0f0f"
 
             source     = det.get("source", "")
-            source_tag = "👗 DeepFashion2" if source == "deepfashion2" else ("👟 YOLO COCO" if source == "yolo_coco" else "🔍 CLIP")
+            source_tag = "👗 DeepFashion2" if source == "deepfashion2" else ("👜 Fashionpedia" if source == "yolos_fashionpedia" else "🔍 CLIP")
 
             st.markdown(f"""
                 <div style="border:{border_style}; border-radius:8px; overflow:hidden;
