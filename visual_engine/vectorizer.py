@@ -1,16 +1,3 @@
-# =============================================================================
-# vectorizer.py
-# Orchestrator — loads all models and coordinates the pipeline
-#
-# Detection models (run independently, results merged):
-#   detector_clothing.py    — DeepFashion2 (shirts, pants, dresses, skirts...)
-#   detector_accessories.py — YOLOv8 COCO (shoes, bags, ties...)
-#
-# Shared utilities:
-#   CLIP  — vectorization + category classification
-#   rembg — background removal
-# =============================================================================
-
 import torch
 import io
 import base64
@@ -80,15 +67,10 @@ class LocusVisualizer:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
             W, H = image.size
 
-            # Both detectors receive the same image and the same classify_fn.
-            # They run completely independently.
             clothing    = self.clothing_detector.detect(image, self._classify_crop)
             accessories = self.accessory_detector.detect(image, self._classify_crop)
-
-            # Merge — simple concatenation, no shared logic
             all_detections = clothing + accessories
 
-            # Fallback if both models found nothing
             if not all_detections:
                 print("Both models found nothing. Running full-image CLIP fallback.")
                 clip_label, clip_conf = self._classify_crop(image)
@@ -111,14 +93,23 @@ class LocusVisualizer:
     # =========================================================================
     # PUBLIC METHOD 2: process_image()
     # =========================================================================
-    def process_image(self, image_bytes):
+    def process_image(self, image_bytes, skip_rembg=False, yolo_label=""):
         """
         Full pipeline for a single selected item:
-        1. Remove background (rembg)
-        2. Ghost image check
-        3. Smart crop to content bounding box
-        4. CLIP vectorization (512-dim vector for Qdrant)
-        5. Category classification with 45% confidence threshold
+
+        1. Resize if needed
+        2a. If skip_rembg=True  → image is already a tight bounding box crop,
+                                   go straight to CLIP (no background removal)
+        2b. If skip_rembg=False → run rembg background removal (full-image fallback)
+        3. CLIP vectorization (512-dim vector for Qdrant)
+        4. Category:
+              - If yolo_label provided → use it directly (YOLO already identified the item)
+              - Otherwise → CLIP zero-shot classification with 45% confidence threshold
+
+        Args:
+            image_bytes: raw image bytes
+            skip_rembg:  True when image comes from a bounding box crop
+            yolo_label:  YOLO's detected label — bypasses CLIP classification when set
         """
         t0 = time.time()
         try:
@@ -133,21 +124,32 @@ class LocusVisualizer:
                 input_image.thumbnail((512, 512))
                 print(f"Resized {original_size} -> {input_image.size}")
 
-            print("Removing background...")
-            output_image = remove(input_image, session=self.rembg_session)
+            if skip_rembg:
+                # Bounding box crop — background already minimised, skip rembg
+                print("Skipping background removal (bounding box crop)")
+                white_bg = Image.new("RGB", input_image.size, (255, 255, 255))
+                if input_image.mode == "RGBA":
+                    white_bg.paste(input_image, mask=input_image.split()[3])
+                else:
+                    white_bg.paste(input_image)
+            else:
+                # Full image — run rembg to isolate the clothing item
+                print("Removing background...")
+                output_image = remove(input_image, session=self.rembg_session)
 
-            alpha_max = output_image.getextrema()[3][1]
-            if alpha_max == 0:
-                print("Ghost image detected. Rejecting.")
-                return None, None, None
+                alpha_max = output_image.getextrema()[3][1]
+                if alpha_max == 0:
+                    print("Ghost image detected. Rejecting.")
+                    return None, None, None
 
-            bbox = output_image.getbbox()
-            if bbox:
-                output_image = output_image.crop(bbox)
+                bbox = output_image.getbbox()
+                if bbox:
+                    output_image = output_image.crop(bbox)
 
-            white_bg = Image.new("RGB", output_image.size, (255, 255, 255))
-            white_bg.paste(output_image, mask=output_image.split()[3])
+                white_bg = Image.new("RGB", output_image.size, (255, 255, 255))
+                white_bg.paste(output_image, mask=output_image.split()[3])
 
+            # ── CLIP Vectorization ────────────────────────────────────────────
             clip_inputs = self.clip_processor(images=white_bg, return_tensors="pt")
             with torch.no_grad():
                 image_features = self.clip_model.get_image_features(**clip_inputs)
@@ -155,28 +157,40 @@ class LocusVisualizer:
             image_features /= image_features.norm(p=2, dim=-1, keepdim=True)
             vector = image_features[0].tolist()
 
-            similarity = (100.0 * image_features @ self.text_features.T).softmax(dim=-1)
-            top_score, top_idx = similarity[0].topk(1)
-            confidence = top_score[0].item()
-            best_label = self.clip_labels[top_idx[0]]
+            # ── Category Classification ───────────────────────────────────────
+            category_confidence = 1.0  # Default to 100% if YOLO found it
 
-            if confidence < 0.45:
-                print(f"Low confidence ({confidence:.2f}) for '{best_label}'. No category filter.")
-                detected_category = None
+            if yolo_label and yolo_label.strip():
+                # YOLO already identified this item with a bounding box —
+                # trust it over CLIP which sees the whole crop including background
+                detected_category = yolo_label.strip()
+                print(f"Category from YOLO: {detected_category}")
             else:
-                detected_category = best_label
-                print(f"Category: {detected_category} ({confidence:.2f})")
+                # No YOLO label — fall back to CLIP zero-shot classification
+                similarity = (100.0 * image_features @ self.text_features.T).softmax(dim=-1)
+                top_score, top_idx = similarity[0].topk(1)
+                
+                category_confidence = top_score[0].item() # 👈 NEW: Capture the score!
+                best_label = self.clip_labels[top_idx[0]]
+                if category_confidence < 0.45:
+                    print(f"Low confidence ({category_confidence:.2f}) for '{best_label}'. No category filter.")
+                    detected_category = None
+                else:
+                    detected_category = best_label
+                    print(f"Category from CLIP: {detected_category} ({category_confidence:.2f})")
 
+            # ── Debug Image ───────────────────────────────────────────────────
             buf = io.BytesIO()
             white_bg.save(buf, format="PNG")
             debug_img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 
             print(f"process_image() done in {(time.time()-t0):.2f}s")
-            return vector, detected_category, debug_img_b64
+            return vector, detected_category, category_confidence, debug_img_b64
 
         except Exception as e:
             print(f"process_image() error: {e}")
-            return None, None, None
+            # 👈 NEW: Return 4 Nones instead of 3
+            return None, None, None, None
 
     # =========================================================================
     # PRIVATE: _classify_crop()
@@ -186,6 +200,7 @@ class LocusVisualizer:
         """
         Runs CLIP zero-shot classification on a PIL image.
         Returns (best_label, confidence) from self.clip_labels.
+        Used by both detectors to get a consistent search label.
         """
         clip_inputs = self.clip_processor(images=pil_image, return_tensors="pt")
         with torch.no_grad():

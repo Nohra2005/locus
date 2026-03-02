@@ -319,7 +319,10 @@ if st.session_state.detections and st.session_state.original_image:
                 with st.spinner("⚙️ Processing..."):
                     try:
                         files = {"file": ("image.png", st.session_state.uploaded_bytes, "image/png")}
-                        data  = {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
+                        data = {
+                            "x1": x1, "y1": y1, "x2": x2, "y2": y2,
+                            "search_label": selected.get("search_label")  # ← passes YOLO label forward
+                        }
                         resp  = requests.post(f"{GATEWAY_URL}/search", files=files, data=data, timeout=60)
                         if resp.status_code == 200:
                             st.session_state.search_results = resp.json()
@@ -333,6 +336,7 @@ if st.session_state.detections and st.session_state.original_image:
                 matches           = result_data.get("matches", [])
                 debug_image_b64   = result_data.get("debug_image")
                 detected_category = result_data.get("detected_category")
+                category_confidence = result_data.get("category_confidence", 1.0)
 
                 st.divider()
 
@@ -344,18 +348,30 @@ if st.session_state.detections and st.session_state.original_image:
                     st.markdown("**AI Vision**")
                     if debug_image_b64:
                         st.image(Image.open(io.BytesIO(base64.b64decode(debug_image_b64))), use_container_width=True)
+                        
                 with col_c:
                     df2_label = selected['label'].upper()
                     if detected_category:
-                        st.markdown(f"""
-                            <div style="background:#0f0f0f; border:1px solid rgba(232,197,71,0.3);
-                                        border-left:3px solid #e8c547; border-radius:8px; padding:20px; margin-top:10px;">
-                                <div style="font-size:0.6rem; color:#555; letter-spacing:0.12em; text-transform:uppercase; font-family:'DM Mono',monospace;">Detected Item</div>
-                                <div style="font-family:Syne,sans-serif; font-size:1.7rem; font-weight:800; color:#e8c547; margin:6px 0 14px;">{df2_label}</div>
-                                <div style="font-size:0.6rem; color:#555; letter-spacing:0.12em; text-transform:uppercase; font-family:'DM Mono',monospace;">Search Filter</div>
-                                <div style="font-family:Syne,sans-serif; font-size:1.1rem; font-weight:700; color:#888; margin-top:4px;">{detected_category.upper()}</div>
-                            </div>
-                        """, unsafe_allow_html=True)
+                        if category_confidence < 0.60:
+                            st.markdown(f"""
+                                <div style="background:rgba(232,116,71,0.08); border:1px solid rgba(232,116,71,0.3);
+                                            border-left:3px solid #e87447; border-radius:8px; padding:20px; margin-top:10px;">
+                                    <div style="font-size:0.6rem; color:#e87447; letter-spacing:0.12em; text-transform:uppercase; font-family:'DM Mono',monospace;">⚠ Low Category Confidence ({category_confidence*100:.1f}%)</div>
+                                    <div style="font-family:Syne,sans-serif; font-size:1.7rem; font-weight:800; color:#e87447; margin:6px 0 14px;">{df2_label}</div>
+                                    <div style="font-size:0.6rem; color:#ccc; font-family:'DM Mono',monospace;">AI guessed <b>{detected_category.upper()}</b>, but might be wrong. If results look bad, try cropping closer.</div>
+                                </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            # Your original success banner (added the math % at the end)
+                            st.markdown(f"""
+                                <div style="background:#0f0f0f; border:1px solid rgba(232,197,71,0.3);
+                                            border-left:3px solid #e8c547; border-radius:8px; padding:20px; margin-top:10px;">
+                                    <div style="font-size:0.6rem; color:#555; letter-spacing:0.12em; text-transform:uppercase; font-family:'DM Mono',monospace;">Detected Item</div>
+                                    <div style="font-family:Syne,sans-serif; font-size:1.7rem; font-weight:800; color:#e8c547; margin:6px 0 14px;">{df2_label}</div>
+                                    <div style="font-size:0.6rem; color:#555; letter-spacing:0.12em; text-transform:uppercase; font-family:'DM Mono',monospace;">Search Filter</div>
+                                    <div style="font-family:Syne,sans-serif; font-size:1.1rem; font-weight:700; color:#888; margin-top:4px;">{detected_category.upper()} ({category_confidence*100:.1f}%)</div>
+                                </div>
+                            """, unsafe_allow_html=True)
                     else:
                         st.markdown(f"""
                             <div style="background:#0f0f0f; border:1px solid #1a1a1a;
@@ -367,20 +383,61 @@ if st.session_state.detections and st.session_state.original_image:
                         """, unsafe_allow_html=True)
 
                 st.markdown(f"<h3 style='font-family:Syne,sans-serif; margin-top:28px; font-size:1.2rem;'>🎯 Top Matches <span style='color:#444; font-size:0.8rem; font-family:DM Mono,monospace;'>({len(matches)} found)</span></h3>", unsafe_allow_html=True)
-
+                
                 if matches:
                     cols = st.columns(5)
                     for idx, item in enumerate(matches):
                         with cols[idx % 5]:
-                            local_path = os.path.join("demo_images", item['image_filename'])
+                            local_path = os.path.join(r"C:\Users\User\Downloads\myntradataset\images", item['image_filename'])
+                            
                             if os.path.exists(local_path):
                                 st.image(local_path, use_container_width=True)
-                            medal = "🥇" if idx == 0 else ("🥈" if idx == 1 else ("🥉" if idx == 2 else ""))
-                            st.markdown(f"**{medal} {item['name']}**")
-                            score = item['score']
-                            score_color = "#47e8a3" if score > 0.8 else ("#e8c547" if score > 0.6 else "#e87447")
-                            st.markdown(f"<span style='color:{score_color}; font-size:0.78rem; font-weight:600; font-family:DM Mono,monospace;'>{score:.3f}</span>", unsafe_allow_html=True)
+                                
+                                medal = "🥇" if idx == 0 else ("🥈" if idx == 1 else ("🥉" if idx == 2 else ""))
+                                st.markdown(f"**{medal} {item['name']}**") 
+                                
+                                score = item['score']
+                                score_color = "#47e8a3" if score > 0.8 else ("#e8c547" if score > 0.6 else "#e87447")
+                                st.markdown(f"<span style='color:{score_color}; font-size:0.78rem; font-weight:600; font-family:DM Mono,monospace;'>{score:.3f}</span>", unsafe_allow_html=True)
+         
+                                # ── NEW: low confidence warning ───────────────────────────────────────
+                                if score < 0.60:
+                                    st.markdown("""
+                                        <div style='background:rgba(232,116,71,0.08); border:1px solid rgba(232,116,71,0.3);
+                                                    border-radius:4px; padding:4px 8px; margin-top:4px;'>
+                                            <span style='color:#e87447; font-size:0.58rem; font-family:DM Mono,monospace;
+                                                        letter-spacing:0.06em;'>
+                                                ⚠ LOW MATCH — may not be similar
+                                            </span>
+                                        </div>
+                                    """, unsafe_allow_html=True)
                             st.markdown(f"<span class='store-tag'>{item['store']} · {item['level']}</span>", unsafe_allow_html=True)
                             st.markdown("---")
                 else:
                     st.warning("No matches found. Try adding more items via bulk_upload.py")
+
+                # ── NEW: MLOps Feedback UI ───────────────────────────────────────
+                st.markdown("<br><br>", unsafe_allow_html=True)
+                st.markdown("""
+                    <div style="background:#141414; border:1px solid #1f1f1f; border-radius:8px; padding:20px; text-align:center;">
+                        <div style="font-family:Syne,sans-serif; font-size:1.1rem; font-weight:700; color:#e8c547; margin-bottom:4px;">Help us improve Locus Lens</div>
+                        <div style="font-size:0.75rem; color:#666; font-family:'DM Mono',monospace; margin-bottom:16px;">Are these recommendations accurate?</div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                col_space1, col_up, col_down, col_space2 = st.columns([3, 1, 1, 3])
+                
+                with col_up:
+                    if st.button("👍 Good Match", use_container_width=True):
+                        try:
+                            requests.post(f"{GATEWAY_URL}/feedback", data={"query_category": detected_category, "rating": "upvote"})
+                            st.toast("✅ Feedback logged! Thank you.")
+                        except:
+                            pass
+                with col_down:
+                    if st.button("👎 Poor Match", use_container_width=True):
+                        try:
+                            requests.post(f"{GATEWAY_URL}/feedback", data={"query_category": detected_category, "rating": "downvote"})
+                            st.toast("📝 Logged for model fine-tuning. Thanks!")
+                        except:
+                            pass
