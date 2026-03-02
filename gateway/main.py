@@ -11,7 +11,7 @@ from PIL import Image
 
 app = FastAPI()
 
-# Serve Images
+# ─── Serve Images ───────────────────────────────────────────────────────────
 try:
     if os.path.exists("../demo_images"):
         app.mount("/static", StaticFiles(directory="../demo_images"), name="static")
@@ -20,7 +20,7 @@ try:
 except Exception:
     pass
 
-# Config
+# ─── Config ─────────────────────────────────────────────────────────────────
 VISUAL_URL = "http://visual_engine:8001"
 QDRANT_HOST = "qdrant"
 QDRANT_PORT = 6333
@@ -40,14 +40,23 @@ def startup_event():
 def read_root():
     return {"status": "online", "service": "Locus Gateway"}
 
+# ─── MLOps / Feedback ───────────────────────────────────────────────────────
+@app.post("/feedback")
+async def receive_feedback(
+    query_category: str = Form("Unknown"),
+    rating: str = Form(...),  # "upvote" or "downvote"
+):
+    """ Logs user feedback for future Contrastive Fine-Tuning. """
+    if rating == "upvote":
+        print(f"📈 [FEEDBACK] SUCCESS: User loved the results for '{query_category}'")
+    else:
+        print(f"📉 [FEEDBACK] FAILURE: User rejected the results for '{query_category}'. Needs fine-tuning.")
+    return {"status": "logged"}
+
+# ─── Health Check (From Left Branch) ────────────────────────────────────────
 @app.get("/health")
 async def health_check():
-    status = {
-        "gateway":       "ready",
-        "visual_engine": "not_ready",
-        "qdrant":        "not_ready",
-    }
-
+    status = {"gateway": "ready", "visual_engine": "not_ready", "qdrant": "not_ready"}
     try:
         async with httpx.AsyncClient() as http_client:
             resp = await http_client.get(f"{VISUAL_URL}/", timeout=3.0)
@@ -62,19 +71,18 @@ async def health_check():
     except Exception:
         status["qdrant"] = "loading"
 
-    all_ready = all(v == "ready" for v in status.values())
-    return {"ready": all_ready, "services": status}
+    return {"ready": all(v == "ready" for v in status.values()), "services": status}
 
+# ─── Step 1: Detect (From Left Branch) ──────────────────────────────────────
 @app.post("/detect")
 async def detect_objects(file: UploadFile = File(...)):
     async with httpx.AsyncClient() as http_client:
         files = {"file": (file.filename, await file.read(), file.content_type)}
-        response = await http_client.post(
-            f"{VISUAL_URL}/detect", files=files, timeout=60.0
-        )
+        response = await http_client.post(f"{VISUAL_URL}/detect", files=files, timeout=60.0)
         response.raise_for_status()
         return response.json()
 
+# ─── Step 2: Search (With Bounding Boxes & skip_rembg) ──────────────────────
 @app.post("/search")
 async def search(
     file: UploadFile = File(...),
@@ -82,40 +90,52 @@ async def search(
     y1: int = Form(None),
     x2: int = Form(None),
     y2: int = Form(None),
+    search_label: str = Form(None),
 ):
     image_bytes = await file.read()
+    is_cropped = all(v is not None for v in [x1, y1, x2, y2])
+    skip_rembg_flag = "true" if is_cropped else "false"
 
-    # If the user selected a specific detected object, crop to it
-    if all(v is not None for v in [x1, y1, x2, y2]):
+    if is_cropped:
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         img = img.crop((x1, y1, x2, y2))
         buf = io.BytesIO()
         img.save(buf, format="PNG")
-        image_bytes = buf.getvalue()
-        filename = "cropped_selection.png"
+        image_bytes  = buf.getvalue()
+        filename     = "cropped_selection.png"
         content_type = "image/png"
     else:
-        filename = file.filename
+        filename     = file.filename
         content_type = file.content_type
 
-    # 1. Vectorize the (possibly cropped) image
     async with httpx.AsyncClient() as http_client:
         files = {"file": (filename, image_bytes, content_type)}
+        form_data = {
+            "skip_rembg": skip_rembg_flag,
+            "yolo_label": search_label if search_label else ""
+        }
+        
         vis_response = await http_client.post(
-            f"{VISUAL_URL}/vectorize", files=files, timeout=40.0
+            f"{VISUAL_URL}/vectorize", 
+            files=files, 
+            data=form_data, 
+            timeout=40.0
         )
         data = vis_response.json()
-        query_vector = data.get("vector")
-        processed_image = data.get("processed_image")
-        detected_category = data.get("category")
+        query_vector        = data.get("vector")
+        processed_image     = data.get("debug_image") 
+        detected_category   = data.get("category")
+        category_confidence = data.get("category_confidence", 1.0) 
 
     if not query_vector:
         raise HTTPException(status_code=400, detail="Could not vectorize image")
 
-    # 2. Build Filter — YOUR FIX: must + category_tag + MatchValue
+    if search_label:
+        detected_category = search_label
+        
+    # (From Right Branch: Partner's Strict Filtering)
     query_filter = None
     if detected_category:
-        print(f"🎯 Filter: {detected_category}")
         query_filter = models.Filter(
             must=[models.FieldCondition(
                 key="category_tag",
@@ -123,7 +143,6 @@ async def search(
             )]
         )
 
-    # 3. Search Qdrant
     search_result = client.search(
         collection_name=COLLECTION_NAME,
         query_vector=query_vector,
@@ -131,23 +150,34 @@ async def search(
         limit=25
     )
 
+    if len(search_result) == 0 and query_filter is not None:
+        search_result = client.search(
+            collection_name=COLLECTION_NAME,
+            query_vector=query_vector,
+            query_filter=None,
+            limit=25
+        )
+        detected_category = None  
+
     matches = []
     for hit in search_result:
         matches.append({
-            "name": hit.payload.get("name", "Unknown"),
-            "store": hit.payload.get("store_name", "Unknown"),
-            "level": hit.payload.get("floor_level", "Unknown"),
-            "mall": hit.payload.get("mall_name", "Unknown"),
-            "score": round(hit.score, 3),
+            "name":           hit.payload.get("name", "Unknown"),
+            "store":          hit.payload.get("store_name", "Unknown"),
+            "level":          hit.payload.get("floor_level", "Unknown"),
+            "mall":           hit.payload.get("mall_name", "Unknown"),
+            "score":          round(hit.score, 3),
             "image_filename": hit.payload.get("filename")
         })
 
     return {
-        "matches": matches,
-        "debug_image": processed_image,
-        "detected_category": detected_category
+        "matches":           matches,
+        "debug_image":       processed_image,
+        "detected_category": detected_category,
+        "category_confidence": category_confidence
     }
 
+# ─── Database Uploads ───────────────────────────────────────────────────────
 @app.post("/add")
 async def add_item(
     name: str = Form(...),
@@ -168,8 +198,8 @@ async def add_item(
 
     point_id = str(uuid.uuid4())
     payload = {
-        "name": name, "store_name": store, "floor_level": level,
-        "mall_name": mall, "filename": file.filename,
+        "name": name, "store_name": store, "floor_level": level, 
+        "mall_name": mall, "filename": file.filename, 
         "category_tag": detected_category
     }
 
