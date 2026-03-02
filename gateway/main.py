@@ -80,12 +80,12 @@ async def search(file: UploadFile = File(...)):
         detected_category = data.get("category")      # Your Category
 
     # 2. Build Filter (YOUR LOGIC)
-    query_filter = None
-    if detected_category:
-        print(f"🎯 Filter: {detected_category}")
-        query_filter = models.Filter(
-            should=[models.FieldCondition(key="name", match=models.MatchText(text=detected_category))]
-        )
+    query_filter = models.Filter(
+        must=[models.FieldCondition(          
+            key="category_tag",              
+            match=models.MatchValue(value=detected_category) 
+        )]
+    )
 
     # 3. Search Qdrant
     search_result = client.search(
