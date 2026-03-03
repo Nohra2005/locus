@@ -14,13 +14,12 @@ L.Icon.Default.mergeOptions({
 // ── Proxy handles routing — no need for absolute URL ──────────────
 const API = "";
 
-// ── Demo store GPS coords (ABC Achrafieh area) ─────────────────────
 const STORE_COORDS = {
-  "Zara":          [33.88690, 35.51310],
-  "Bershka":       [33.88720, 35.51350],
-  "Mike Sport":    [33.88650, 35.51280],
-  "Louis Vuitton": [33.88750, 35.51400],
-  "Virgin":        [33.88600, 35.51250],
+  "Zara":          [33.88685, 35.51308],  // ABC Achrafieh, Beirut
+  "Bershka":       [33.93372, 35.58891],  // ABC Dbayeh, Metn
+  "Mike Sport":    [33.86769, 35.54560],  // City Centre Beirut, Hazmieh
+  "Louis Vuitton": [33.89383, 35.50182],  // Beirut Souks, Downtown
+  "Virgin":        [33.88685, 35.51308],  // ABC Achrafieh, Beirut
 };
 
 // ── Design tokens — matching your existing locus aesthetic ─────────
@@ -1160,7 +1159,26 @@ export default function App() {
       const res = await fetch(`${API}/search`, { method: "POST", body: form });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setResults(data.results || []);
+      // Gateway returns "matches" as flat objects — reshape to {score, payload}
+      // so the rest of the frontend (ResultCard, map) works without changes
+      const reshaped = (data.matches || data.results || []).map(m => ({
+        score: m.score,
+        payload: {
+          store:      m.store      || m.store_name,
+          image_url:  m.image_url  || m.image_filename,
+          item_name:  m.name,
+          item_id:    m.item_id,
+        }
+      }));
+      const seen = new Map();
+      for (const r of reshaped) {
+        const id = r.payload.item_id || r.payload.image_url;
+        if (!seen.has(id) || r.score > seen.get(id).score) {
+          seen.set(id, r);
+        }
+      }
+      const deduped = Array.from(seen.values()).sort((a, b) => b.score - a.score);
+      setResults(deduped);
       setCategoryInfo({ category: data.detected_category, confidence: data.category_confidence });
       setView("results");
     } catch (e) {

@@ -5,25 +5,30 @@ import httpx
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.staticfiles import StaticFiles
 from qdrant_client import QdrantClient
-from qdrant_client.http import models
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from PIL import Image
 
 app = FastAPI()
 
-# ─── Serve Images ───────────────────────────────────────────────────────────
+# ── Serve DeepFashion dataset images at /static ──────────────────────────────
+# Add this volume to docker-compose.yml under the gateway service:
+#   volumes:
+#     - "C:/Users/User/.cache/kagglehub/datasets/hserdaraltan/deepfashion-inshop-clothes-retrieval/versions/1:/app/dataset"
+# bulk_upload stores URLs as /static/img_highres/... so we mount at /static
+DATASET_DIR = os.environ.get("DATASET_DIR", "/app/dataset")
 try:
-    if os.path.exists("../demo_images"):
-        app.mount("/static", StaticFiles(directory="../demo_images"), name="static")
-    elif os.path.exists("./demo_images"):
-        app.mount("/static", StaticFiles(directory="./demo_images"), name="static")
-except Exception:
-    pass
+    if os.path.exists(DATASET_DIR):
+        app.mount("/static", StaticFiles(directory=DATASET_DIR), name="static")
+        print(f"Serving dataset images from {DATASET_DIR}")
+    else:
+        print(f"WARNING: DATASET_DIR not found: {DATASET_DIR}")
+except Exception as e:
+    print(f"WARNING: Could not mount static files: {e}")
 
-# ─── Config ─────────────────────────────────────────────────────────────────
-VISUAL_URL = "http://visual_engine:8001"
-QDRANT_HOST = "qdrant"
-QDRANT_PORT = 6333
+# ── Config ────────────────────────────────────────────────────────────────────
+VISUAL_URL      = "http://visual_engine:8001"
+QDRANT_HOST     = "qdrant"
+QDRANT_PORT     = 6333
 COLLECTION_NAME = "locus_items"
 
 client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
@@ -40,20 +45,19 @@ def startup_event():
 def read_root():
     return {"status": "online", "service": "Locus Gateway"}
 
-# ─── MLOps / Feedback ───────────────────────────────────────────────────────
+# ── Feedback ──────────────────────────────────────────────────────────────────
 @app.post("/feedback")
 async def receive_feedback(
     query_category: str = Form("Unknown"),
-    rating: str = Form(...),  # "upvote" or "downvote"
+    rating: str = Form(...),
 ):
-    """ Logs user feedback for future Contrastive Fine-Tuning. """
     if rating == "upvote":
-        print(f"📈 [FEEDBACK] SUCCESS: User loved the results for '{query_category}'")
+        print(f"[FEEDBACK] SUCCESS: User loved results for '{query_category}'")
     else:
-        print(f"📉 [FEEDBACK] FAILURE: User rejected the results for '{query_category}'. Needs fine-tuning.")
+        print(f"[FEEDBACK] FAILURE: User rejected '{query_category}'. Needs fine-tuning.")
     return {"status": "logged"}
 
-# ─── Health Check (From Left Branch) ────────────────────────────────────────
+# ── Health Check ──────────────────────────────────────────────────────────────
 @app.get("/health")
 async def health_check():
     status = {"gateway": "ready", "visual_engine": "not_ready", "qdrant": "not_ready"}
@@ -64,25 +68,23 @@ async def health_check():
                 status["visual_engine"] = "ready"
     except Exception:
         status["visual_engine"] = "loading"
-
     try:
         client.get_collections()
         status["qdrant"] = "ready"
     except Exception:
         status["qdrant"] = "loading"
-
     return {"ready": all(v == "ready" for v in status.values()), "services": status}
 
-# ─── Step 1: Detect (From Left Branch) ──────────────────────────────────────
+# ── Step 1: Detect ────────────────────────────────────────────────────────────
 @app.post("/detect")
 async def detect_objects(file: UploadFile = File(...)):
     async with httpx.AsyncClient() as http_client:
-        files = {"file": (file.filename, await file.read(), file.content_type)}
+        files    = {"file": (file.filename, await file.read(), file.content_type)}
         response = await http_client.post(f"{VISUAL_URL}/detect", files=files, timeout=60.0)
         response.raise_for_status()
         return response.json()
 
-# ─── Step 2: Search (With Bounding Boxes & skip_rembg) ──────────────────────
+# ── Step 2: Search ────────────────────────────────────────────────────────────
 @app.post("/search")
 async def search(
     file: UploadFile = File(...),
@@ -93,8 +95,7 @@ async def search(
     search_label: str = Form(None),
 ):
     image_bytes = await file.read()
-    is_cropped = all(v is not None for v in [x1, y1, x2, y2])
-    skip_rembg_flag = "true" if is_cropped else "false"
+    is_cropped  = all(v is not None for v in [x1, y1, x2, y2])
 
     if is_cropped:
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -109,102 +110,85 @@ async def search(
         content_type = file.content_type
 
     async with httpx.AsyncClient() as http_client:
-        files = {"file": (filename, image_bytes, content_type)}
-        form_data = {
-            "skip_rembg": skip_rembg_flag,
-            "yolo_label": search_label if search_label else ""
-        }
-        
         vis_response = await http_client.post(
-            f"{VISUAL_URL}/vectorize", 
-            files=files, 
-            data=form_data, 
+            f"{VISUAL_URL}/vectorize",
+            files={"file": (filename, image_bytes, content_type)},
+            data={
+                "skip_rembg": "true" if is_cropped else "false",
+                "yolo_label": search_label if search_label else ""
+            },
             timeout=40.0
         )
-        data = vis_response.json()
+        data                = vis_response.json()
         query_vector        = data.get("vector")
-        processed_image     = data.get("debug_image") 
+        processed_image     = data.get("debug_image")
         detected_category   = data.get("category")
-        category_confidence = data.get("category_confidence", 1.0) 
+        category_confidence = data.get("category_confidence", 1.0)
 
     if not query_vector:
         raise HTTPException(status_code=400, detail="Could not vectorize image")
 
     if search_label:
         detected_category = search_label
-        
-    # (From Right Branch: Partner's Strict Filtering)
-    query_filter = None
-    if detected_category:
-        query_filter = models.Filter(
-            must=[models.FieldCondition(
-                key="category_tag",
-                match=models.MatchValue(value=detected_category)
-            )]
-        )
 
+    # No category filter — CLIP labels ("shirt") never match index tags
+    # ("blouses shirts"). Pure vector similarity works better.
+    # Fetch 50 so the frontend can deduplicate multi-view/dim duplicates.
     search_result = client.search(
         collection_name=COLLECTION_NAME,
         query_vector=query_vector,
-        query_filter=query_filter,
-        limit=25
+        query_filter=None,
+        limit=50
     )
-
-    if len(search_result) == 0 and query_filter is not None:
-        search_result = client.search(
-            collection_name=COLLECTION_NAME,
-            query_vector=query_vector,
-            query_filter=None,
-            limit=25
-        )
-        detected_category = None  
 
     matches = []
     for hit in search_result:
         matches.append({
             "name":           hit.payload.get("name", "Unknown"),
             "store":          hit.payload.get("store_name", "Unknown"),
-            "level":          hit.payload.get("floor_level", "Unknown"),
-            "mall":           hit.payload.get("mall_name", "Unknown"),
             "score":          round(hit.score, 3),
-            "image_filename": hit.payload.get("filename")
+            "image_filename": hit.payload.get("filename"),
+            "item_id":        hit.payload.get("item_id"),
         })
 
     return {
-        "matches":           matches,
-        "debug_image":       processed_image,
-        "detected_category": detected_category,
+        "matches":             matches,
+        "debug_image":         processed_image,
+        "detected_category":   detected_category,
         "category_confidence": category_confidence
     }
 
-# ─── Database Uploads ───────────────────────────────────────────────────────
+# ── Add Item ──────────────────────────────────────────────────────────────────
 @app.post("/add")
 async def add_item(
-    name: str = Form(...),
-    store: str = Form(...),
-    level: str = Form(...),
-    mall: str = Form(...),
-    file: UploadFile = File(...)
+    name:  str        = Form(...),
+    store: str        = Form(...),
+    mall:  str        = Form(...),
+    file:  UploadFile = File(...)
 ):
     async with httpx.AsyncClient() as http_client:
-        files = {"file": (file.filename, await file.read(), file.content_type)}
         vis_response = await http_client.post(
-            f"{VISUAL_URL}/vectorize", files=files, timeout=30.0
+            f"{VISUAL_URL}/vectorize",
+            files={"file": (file.filename, await file.read(), file.content_type)},
+            timeout=30.0
         )
         vis_response.raise_for_status()
-        data = vis_response.json()
-        vector = data.get("vector")
+        data              = vis_response.json()
+        vector            = data.get("vector")
         detected_category = data.get("category")
-
-    point_id = str(uuid.uuid4())
-    payload = {
-        "name": name, "store_name": store, "floor_level": level, 
-        "mall_name": mall, "filename": file.filename, 
-        "category_tag": detected_category
-    }
 
     client.upsert(
         collection_name=COLLECTION_NAME,
-        points=[PointStruct(id=point_id, vector=vector, payload=payload)]
+        points=[PointStruct(
+            id      = str(uuid.uuid4()),
+            vector  = vector,
+            payload = {
+                "name":         name,
+                "store_name":   store,
+                "mall_name":    mall,
+                "filename":     file.filename,
+                "category_tag": detected_category
+            }
+        )]
     )
     return {"status": "saved", "item": name}
