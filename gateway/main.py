@@ -5,16 +5,12 @@ import httpx
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.staticfiles import StaticFiles
 from qdrant_client import QdrantClient
+from qdrant_client.http import models
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from PIL import Image
 
 app = FastAPI()
 
-# ── Serve DeepFashion dataset images at /static ──────────────────────────────
-# Add this volume to docker-compose.yml under the gateway service:
-#   volumes:
-#     - "C:/Users/User/.cache/kagglehub/datasets/hserdaraltan/deepfashion-inshop-clothes-retrieval/versions/1:/app/dataset"
-# bulk_upload stores URLs as /static/img_highres/... so we mount at /static
 DATASET_DIR = os.environ.get("DATASET_DIR", "/app/dataset")
 try:
     if os.path.exists(DATASET_DIR):
@@ -25,11 +21,41 @@ try:
 except Exception as e:
     print(f"WARNING: Could not mount static files: {e}")
 
-# ── Config ────────────────────────────────────────────────────────────────────
 VISUAL_URL      = "http://visual_engine:8001"
 QDRANT_HOST     = "qdrant"
 QDRANT_PORT     = 6333
 COLLECTION_NAME = "locus_items"
+
+LABEL_TO_CATEGORY = {
+    "short sleeved shirt":   "blouses shirts",
+    "long sleeved shirt":    "blouses shirts",
+    "short sleeved outwear": "jackets vests",
+    "long sleeved outwear":  "jackets vests",
+    "vest":                  "jackets vests",
+    "sling":                 "blouses shirts",
+    "shorts":                "shorts",
+    "trousers":              "pants capris",
+    "skirt":                 "skirts",
+    "short sleeved dress":   "dresses",
+    "long sleeved dress":    "dresses",
+    "vest dress":            "dresses",
+    "sling dress":           "dresses",
+    "shoe":                  "shoes",
+    "bag, wallet":           "accessories",
+    "glasses":               "accessories",
+    "hat":                   "accessories",
+    "shirt":                 "blouses shirts",
+    "t-shirt":               "blouses shirts",
+    "dress":                 "dresses",
+    "pants":                 "pants capris",
+    "jeans":                 "denim",
+    "jacket":                "jackets vests",
+    "coat":                  "jackets vests",
+    "shoes":                 "shoes",
+    "sneakers":              "shoes",
+    "bag":                   "accessories",
+    "handbag":               "accessories",
+}
 
 client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
 
@@ -131,15 +157,35 @@ async def search(
     if search_label:
         detected_category = search_label
 
-    # No category filter — CLIP labels ("shirt") never match index tags
-    # ("blouses shirts"). Pure vector similarity works better.
-    # Fetch 50 so the frontend can deduplicate multi-view/dim duplicates.
+    raw_label    = (search_label or detected_category or "").lower().strip()
+    category_tag = LABEL_TO_CATEGORY.get(raw_label)
+    print(f"[SEARCH] label='{raw_label}' → category_tag='{category_tag}'")
+
+    query_filter = None
+    if category_tag:
+        query_filter = models.Filter(
+            must=[models.FieldCondition(
+                key="category_tag",
+                match=models.MatchValue(value=category_tag)
+            )]
+        )
+
     search_result = client.search(
         collection_name=COLLECTION_NAME,
         query_vector=query_vector,
-        query_filter=None,
+        query_filter=query_filter,
         limit=50
     )
+
+    # Fallback: if filter returns nothing, drop it and search without
+    if len(search_result) == 0 and query_filter is not None:
+        print(f"[SEARCH] No results for '{category_tag}', retrying without filter")
+        search_result = client.search(
+            collection_name=COLLECTION_NAME,
+            query_vector=query_vector,
+            query_filter=None,
+            limit=50
+        )
 
     matches = []
     for hit in search_result:
