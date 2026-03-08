@@ -1,9 +1,0 @@
-from qdrant_client import QdrantClient
-
-client = QdrantClient("localhost", port=6333)
-
-if client.collection_exists("locus_items"):
-    client.delete_collection("locus_items")
-    print("Deleted.")
-else:
-    print("Nothing to delete.")
