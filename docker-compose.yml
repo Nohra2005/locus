@@ -24,7 +24,6 @@ services:
       - QDRANT_HOST=http://qdrant:6333
     volumes:
       - ./gateway:/app
-      - "C:/Users/User/.cache/kagglehub/datasets/hserdaraltan/deepfashion-inshop-clothes-retrieval/versions/1:/app/dataset"
 
   # 3. Visual Engine (Internal Endpoint 1)
   visual_engine:
