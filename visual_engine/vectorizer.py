@@ -1,16 +1,12 @@
 # =============================================================================
 # vectorizer.py
 #
-# CHANGES vs previous version:
-#   - clip_labels imported from clip_labels.py (single source of truth)
-#   - _classify_crop() now returns ALL 15 scores, not just top-1
-#   - process_image() accepts yolo_conf parameter (YOLO bbox confidence)
-#   - Confidence ensemble implemented:
-#       YOLO canonical label + bbox conf  vs  CLIP top label + softmax conf
-#       Whichever is higher confidence wins → becomes category_tag
-#   - category_scores (all 15 label scores) now returned and stored in Qdrant
-#   - process_image() always returns 4 values: vector, category_tag,
-#     category_scores, debug_img_b64
+# Clean separation of concerns:
+#   YOLO  → detection only   (finds items, draws bounding boxes)
+#   CLIP  → classification + embedding  (what is it? what does it look like?)
+#
+# process_image() returns 4 values:
+#   vector, category_tag, category_scores, debug_img_b64
 # =============================================================================
 
 import torch
@@ -23,17 +19,15 @@ from rembg import remove, new_session
 
 from detector_clothing import ClothingDetector
 from detector_accessories import AccessoryDetector
-from clip_labels import CANONICAL_LABELS   # ← single source of truth
+from clip_labels import CANONICAL_LABELS
 
 
 class LocusVisualizer:
     def __init__(self):
 
-        # ── Detection Model 1 ─────────────────────────────────────────────────
-        self.clothing_detector = ClothingDetector()
-
-        # ── Detection Model 2 ─────────────────────────────────────────────────
-        self.accessory_detector = AccessoryDetector()
+        # ── Detection models ──────────────────────────────────────────────────
+        self.clothing_detector   = ClothingDetector()
+        self.accessory_detector  = AccessoryDetector()
 
         # ── CLIP ──────────────────────────────────────────────────────────────
         print("Loading CLIP (Vectorization & Classification)")
@@ -44,14 +38,11 @@ class LocusVisualizer:
         print("Loading rembg (Background Removal)")
         self.rembg_session = new_session("u2net")
 
-        # ── Labels — imported, never hardcoded here ───────────────────────────
-        # CANONICAL_LABELS is the 15-label list from clip_labels.py.
-        # If you add a label there, it automatically applies here at next restart.
-        self.clip_labels = CANONICAL_LABELS
+        # ── Labels ────────────────────────────────────────────────────────────
+        self.clip_labels = CANONICAL_LABELS   # 15 canonical labels from clip_labels.py
 
-        # Pre-compute text embeddings once at startup.
-        # Shape: (15, 512) — one 512-dim vector per label.
-        # Stays in memory so every classify call is just a matrix multiply.
+        # Pre-compute text embeddings once at startup — shape (15, 512)
+        # Every classification call is then just one matrix multiply (fast)
         print(f"Pre-computing CLIP text embeddings for {len(self.clip_labels)} labels...")
         text_inputs = self.clip_processor(
             text=self.clip_labels, return_tensors="pt", padding=True
@@ -62,40 +53,38 @@ class LocusVisualizer:
 
         print("=" * 50)
         print("LOCUS VISUAL ENGINE READY")
-        print(f"Labels: {self.clip_labels}")
+        print(f"Labels ({len(self.clip_labels)}): {self.clip_labels}")
         print("=" * 50)
 
     # =========================================================================
     # PUBLIC METHOD 1: detect_objects()
     # Called by gateway /detect endpoint.
-    # Runs both detectors, merges results, falls back to CLIP if nothing found.
     # =========================================================================
     def detect_objects(self, image_bytes):
         """
-        Runs both detection models independently on the same image.
+        Runs both detection models on the same image and merges results.
 
         Flow:
             1. ClothingDetector  → shirts, pants, dresses, skirts, jackets
             2. AccessoryDetector → sweaters, coats, jumpsuits, shoes, bags, etc.
-            3. Results merged (simple concatenation, no cross-model deduplication)
+            3. Results merged
             4. Fallback to full-image CLIP if both models find nothing
 
         Returns:
             (detections, image_width, image_height)
-            detections: list of dicts with bbox, label, search_label, score, source
         """
         t0 = time.time()
         try:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
             W, H  = image.size
 
-            clothing    = self.clothing_detector.detect(image, self._classify_crop)
-            accessories = self.accessory_detector.detect(image, self._classify_crop)
+            clothing       = self.clothing_detector.detect(image, self._classify_crop)
+            accessories    = self.accessory_detector.detect(image, self._classify_crop)
             all_detections = clothing + accessories
 
             if not all_detections:
-                print("Both models found nothing. Running full-image CLIP fallback.")
-                label, conf, _ = self._classify_crop(image)   # _ = all_scores, unused here
+                print("Both models found nothing — running full-image CLIP fallback.")
+                label, conf, _ = self._classify_crop(image)
                 if conf >= 0.35:
                     all_detections.append({
                         "bbox":         [0, 0, W, H],
@@ -115,38 +104,30 @@ class LocusVisualizer:
     # =========================================================================
     # PUBLIC METHOD 2: process_image()
     # Called by gateway /search and /add-bulk endpoints.
-    # Embeds the item and classifies it using the confidence ensemble.
     # =========================================================================
-    def process_image(self, image_bytes, skip_rembg=False, yolo_label="", yolo_conf=0.0):
+    def process_image(self, image_bytes, skip_rembg=False):
         """
-        Full pipeline for a single selected item.
+        Full pipeline for a single item.
 
         Steps:
             1. Resize if needed (max 512px)
             2a. skip_rembg=True  → bounding box crop, skip background removal
-            2b. skip_rembg=False → run rembg to isolate item from background
-            3. CLIP vectorization → 512-dim embedding for Qdrant
-            4. CLIP classification → all 15 label scores (softmax)
-            5. Confidence ensemble:
-                  Branch A: yolo_label + yolo_conf  (YOLO bbox detection confidence)
-                  Branch B: clip_label + clip_conf  (CLIP softmax top score)
-                  Winner:   whichever branch has higher confidence → category_tag
-            6. Return category_scores (all 15 scores) for Qdrant payload storage
+            2b. skip_rembg=False → rembg background removal
+            3. CLIP vectorization → 512-dim embedding
+            4. CLIP classification → all 15 scores (softmax)
+               top score ≥ 0.45 → category_tag = that label
+               top score < 0.45 → category_tag = None (indexed without filter)
 
         Args:
-            image_bytes: raw bytes of the image to process
-            skip_rembg:  True when image is a tight bounding box crop
-            yolo_label:  canonical label from YOLO (already mapped via YOLO_TO_CANONICAL
-                         or FASHIONPEDIA_TO_CANONICAL). Empty string if no YOLO detection.
-            yolo_conf:   YOLO bounding box confidence score (0.0-1.0).
-                         Only meaningful when yolo_label is set.
+            image_bytes: raw bytes of the image
+            skip_rembg:  True when called with a tight bounding box crop
 
         Returns:
             (vector, category_tag, category_scores, debug_img_b64)
             vector:          list[float] — 512-dim CLIP embedding
-            category_tag:    str | None  — winning canonical label, None if low confidence
-            category_scores: dict        — all 15 scores e.g. {"dress": 0.91, "shirt": 0.03, ...}
-            debug_img_b64:   str         — base64 PNG of preprocessed image (for UI debugger)
+            category_tag:    str | None  — top label if conf ≥ 0.45, else None
+            category_scores: dict        — all 15 scores {"shirt": 0.02, "dress": 0.91, ...}
+            debug_img_b64:   str         — base64 PNG of preprocessed image
         """
         t0 = time.time()
         try:
@@ -176,7 +157,7 @@ class LocusVisualizer:
 
                 alpha_max = output_image.getextrema()[3][1]
                 if alpha_max == 0:
-                    print("Ghost image detected. Rejecting.")
+                    print("Ghost image detected — rejecting.")
                     return None, None, None, None
 
                 bbox = output_image.getbbox()
@@ -187,65 +168,34 @@ class LocusVisualizer:
                 white_bg.paste(output_image, mask=output_image.split()[3])
 
             # ── Step 3: CLIP Vectorization ────────────────────────────────────
-            # Produces the 512-dim embedding stored in Qdrant for similarity search.
             clip_inputs = self.clip_processor(images=white_bg, return_tensors="pt")
             with torch.no_grad():
                 image_features = self.clip_model.get_image_features(**clip_inputs)
             image_features /= image_features.norm(p=2, dim=-1, keepdim=True)
             vector = image_features[0].tolist()
 
-            # ── Step 4: CLIP Classification (all 15 scores) ───────────────────
-            # Always run this even when YOLO gave us a label.
-            # Two reasons:
-            #   (a) We need CLIP's confidence to compare against YOLO's in the ensemble
-            #   (b) We store ALL 15 scores in Qdrant — useful for future re-classification
+            # ── Step 4: CLIP Classification ───────────────────────────────────
             similarity    = (100.0 * image_features @ self.text_features.T).softmax(dim=-1)
-            scores_tensor = similarity[0]                          # shape: (15,)
+            scores_tensor = similarity[0]   # shape: (15,)
 
+            # All 15 scores stored in Qdrant — useful for future re-classification
+            # without re-running the visual engine
             category_scores = {
                 label: round(scores_tensor[i].item(), 4)
                 for i, label in enumerate(self.clip_labels)
             }
 
-            clip_conf_val  = scores_tensor.max().item()
-            clip_label_val = self.clip_labels[scores_tensor.argmax().item()]
+            clip_conf  = scores_tensor.max().item()
+            clip_label = self.clip_labels[scores_tensor.argmax().item()]
 
-            # ── Step 5: Confidence Ensemble ───────────────────────────────────
-            #
-            # Branch A (YOLO): canonical label from bbox detection + bbox confidence
-            # Branch B (CLIP): top softmax label + softmax confidence
-            #
-            # Both are 0-1 floats → directly comparable.
-            # If neither clears MIN_CONF → category_tag = None
-            # (product still indexed, just without a category filter)
-
-            MIN_CONF       = 0.45
-            yolo_available = bool(yolo_label and yolo_label.strip())
-
-            if yolo_available and yolo_conf >= clip_conf_val:
-                # YOLO is more confident — trust the detector
-                category_tag = yolo_label.strip()
-                winner       = "YOLO"
-                win_conf     = yolo_conf
-            elif clip_conf_val >= MIN_CONF:
-                # CLIP is more confident (or YOLO wasn't available)
-                category_tag = clip_label_val
-                winner       = "CLIP"
-                win_conf     = clip_conf_val
+            if clip_conf >= 0.45:
+                category_tag = clip_label
+                print(f"CLIP classification: '{category_tag}' ({clip_conf:.2f})")
             else:
-                # Neither branch is confident enough
                 category_tag = None
-                winner       = "none"
-                win_conf     = max(yolo_conf, clip_conf_val)
+                print(f"CLIP low confidence: '{clip_label}' ({clip_conf:.2f}) → no category filter")
 
-            print(
-                f"Ensemble → "
-                f"YOLO: '{yolo_label}' ({yolo_conf:.2f})  |  "
-                f"CLIP: '{clip_label_val}' ({clip_conf_val:.2f})  |  "
-                f"Winner: {winner} → '{category_tag}' ({win_conf:.2f})"
-            )
-
-            # ── Step 6: Debug image ───────────────────────────────────────────
+            # ── Step 5: Debug image ───────────────────────────────────────────
             buf = io.BytesIO()
             white_bg.save(buf, format="PNG")
             debug_img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
@@ -259,18 +209,14 @@ class LocusVisualizer:
 
     # =========================================================================
     # PRIVATE: _classify_crop()
-    # Passed into detectors as classify_fn.
-    # Returns all 15 scores now (not just top-1) so callers have full info.
+    # Passed into both detectors as classify_fn (used by fallback path).
     # =========================================================================
     def _classify_crop(self, pil_image):
         """
-        Runs CLIP zero-shot classification on a PIL image crop.
+        CLIP zero-shot classification on a PIL image.
 
         Returns:
             (best_label, best_confidence, all_scores)
-            best_label:      str   — canonical label with highest softmax score
-            best_confidence: float — that label's softmax score
-            all_scores:      dict  — full {label: score} dict for all 15 labels
         """
         clip_inputs = self.clip_processor(images=pil_image, return_tensors="pt")
         with torch.no_grad():

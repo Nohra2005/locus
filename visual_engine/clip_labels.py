@@ -1,3 +1,10 @@
+# =============================================================================
+# clip_labels.py — Single source of truth for all category labels
+#
+# Imported by: vectorizer.py, detector_clothing.py, detector_accessories.py
+# Never hardcode labels anywhere else — always import from here.
+# =============================================================================
+
 CANONICAL_LABELS = [
     "shirt",
     "sweater",      # hoodie, cardigan, knitwear, sweatshirt
@@ -17,7 +24,7 @@ CANONICAL_LABELS = [
 ]  # 15 labels total
 
 YOLO_TO_CANONICAL = {
-    # DeepFashion2 — unchanged
+    # DeepFashion2 class names → canonical labels
     "short sleeved shirt":   "shirt",
     "long sleeved shirt":    "shirt",
     "short sleeved outwear": "jacket",
@@ -35,22 +42,22 @@ YOLO_TO_CANONICAL = {
 
 FASHIONPEDIA_TO_CANONICAL = {
     # Clothing items DeepFashion2 misses — handled by YOLOS
-    "top, t-shirt, sweatshirt":               "sweater",
-    "sweater":                                "sweater",
-    "cardigan":                               "sweater",
-    "coat":                                   "coat",
-    "jumpsuit":                               "jumpsuit",
+    "top, t-shirt, sweatshirt":                "sweater",
+    "sweater":                                 "sweater",
+    "cardigan":                                "sweater",
+    "coat":                                    "coat",
+    "jumpsuit":                                "jumpsuit",
     # Accessories
-    "shoe":                                   "shoes",
-    "sock":                                   "shoes",
-    "leg warmer":                             "shoes",
-    "tights, stockings":                      "shoes",
-    "bag, wallet":                            "bag",
-    "glasses":                                "glasses",
-    "hat":                                    "hat",
-    "headband, head covering, hair accessory":"hat",
-    "watch":                                  "watch",
-    "scarf":                                  "scarf",
+    "shoe":                                    "shoes",
+    "sock":                                    "shoes",
+    "leg warmer":                              "shoes",
+    "tights, stockings":                       "shoes",
+    "bag, wallet":                             "bag",
+    "glasses":                                 "glasses",
+    "hat":                                     "hat",
+    "headband, head covering, hair accessory": "hat",
+    "watch":                                   "watch",
+    "scarf":                                   "scarf",
 }
 
 NON_SEARCHABLE = {
@@ -59,10 +66,8 @@ NON_SEARCHABLE = {
     "pocket", "neckline", "buckle", "zipper",
 }
 
-# Add this to the bottom of clip_labels.py
-
 # Fashionpedia class IDs we actually want to detect.
-# Derived from FASHIONPEDIA_TO_CANONICAL — every ID whose label has a mapping.
+# Every ID whose Fashionpedia label has a mapping in FASHIONPEDIA_TO_CANONICAL.
 # IDs NOT in this set (tie, glove, belt, garment parts...) are silently skipped.
 SEARCHABLE_IDS = {
     1,   # top, t-shirt, sweatshirt  → sweater

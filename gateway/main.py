@@ -118,6 +118,67 @@ async def health_check():
     return {"ready": all(v == "ready" for v in status.values()), "services": status}
 
 
+# ── Store Catalogue ────────────────────────────────────────────────────────────
+@app.get("/store-catalogue")
+async def store_catalogue(store_name: str, limit: int = 100, offset: int = 0):
+    """
+    Returns all indexed products for a given store_name.
+    Supports pagination via limit + offset.
+    """
+    results, _ = client.scroll(
+        collection_name=COLLECTION_NAME,
+        scroll_filter=models.Filter(
+            must=[models.FieldCondition(
+                key="store_name",
+                match=models.MatchValue(value=store_name)
+            )]
+        ),
+        limit=limit,
+        offset=offset,
+        with_payload=True,
+        with_vectors=False,   # no need to return the 512-dim vectors
+    )
+
+    products = []
+    for point in results:
+        p = point.payload
+        products.append({
+            "id":           str(point.id),
+            "name":         p.get("name", ""),
+            "price":        p.get("price", ""),
+            "category_tag": p.get("category_tag", ""),
+            "image_url":    p.get("filename", ""),
+            "store_name":   p.get("store_name", ""),
+            "mall_name":    p.get("mall_name", ""),
+        })
+
+    # Also get total count for this store
+    count = client.count(
+        collection_name=COLLECTION_NAME,
+        count_filter=models.Filter(
+            must=[models.FieldCondition(
+                key="store_name",
+                match=models.MatchValue(value=store_name)
+            )]
+        ),
+    ).count
+
+    return {"products": products, "total": count, "offset": offset, "limit": limit}
+
+
+@app.delete("/store-catalogue/item/{item_id}")
+async def delete_catalogue_item(item_id: str):
+    """Delete a single product from the catalogue by its Qdrant point ID."""
+    try:
+        client.delete(
+            collection_name=COLLECTION_NAME,
+            points_selector=models.PointIdsList(points=[item_id]),
+        )
+        return {"status": "deleted", "id": item_id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 # ── Step 1: Detect ─────────────────────────────────────────────────────────────
 @app.post("/detect")
 async def detect_objects(file: UploadFile = File(...)):
@@ -189,7 +250,7 @@ async def search(
             "mall_name":      hit.payload.get("mall_name", "Unknown"),
             "price":          hit.payload.get("price", "Unknown"),
             "score":          round(hit.score, 3),
-            "image_filename": hit.payload.get("filename"),
+            "image_url":       hit.payload.get("image_url"),
             "item_id":        hit.payload.get("item_id"),
         })
 
@@ -229,7 +290,7 @@ async def add_item(
                 "name":         name,
                 "store_name":   store,
                 "mall_name":    mall,
-                "filename":     file.filename,
+                "image_url":     f"/static/{file.filename}",
                 "category_tag": detected_category
             }
         )]
@@ -282,7 +343,7 @@ async def add_bulk_item(item: BulkItem):
                 "name":         item.name,
                 "store_name":   item.store,
                 "mall_name":    item.mall,
-                "filename":     item.image_url,
+                "image_url":     item.image_url,
                 "category_tag": final_category,
                 "price":        item.price,
             }

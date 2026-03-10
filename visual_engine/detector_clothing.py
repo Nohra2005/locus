@@ -1,14 +1,22 @@
 # =============================================================================
 # detector_clothing.py
 # Model 1: DeepFashion2 YOLOv8
-# Detects clothing items: shirts, pants, dresses, skirts, outwear
-# Does NOT detect shoes, bags, or accessories
+# Detects: shirt, jacket, dress, skirt, pants, shorts
+# Does NOT detect: shoes, bags, accessories, sweaters, coats — see detector_accessories.py
+#
+# CHANGES vs previous version:
+#   - Imports YOLO_TO_CANONICAL from clip_labels.py
+#   - search_label assigned via YOLO_TO_CANONICAL directly (no CLIP call per crop)
+#   - classify_fn still accepted for interface compatibility but not used
 # =============================================================================
 
 from ultralytics import YOLO
 from huggingface_hub import hf_hub_download
 from PIL import Image
 
+from clip_labels import YOLO_TO_CANONICAL
+
+# Raw DeepFashion2 class labels — fixed by model weights, do not reorder
 DEEPFASHION2_LABELS = {
     0:  "short sleeved shirt",
     1:  "long sleeved shirt",
@@ -26,14 +34,14 @@ DEEPFASHION2_LABELS = {
 }
 
 MIN_CONFIDENCE = 0.30
-MIN_AREA = 1500  # px²
+MIN_AREA       = 1500  # px²
 
 
 class ClothingDetector:
     def __init__(self):
         print("=" * 50)
         print("Loading Model 1: DeepFashion2 (Clothing)")
-        print("Covers: shirts, pants, dresses, skirts, outwear")
+        print("Covers: shirt, jacket, dress, skirt, pants, shorts")
         print("=" * 50)
         model_path = hf_hub_download(
             repo_id="Bingsu/adetailer",
@@ -48,37 +56,40 @@ class ClothingDetector:
 
         Args:
             pil_image:   PIL.Image — the full photo to scan
-            classify_fn: function(pil_image) -> (label, confidence)
-                         Provided by the orchestrator (CLIP).
-                         Used to map DeepFashion2 labels to search-friendly labels.
+            classify_fn: kept for interface compatibility, not called here.
+                         YOLO already knows the category — mapped via YOLO_TO_CANONICAL.
 
         Returns:
-            list of dicts: bbox, label, search_label, score, source
+            list of dicts:
+                bbox         [x1, y1, x2, y2]
+                label        raw DeepFashion2 label (shown in UI)
+                search_label canonical label (used for Qdrant filter)
+                score        YOLO bbox confidence
+                source       "deepfashion2"
         """
         detections = []
         try:
             results = self.model(pil_image, conf=MIN_CONFIDENCE, verbose=False)[0]
 
             for box in results.boxes:
-                class_id = int(box.cls[0])
-                conf = float(box.conf[0])
+                class_id        = int(box.cls[0])
+                conf            = float(box.conf[0])
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
 
-                # Skip boxes that are too small to be meaningful
                 if (x2 - x1) * (y2 - y1) < MIN_AREA:
                     continue
 
                 df2_label = DEEPFASHION2_LABELS.get(class_id, "clothing")
+                canonical = YOLO_TO_CANONICAL.get(df2_label)
 
-                # Use CLIP (passed in as classify_fn) to get a consistent
-                # search label that matches the Qdrant index categories
-                crop = pil_image.crop((x1, y1, x2, y2))
-                clip_label, _ = classify_fn(crop)
+                if canonical is None:
+                    print(f"  WARNING: no canonical mapping for '{df2_label}', skipping")
+                    continue
 
                 detections.append({
                     "bbox":         [x1, y1, x2, y2],
-                    "label":        df2_label,   # shown to user
-                    "search_label": clip_label,  # used for Qdrant filter
+                    "label":        df2_label,
+                    "search_label": canonical,
                     "score":        round(conf, 3),
                     "source":       "deepfashion2"
                 })
