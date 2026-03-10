@@ -58,3 +58,26 @@ NON_SEARCHABLE = {
     "hood", "collar", "lapel", "epaulette", "sleeve",
     "pocket", "neckline", "buckle", "zipper",
 }
+
+# Add this to the bottom of clip_labels.py
+
+# Fashionpedia class IDs we actually want to detect.
+# Derived from FASHIONPEDIA_TO_CANONICAL — every ID whose label has a mapping.
+# IDs NOT in this set (tie, glove, belt, garment parts...) are silently skipped.
+SEARCHABLE_IDS = {
+    1,   # top, t-shirt, sweatshirt  → sweater
+    2,   # sweater                   → sweater
+    3,   # cardigan                  → sweater
+    9,   # coat                      → coat
+    11,  # jumpsuit                  → jumpsuit
+    13,  # glasses                   → glasses
+    14,  # hat                       → hat
+    15,  # headband / hair accessory → hat
+    18,  # watch                     → watch
+    20,  # leg warmer                → shoes
+    21,  # tights, stockings         → shoes
+    22,  # sock                      → shoes
+    23,  # shoe                      → shoes
+    24,  # bag, wallet               → bag
+    25,  # scarf                     → scarf
+}
