@@ -1,84 +1,81 @@
 # =============================================================================
 # detector_accessories.py
 # Model 2: YOLOS-Fashionpedia
+# Detects: sweater, coat, jumpsuit (clothing DeepFashion2 misses)
+#          + shoes, bag, glasses, hat, watch, scarf
 #
 # CHANGES vs previous version:
-#   - ACCESSORY_ONLY_IDS renamed to SEARCHABLE_IDS
-#   - SEARCHABLE_IDS now includes clothing items DeepFashion2 can't detect:
-#     sweater, cardigan, top/sweatshirt, coat, jumpsuit
-#   - FASHIONPEDIA_TO_SEARCH renamed to FASHIONPEDIA_TO_CANONICAL
-#     and updated to map to the new 15-label canonical vocabulary
-#   - Non-searchable items (tie, glove, belt, umbrella, etc.) excluded
-#   - scarf now maps to "scarf" (own category) not "bag"
+#   - FASHIONPEDIA_TO_CANONICAL and SEARCHABLE_IDS imported from clip_labels.py
+#   - ACCESSORY_ONLY_IDS renamed to SEARCHABLE_IDS (now includes clothing items)
+#   - Safety check added: warns if a searchable ID has no canonical mapping
+#   - MIN_CONFIDENCE lowered to 0.35 (accessories harder to detect than clothing)
 # =============================================================================
 
 import torch
-from PIL import Image
 from transformers import YolosForObjectDetection, YolosImageProcessor
 
-# Single source of truth — canonical vocab and mappings live here
 from clip_labels import FASHIONPEDIA_TO_CANONICAL, SEARCHABLE_IDS
 
 # Full Fashionpedia category list — index = class_id from model output
-# DO NOT reorder. These are fixed by the model weights.
+# DO NOT reorder — fixed by model weights
 FASHIONPEDIA_CATS = [
-    'shirt, blouse',                          # 0
-    'top, t-shirt, sweatshirt',               # 1  ← now searchable
-    'sweater',                                # 2  ← now searchable
-    'cardigan',                               # 3  ← now searchable
-    'jacket',                                 # 4
-    'vest',                                   # 5
-    'pants',                                  # 6
-    'shorts',                                 # 7
-    'skirt',                                  # 8
-    'coat',                                   # 9  ← now searchable
-    'dress',                                  # 10
-    'jumpsuit',                               # 11 ← now searchable
-    'cape',                                   # 12 — non-searchable
-    'glasses',                                # 13
-    'hat',                                    # 14
-    'headband, head covering, hair accessory',# 15
-    'tie',                                    # 16 — non-searchable
-    'glove',                                  # 17 — non-searchable
-    'watch',                                  # 18
-    'belt',                                   # 19 — non-searchable
-    'leg warmer',                             # 20
-    'tights, stockings',                      # 21
-    'sock',                                   # 22
-    'shoe',                                   # 23
-    'bag, wallet',                            # 24
-    'scarf',                                  # 25
-    'umbrella',                               # 26 — non-searchable
-    'hood',                                   # 27 — part of garment, not item
-    'collar',                                 # 28 — part of garment
-    'lapel',                                  # 29 — part of garment
-    'epaulette',                              # 30 — part of garment
-    'sleeve',                                 # 31 — part of garment
-    'pocket',                                 # 32 — part of garment
-    'neckline',                               # 33 — part of garment
-    'buckle',                                 # 34 — part of garment
-    'zipper',                                 # 35 — part of garment
-    'applique',                               # 36 — decoration
-    'bead',                                   # 37 — decoration
-    'bow',                                    # 38 — decoration
-    'flower',                                 # 39 — decoration
-    'fringe',                                 # 40 — decoration
-    'ribbon',                                 # 41 — decoration
-    'rivet',                                  # 42 — decoration
-    'ruffle',                                 # 43 — decoration
-    'sequin',                                 # 44 — decoration
-    'tassel',                                 # 45 — decoration
+    'shirt, blouse',                           # 0
+    'top, t-shirt, sweatshirt',                # 1
+    'sweater',                                 # 2
+    'cardigan',                                # 3
+    'jacket',                                  # 4
+    'vest',                                    # 5
+    'pants',                                   # 6
+    'shorts',                                  # 7
+    'skirt',                                   # 8
+    'coat',                                    # 9
+    'dress',                                   # 10
+    'jumpsuit',                                # 11
+    'cape',                                    # 12
+    'glasses',                                 # 13
+    'hat',                                     # 14
+    'headband, head covering, hair accessory', # 15
+    'tie',                                     # 16
+    'glove',                                   # 17
+    'watch',                                   # 18
+    'belt',                                    # 19
+    'leg warmer',                              # 20
+    'tights, stockings',                       # 21
+    'sock',                                    # 22
+    'shoe',                                    # 23
+    'bag, wallet',                             # 24
+    'scarf',                                   # 25
+    'umbrella',                                # 26
+    'hood',                                    # 27
+    'collar',                                  # 28
+    'lapel',                                   # 29
+    'epaulette',                               # 30
+    'sleeve',                                  # 31
+    'pocket',                                  # 32
+    'neckline',                                # 33
+    'buckle',                                  # 34
+    'zipper',                                  # 35
+    'applique',                                # 36
+    'bead',                                    # 37
+    'bow',                                     # 38
+    'flower',                                  # 39
+    'fringe',                                  # 40
+    'ribbon',                                  # 41
+    'rivet',                                   # 42
+    'ruffle',                                  # 43
+    'sequin',                                  # 44
+    'tassel',                                  # 45
 ]
 
-MIN_CONFIDENCE = 0.35   # lowered from 0.50 — accessories are harder to detect
-MIN_AREA       = 1500   # px² — ignore tiny detections
+MIN_CONFIDENCE = 0.35   # lowered from 0.50 — accessories harder to detect
+MIN_AREA       = 1500   # px²
 
 
 class AccessoryDetector:
     def __init__(self):
         print("=" * 50)
         print("Loading Model 2: YOLOS-Fashionpedia")
-        print("Covers: sweater/cardigan/coat/jumpsuit + accessories")
+        print("Covers: sweater, coat, jumpsuit + accessories")
         print("=" * 50)
         self.processor = YolosImageProcessor.from_pretrained("valentinafeve/yolos-fashionpedia")
         self.model     = YolosForObjectDetection.from_pretrained("valentinafeve/yolos-fashionpedia")
@@ -91,11 +88,15 @@ class AccessoryDetector:
 
         Args:
             pil_image:   PIL.Image — the full photo to scan
-            classify_fn: kept for interface compatibility, not used here.
-                         YOLOS already knows the category — we map it directly.
+            classify_fn: kept for interface compatibility, not called here.
 
         Returns:
-            list of dicts: bbox, label, search_label, score, source
+            list of dicts:
+                bbox         [x1, y1, x2, y2]
+                label        raw Fashionpedia label (shown in UI)
+                search_label canonical label (used for Qdrant filter)
+                score        YOLOS detection confidence
+                source       "yolos_fashionpedia"
         """
         detections = []
         try:
@@ -114,7 +115,6 @@ class AccessoryDetector:
                 class_id = int(label_id)
                 conf     = float(score)
 
-                # Skip anything not in our searchable set
                 if class_id not in SEARCHABLE_IDS:
                     continue
 
@@ -126,18 +126,16 @@ class AccessoryDetector:
                     continue
 
                 fashionpedia_label = FASHIONPEDIA_CATS[class_id]
-                canonical_label    = FASHIONPEDIA_TO_CANONICAL.get(fashionpedia_label)
+                canonical          = FASHIONPEDIA_TO_CANONICAL.get(fashionpedia_label)
 
-                # Safety check — should never happen if SEARCHABLE_IDS and
-                # FASHIONPEDIA_TO_CANONICAL are kept in sync
-                if canonical_label is None:
+                if canonical is None:
                     print(f"  WARNING: no canonical mapping for '{fashionpedia_label}' (id {class_id}), skipping")
                     continue
 
                 detections.append({
                     "bbox":         [x1, y1, x2, y2],
-                    "label":        fashionpedia_label,  # human-readable label shown in UI
-                    "search_label": canonical_label,      # canonical label used for Qdrant filter
+                    "label":        fashionpedia_label,
+                    "search_label": canonical,
                     "score":        round(conf, 3),
                     "source":       "yolos_fashionpedia"
                 })
