@@ -521,7 +521,7 @@ function ResultCard({ result, onFeedback, highlighted }) {
 // ══════════════════════════════════════════════════════════════════
 // RESULTS VIEW
 // ══════════════════════════════════════════════════════════════════
-function ResultsView({ results, categoryInfo, selectedItem, imageURL, radius, setRadius, userLocation, onFeedback, onReset }) {
+function ResultsView({ results, categoryInfo, selectedItem, radius, setRadius, userLocation, onFeedback, onReset }) {
   const [highlightedStore, setHighlightedStore] = useState(null);
   const userLL = userLocation || [33.8869, 35.5131];
 
@@ -761,7 +761,6 @@ export default function App() {
               results={results}
               categoryInfo={categoryInfo}
               selectedItem={selectedItem}
-              imageURL={imageURL}
               radius={radius}
               setRadius={setRadius}
               userLocation={userLocation}
