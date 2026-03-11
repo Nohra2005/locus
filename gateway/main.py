@@ -13,6 +13,7 @@ from qdrant_client.http import models
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 from PIL import Image
 from urllib.parse import urlparse
+import asyncio
 
 app = FastAPI()
 
@@ -337,7 +338,7 @@ async def add_bulk_item(item: BulkItem):
     client.upsert(
         collection_name=COLLECTION_NAME,
         points=[PointStruct(
-            id      = str(uuid.uuid4()),
+            id = str(uuid.uuid5(uuid.NAMESPACE_URL, item.image_url)),,
             vector  = vector,
             payload = {
                 "name":         item.name,
@@ -352,7 +353,100 @@ async def add_bulk_item(item: BulkItem):
 
     return {"status": "indexed", "item": item.name, "category": final_category}
 
+# ════════════════════════════════════════════════════════════════════
+# Copy-paste this block into gateway/main.py
+#
+# WHERE: right after the closing line of the existing /add-bulk endpoint
+# ALSO:  add `import asyncio` at the top of the file with the other imports
+# ALSO:  change uuid.uuid4() → uuid.uuid5(uuid.NAMESPACE_URL, item.image_url)
+#        inside the EXISTING /add-bulk endpoint (1 line change)
+# ════════════════════════════════════════════════════════════════════
 
+# ── Batch Bulk Index (parallel) ───────────────────────────────────────────────
+class BulkBatchRequest(BaseModel):
+    items: list[dict]
+
+
+@app.post("/add-bulk-batch")
+async def add_bulk_batch(batch: BulkBatchRequest):
+    """
+    Index many products in parallel instead of one-by-one.
+
+    How it works:
+      - Receives a list of items (up to 50 at a time from the frontend)
+      - Runs up to 10 simultaneously using asyncio.Semaphore
+      - Each item gets a deterministic ID from its image_url
+        → indexing the same product twice just silently overwrites it (no duplicates)
+      - Failed items are reported but don't stop the rest
+    """
+    semaphore = asyncio.Semaphore(10)   # never more than 10 running at once
+
+    async def index_one(raw: dict):
+        # Build a BulkItem from the raw dict (validates fields)
+        item = BulkItem(
+            name      = raw.get("name", "Product"),
+            store     = raw.get("store", ""),
+            mall      = raw.get("mall", ""),
+            image_url = raw.get("image_url", ""),
+            price     = raw.get("price", ""),
+            category  = raw.get("category", ""),
+        )
+        async with semaphore:
+            try:
+                async with httpx.AsyncClient() as http:
+                    # Step 1 — download the product image from its URL
+                    img_resp = await http.get(
+                        item.image_url, timeout=15.0, follow_redirects=True
+                    )
+                    img_resp.raise_for_status()
+                    content_type = img_resp.headers.get("content-type", "image/jpeg")
+
+                    # Step 2 — send image to visual engine (CLIP vectorization)
+                    vis_resp = await http.post(
+                        f"{VISUAL_URL}/vectorize",
+                        files={"file": ("product.jpg", img_resp.content, content_type)},
+                        timeout=60.0,
+                    )
+                    vis_resp.raise_for_status()
+                    vis_data = vis_resp.json()
+
+                vector            = vis_data.get("vector")
+                detected_category = vis_data.get("category")
+                final_category    = detected_category or item.category or "unknown"
+
+                # Step 3 — deterministic ID: same URL → same ID → upsert = safe overwrite
+                point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, item.image_url))
+
+                # Step 4 — store in Qdrant
+                client.upsert(
+                    collection_name=COLLECTION_NAME,
+                    points=[PointStruct(
+                        id      = point_id,
+                        vector  = vector,
+                        payload = {
+                            "name":         item.name,
+                            "store_name":   item.store,
+                            "mall_name":    item.mall,
+                            "image_url":    item.image_url,
+                            "category_tag": final_category,
+                            "price":        item.price,
+                        }
+                    )]
+                )
+                return {"status": "ok", "item": item.name}
+
+            except Exception as e:
+                # Log the failure but don't crash the whole batch
+                print(f"[BATCH] Failed: {item.name} — {e}")
+                return {"status": "failed", "item": item.name, "error": str(e)}
+
+    # Launch all items concurrently (semaphore caps simultaneous requests at 10)
+    results = await asyncio.gather(*[index_one(raw) for raw in batch.items])
+
+    success = sum(1 for r in results if r["status"] == "ok")
+    failed  = [r for r in results if r["status"] == "failed"]
+
+    return {"success": success, "total": len(batch.items), "failed": failed}
 # ══════════════════════════════════════════════════════════════════════════════
 # /scrape  — smart scraper with Shopify API as Strategy 1
 #

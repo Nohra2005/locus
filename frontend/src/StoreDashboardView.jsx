@@ -21,6 +21,74 @@ const T = {
   red:         "#c97070",
 };
 
+
+// ══════════════════════════════════════════════════════════════════
+// SHARED BATCH INDEXING HELPER
+// Sends items in chunks of 50 to /add-bulk-batch.
+// Server runs 10 of those in parallel — much faster than 1-by-1.
+// Same image_url always produces the same ID → no duplicates.
+// ══════════════════════════════════════════════════════════════════
+
+async function runBatchIndex(items, storeName, mallName, setProgress, setErrors, setStatus) {
+  setStatus("indexing");
+  setErrors([]);
+
+  const CHUNK_SIZE = 50;
+  const total = items.length;
+  let success = 0;
+  let failed  = 0;
+  const errs  = [];
+
+  for (let start = 0; start < total; start += CHUNK_SIZE) {
+    const chunk      = items.slice(start, start + CHUNK_SIZE);
+    const batchNum   = Math.floor(start / CHUNK_SIZE) + 1;
+    const totalBatch = Math.ceil(total / CHUNK_SIZE);
+
+    setProgress({
+      done:    start,
+      total,
+      success,
+      failed,
+      current: `Batch ${batchNum}/${totalBatch} (items ${start + 1}–${Math.min(start + CHUNK_SIZE, total)})`,
+    });
+
+    try {
+      const resp = await fetch(`${API}/add-bulk-batch`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: chunk.map(row => ({
+            name:      row.name      || "Product",
+            store:     storeName,
+            mall:      mallName,
+            image_url: row.image_url || row.image || "",
+            price:     row.price     || "",
+            category:  row.category  || "",
+          })),
+        }),
+      });
+
+      if (resp.ok) {
+        const data = await resp.json();
+        success += data.success || 0;
+        failed  += (data.failed || []).length;
+        (data.failed || []).forEach(f => errs.push(`${f.item}: ${f.error}`));
+      } else {
+        failed += chunk.length;
+        errs.push(`Batch ${batchNum}: HTTP ${resp.status}`);
+      }
+    } catch (e) {
+      failed += chunk.length;
+      errs.push(`Batch ${batchNum}: ${e.message}`);
+    }
+  }
+
+  setProgress({ done: total, total, success, failed, current: "" });
+  setErrors(errs);
+  setStatus("done");
+}
+
+
 // ══════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════════
@@ -114,9 +182,9 @@ export default function StoreDashboardView() {
             borderRadius: 10, padding: 4, width: "fit-content",
           }}>
             {[
-              { id: "csv",       label: "CSV / Excel",   icon: "📋" },
-              { id: "scrape",    label: "Scrape Website", icon: "🌐" },
-              { id: "catalogue", label: "My Catalogue",   icon: "🗄️" },
+              { id: "csv",       label: "CSV / Excel",    icon: "📋" },
+              { id: "scrape",    label: "Scrape Website",  icon: "🌐" },
+              { id: "catalogue", label: "My Catalogue",    icon: "🗄️" },
             ].map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
                 padding: "8px 20px", borderRadius: 7, border: "none", cursor: "pointer",
@@ -205,7 +273,6 @@ function CataloguePanel({ storeName }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {/* Header row */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
         <div style={{ fontSize: "0.78rem", color: T.textMuted }}>
           <span style={{ color: T.accent, fontWeight: 600 }}>{total}</span> products indexed for{" "}
@@ -217,7 +284,6 @@ function CataloguePanel({ storeName }) {
         </button>
       </div>
 
-      {/* Search */}
       <input
         value={search}
         onChange={e => setSearch(e.target.value)}
@@ -238,7 +304,6 @@ function CataloguePanel({ storeName }) {
         }}>⚠ {error}</div>
       )}
 
-      {/* Grid */}
       {loading ? (
         <div style={{ textAlign: "center", padding: "60px 0", color: T.textMuted, fontSize: "0.82rem" }}>
           Loading products…
@@ -271,7 +336,6 @@ function CataloguePanel({ storeName }) {
         </div>
       )}
 
-      {/* Pagination */}
       {total > LIMIT && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 8 }}>
           <button className="btn-ghost"
@@ -307,7 +371,6 @@ function CatalogueCard({ product: p, catColor, deleting, onDelete }) {
         position: "relative", transition: "border-color 0.2s",
       }}
     >
-      {/* Image */}
       <div style={{ width: "100%", aspectRatio: "1 / 1", background: T.bgDeep, overflow: "hidden" }}>
         {p.image_url ? (
           <img src={p.image_url} alt={p.name}
@@ -321,8 +384,6 @@ function CatalogueCard({ product: p, catColor, deleting, onDelete }) {
           }}>📦</div>
         )}
       </div>
-
-      {/* Info */}
       <div style={{ padding: "10px 10px 8px" }}>
         <div style={{
           fontSize: "0.75rem", color: T.text, fontWeight: 500, lineHeight: 1.35,
@@ -352,8 +413,6 @@ function CatalogueCard({ product: p, catColor, deleting, onDelete }) {
           )}
         </div>
       </div>
-
-      {/* Delete button — visible on hover */}
       {hovered && (
         <button onClick={onDelete} disabled={deleting} style={{
           position: "absolute", top: 6, right: 6,
@@ -402,34 +461,9 @@ function CsvUploadPanel({ storeName, mallName }) {
 
   const hasRequired = headers.includes("name") && headers.includes("image_url");
 
-  const handleIndex = async () => {
-    setStatus("indexing");
-    setErrors([]);
-    const total = rows.length;
-    let success = 0, failed = 0;
-    const errs = [];
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      setProgress({ done: i, total, success, failed, current: row.name || `Row ${i + 1}` });
-      try {
-        const resp = await fetch(`${API}/add-bulk`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: row.name, store: storeName, mall: mallName,
-            image_url: row.image_url, price: row.price || "", category: row.category || "",
-          }),
-        });
-        if (resp.ok) { success++; } else { failed++; errs.push(`${row.name}: HTTP ${resp.status}`); }
-      } catch (e) {
-        failed++; errs.push(`${row.name}: ${e.message}`);
-      }
-    }
-    setProgress({ done: total, total, success, failed, current: "" });
-    setErrors(errs);
-    setStatus("done");
-  };
+  // ── Uses shared batch helper — parallel, dedup-safe ──
+  const handleIndex = () =>
+    runBatchIndex(rows, storeName, mallName, setProgress, setErrors, setStatus);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -474,7 +508,7 @@ function CsvUploadPanel({ storeName, mallName }) {
               <span style={{ color: T.accent }}>✦</span> Index {rows.length} products
             </button>
             <span style={{ fontSize: "0.72rem", color: T.textMuted }}>
-              ~{Math.ceil(rows.length * 4 / 60)} min estimated
+              ~{Math.max(1, Math.ceil(rows.length * 0.5 / 60))} min estimated
             </span>
           </div>
         </>
@@ -529,35 +563,9 @@ function ScrapeWebsitePanel({ storeName, mallName }) {
 
   const selectedItems = (products || []).filter((_, i) => selected[i]);
 
-  const handleIndex = async () => {
-    if (!selectedItems.length) return;
-    setStatus("indexing");
-    setErrors([]);
-    const total = selectedItems.length;
-    let success = 0, failed = 0;
-    const errs = [];
-
-    for (let i = 0; i < selectedItems.length; i++) {
-      const p = selectedItems[i];
-      setProgress({ done: i, total, success, failed, current: p.name || `Product ${i + 1}` });
-      try {
-        const resp = await fetch(`${API}/add-bulk`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: p.name, store: storeName, mall: mallName,
-            image_url: p.image_url, price: p.price || "", category: "",
-          }),
-        });
-        if (resp.ok) { success++; } else { failed++; errs.push(`${p.name}: HTTP ${resp.status}`); }
-      } catch (e) {
-        failed++; errs.push(`${p.name}: ${e.message}`);
-      }
-    }
-    setProgress({ done: total, total, success, failed, current: "" });
-    setErrors(errs);
-    setStatus("done");
-  };
+  // ── Uses shared batch helper — parallel, dedup-safe ──
+  const handleIndex = () =>
+    runBatchIndex(selectedItems, storeName, mallName, setProgress, setErrors, setStatus);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -645,7 +653,7 @@ function ScrapeWebsitePanel({ storeName, mallName }) {
                 <span style={{ color: T.accent }}>✦</span> Index {selectedItems.length} selected
               </button>
               <span style={{ fontSize: "0.72rem", color: T.textMuted }}>
-                ~{Math.ceil(selectedItems.length * 4 / 60)} min estimated
+                ~{Math.max(1, Math.ceil(selectedItems.length * 0.5 / 60))} min estimated
               </span>
             </div>
           )}
