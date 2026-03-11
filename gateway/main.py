@@ -137,7 +137,7 @@ async def store_catalogue(store_name: str, limit: int = 100, offset: int = 0):
         limit=limit,
         offset=offset,
         with_payload=True,
-        with_vectors=False,   # no need to return the 512-dim vectors
+        with_vectors=False,
     )
 
     products = []
@@ -148,12 +148,11 @@ async def store_catalogue(store_name: str, limit: int = 100, offset: int = 0):
             "name":         p.get("name", ""),
             "price":        p.get("price", ""),
             "category_tag": p.get("category_tag", ""),
-            "image_url":    p.get("filename", ""),
+            "image_url":    p.get("image_url", ""),   # ✔ fixed: was p.get("filename", "")
             "store_name":   p.get("store_name", ""),
             "mall_name":    p.get("mall_name", ""),
         })
 
-    # Also get total count for this store
     count = client.count(
         collection_name=COLLECTION_NAME,
         count_filter=models.Filter(
@@ -251,7 +250,7 @@ async def search(
             "mall_name":      hit.payload.get("mall_name", "Unknown"),
             "price":          hit.payload.get("price", "Unknown"),
             "score":          round(hit.score, 3),
-            "image_url":       hit.payload.get("image_url"),
+            "image_url":      hit.payload.get("image_url"),
             "item_id":        hit.payload.get("item_id"),
         })
 
@@ -291,7 +290,7 @@ async def add_item(
                 "name":         name,
                 "store_name":   store,
                 "mall_name":    mall,
-                "image_url":     f"/static/{file.filename}",
+                "image_url":    f"/static/{file.filename}",
                 "category_tag": detected_category
             }
         )]
@@ -300,7 +299,7 @@ async def add_item(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# /add-bulk  — index a product from a public image URL (JSON body)
+# /add-bulk  — index a single product from a public image URL (JSON body)
 # ══════════════════════════════════════════════════════════════════════════════
 
 class BulkItem(BaseModel):
@@ -338,13 +337,13 @@ async def add_bulk_item(item: BulkItem):
     client.upsert(
         collection_name=COLLECTION_NAME,
         points=[PointStruct(
-            id = str(uuid.uuid5(uuid.NAMESPACE_URL, item.image_url)),,
+            id      = str(uuid.uuid5(uuid.NAMESPACE_URL, item.image_url)),  # ✔ fixed: removed double comma
             vector  = vector,
             payload = {
                 "name":         item.name,
                 "store_name":   item.store,
                 "mall_name":    item.mall,
-                "image_url":     item.image_url,
+                "image_url":    item.image_url,
                 "category_tag": final_category,
                 "price":        item.price,
             }
@@ -353,16 +352,11 @@ async def add_bulk_item(item: BulkItem):
 
     return {"status": "indexed", "item": item.name, "category": final_category}
 
-# ════════════════════════════════════════════════════════════════════
-# Copy-paste this block into gateway/main.py
-#
-# WHERE: right after the closing line of the existing /add-bulk endpoint
-# ALSO:  add `import asyncio` at the top of the file with the other imports
-# ALSO:  change uuid.uuid4() → uuid.uuid5(uuid.NAMESPACE_URL, item.image_url)
-#        inside the EXISTING /add-bulk endpoint (1 line change)
-# ════════════════════════════════════════════════════════════════════
 
-# ── Batch Bulk Index (parallel) ───────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# /add-bulk-batch  — index many products in parallel
+# ══════════════════════════════════════════════════════════════════════════════
+
 class BulkBatchRequest(BaseModel):
     items: list[dict]
 
@@ -371,18 +365,14 @@ class BulkBatchRequest(BaseModel):
 async def add_bulk_batch(batch: BulkBatchRequest):
     """
     Index many products in parallel instead of one-by-one.
-
-    How it works:
-      - Receives a list of items (up to 50 at a time from the frontend)
-      - Runs up to 10 simultaneously using asyncio.Semaphore
-      - Each item gets a deterministic ID from its image_url
-        → indexing the same product twice just silently overwrites it (no duplicates)
-      - Failed items are reported but don't stop the rest
+    - Receives up to 50 items at a time from the frontend
+    - Runs up to 10 simultaneously using asyncio.Semaphore
+    - Deterministic ID from image_url → no duplicates on re-index
+    - Failed items are reported but don't stop the rest
     """
-    semaphore = asyncio.Semaphore(10)   # never more than 10 running at once
+    semaphore = asyncio.Semaphore(10)
 
     async def index_one(raw: dict):
-        # Build a BulkItem from the raw dict (validates fields)
         item = BulkItem(
             name      = raw.get("name", "Product"),
             store     = raw.get("store", ""),
@@ -394,14 +384,12 @@ async def add_bulk_batch(batch: BulkBatchRequest):
         async with semaphore:
             try:
                 async with httpx.AsyncClient() as http:
-                    # Step 1 — download the product image from its URL
                     img_resp = await http.get(
                         item.image_url, timeout=15.0, follow_redirects=True
                     )
                     img_resp.raise_for_status()
                     content_type = img_resp.headers.get("content-type", "image/jpeg")
 
-                    # Step 2 — send image to visual engine (CLIP vectorization)
                     vis_resp = await http.post(
                         f"{VISUAL_URL}/vectorize",
                         files={"file": ("product.jpg", img_resp.content, content_type)},
@@ -413,11 +401,8 @@ async def add_bulk_batch(batch: BulkBatchRequest):
                 vector            = vis_data.get("vector")
                 detected_category = vis_data.get("category")
                 final_category    = detected_category or item.category or "unknown"
+                point_id          = str(uuid.uuid5(uuid.NAMESPACE_URL, item.image_url))
 
-                # Step 3 — deterministic ID: same URL → same ID → upsert = safe overwrite
-                point_id = str(uuid.uuid5(uuid.NAMESPACE_URL, item.image_url))
-
-                # Step 4 — store in Qdrant
                 client.upsert(
                     collection_name=COLLECTION_NAME,
                     points=[PointStruct(
@@ -436,17 +421,17 @@ async def add_bulk_batch(batch: BulkBatchRequest):
                 return {"status": "ok", "item": item.name}
 
             except Exception as e:
-                # Log the failure but don't crash the whole batch
                 print(f"[BATCH] Failed: {item.name} — {e}")
                 return {"status": "failed", "item": item.name, "error": str(e)}
 
-    # Launch all items concurrently (semaphore caps simultaneous requests at 10)
     results = await asyncio.gather(*[index_one(raw) for raw in batch.items])
 
     success = sum(1 for r in results if r["status"] == "ok")
     failed  = [r for r in results if r["status"] == "failed"]
 
     return {"success": success, "total": len(batch.items), "failed": failed}
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # /scrape  — smart scraper with Shopify API as Strategy 1
 #
@@ -459,7 +444,7 @@ async def add_bulk_batch(batch: BulkBatchRequest):
 
 class ScrapeRequest(BaseModel):
     url:          str
-    max_products: int = 0   # 0 = no limit — fetches all pages automatically
+    max_products: int = 0   # 0 = no limit
 
 
 @app.post("/scrape")
@@ -470,6 +455,7 @@ async def scrape_store(req: ScrapeRequest):
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/120.0.0.0 Safari/537.36"
         ),
+        "Accept":          "application/json, text/html, */*",
         "Accept-Language": "en-US,en;q=0.9",
     }
 
@@ -535,7 +521,7 @@ async def scrape_store(req: ScrapeRequest):
         if not products:
             products = _scrape_product_cards(soup, req.url)
 
-    # Deduplicate and cap
+    # Deduplicate
     seen, unique = set(), []
     for p in products:
         key = p.get("image_url", "")
@@ -562,11 +548,10 @@ async def _try_shopify_api(
 ) -> list:
     """
     Tries Shopify's public /products.json endpoint (no API key needed).
-    Paginates automatically — fetches all products, 250 per page, until
-    the store returns an empty page (meaning we have everything).
+    Paginates automatically — 250 per page until the store returns empty.
 
-    Two base endpoints tried:
-      A) /collections/{handle}/products.json  — if URL targets a collection
+    Two endpoints tried:
+      A) /collections/{handle}/products.json  — collection-specific
       B) /products.json                        — store-wide fallback
     """
     path  = urlparse(original_url).path
@@ -597,7 +582,6 @@ async def _try_shopify_api(
                 raw_products = data.get("products", [])
 
                 if not raw_products:
-                    # Empty page — we've fetched everything
                     break
 
                 for p in raw_products:
@@ -626,7 +610,6 @@ async def _try_shopify_api(
 
                 print(f"[SCRAPE] Page {page}: got {len(raw_products)} products (total so far: {len(all_products)})")
 
-                # If we got fewer than 250, this was the last page
                 if len(raw_products) < 250:
                     break
 
