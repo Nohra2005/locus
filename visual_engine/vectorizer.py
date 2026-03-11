@@ -7,6 +7,11 @@
 #
 # process_image() returns 4 values:
 #   vector, category_tag, category_scores, debug_img_b64
+#
+# CHANGES vs previous version:
+#   - Added _iou() and _nms() helpers at module level
+#   - detect_objects() now runs NMS after merging both detectors
+#     to eliminate duplicate boxes from overlapping model coverage
 # =============================================================================
 
 import torch
@@ -23,11 +28,14 @@ from clip_labels import CANONICAL_LABELS
 
 
 # =============================================================================
-# NMS helpers (cross-model deduplication)
+# NMS HELPERS  (module-level, not inside the class)
 # =============================================================================
 
 def _iou(a, b):
-    """Intersection over Union for two [x1,y1,x2,y2] boxes."""
+    """
+    Intersection over Union for two bounding boxes [x1, y1, x2, y2].
+    Returns a float between 0.0 (no overlap) and 1.0 (identical boxes).
+    """
     ax1, ay1, ax2, ay2 = a
     bx1, by1, bx2, by2 = b
     ix1 = max(ax1, bx1); iy1 = max(ay1, by1)
@@ -42,27 +50,39 @@ def _iou(a, b):
 
 def _nms(detections, iou_threshold=0.45):
     """
-    Greedy NMS across ALL detections regardless of which model produced them.
-    Sort by confidence descending, keep the best box, suppress anything that
-    overlaps it by more than iou_threshold.
+    Greedy Non-Maximum Suppression across all detections regardless of source model.
+
+    Algorithm:
+        1. Sort all boxes by confidence score (highest first)
+        2. Keep the top box
+        3. Suppress any other box that overlaps it by more than iou_threshold
+        4. Repeat for remaining boxes
+
+    This eliminates duplicates when both DeepFashion2 AND YOLOS fire on the same item.
     """
+    if not detections:
+        return []
+
     dets = sorted(detections, key=lambda d: d["score"], reverse=True)
     kept = []
     suppressed = set()
+
     for i, d in enumerate(dets):
         if i in suppressed:
             continue
         kept.append(d)
-        for j, other in enumerate(dets):
-            if j <= i or j in suppressed:
+        for j in range(i + 1, len(dets)):
+            if j in suppressed:
                 continue
-            if _iou(d["bbox"], other["bbox"]) > iou_threshold:
+            if _iou(d["bbox"], dets[j]["bbox"]) > iou_threshold:
                 suppressed.add(j)
+
+    print(f"  NMS: {len(detections)} -> {len(kept)} detections after suppression")
     return kept
 
 
 # =============================================================================
-# Main class
+# MAIN CLASS
 # =============================================================================
 
 class LocusVisualizer:
@@ -85,6 +105,7 @@ class LocusVisualizer:
         self.clip_labels = CANONICAL_LABELS   # 15 canonical labels from clip_labels.py
 
         # Pre-compute text embeddings once at startup — shape (15, 512)
+        # Every classification call is then just one matrix multiply (fast)
         print(f"Pre-computing CLIP text embeddings for {len(self.clip_labels)} labels...")
         text_inputs = self.clip_processor(
             text=self.clip_labels, return_tensors="pt", padding=True
@@ -104,13 +125,15 @@ class LocusVisualizer:
     # =========================================================================
     def detect_objects(self, image_bytes):
         """
-        Runs both detection models on the same image, merges, then deduplicates.
+        Runs both detection models on the same image, merges results, and
+        applies cross-model NMS to remove duplicate boxes.
 
         Flow:
-            1. ClothingDetector  → shirts, pants, dresses, skirts, jackets
-            2. AccessoryDetector → sweaters, coats, jumpsuits, shoes, bags, etc.
-            3. Cross-model NMS   → removes duplicate boxes from overlapping detectors
-            4. Fallback to full-image CLIP if both models find nothing
+            1. ClothingDetector  -> shirts, pants, dresses, skirts, jackets
+            2. AccessoryDetector -> sweaters, coats, jumpsuits, shoes, bags, etc.
+            3. Merge all results
+            4. NMS — suppress overlapping boxes, keep highest confidence
+            5. Fallback to full-image CLIP if nothing survives
 
         Returns:
             (detections, image_width, image_height)
@@ -123,11 +146,8 @@ class LocusVisualizer:
             clothing    = self.clothing_detector.detect(image, self._classify_crop)
             accessories = self.accessory_detector.detect(image, self._classify_crop)
 
-            # Merge then deduplicate — this is the key fix for multiple boxes
-            # on the same item produced by both models firing simultaneously
+            # Merge then deduplicate with NMS
             all_detections = _nms(clothing + accessories, iou_threshold=0.45)
-
-            print(f"  Before NMS: {len(clothing) + len(accessories)}  →  After NMS: {len(all_detections)}")
 
             if not all_detections:
                 print("Both models found nothing — running full-image CLIP fallback.")
@@ -152,22 +172,23 @@ class LocusVisualizer:
     # PUBLIC METHOD 2: process_image()
     # Called by gateway /search and /add-bulk endpoints.
     # =========================================================================
-    def process_image(self, image_bytes, skip_rembg=False):
+    def process_image(self, image_bytes, skip_rembg=False, yolo_label=""):
         """
         Full pipeline for a single item.
 
         Steps:
             1. Resize if needed (max 512px)
-            2a. skip_rembg=True  → bounding box crop, skip background removal
-            2b. skip_rembg=False → rembg background removal
-            3. CLIP vectorization → 512-dim embedding
-            4. CLIP classification → all 15 scores (softmax)
-               top score ≥ 0.45 → category_tag = that label
-               top score < 0.45 → category_tag = None (indexed without filter)
+            2a. skip_rembg=True  -> bounding box crop, skip background removal
+            2b. skip_rembg=False -> rembg background removal
+            3. CLIP vectorization -> 512-dim embedding
+            4. CLIP classification -> all 15 scores (softmax)
+               top score >= 0.45 -> category_tag = that label
+               top score <  0.45 -> category_tag = None (indexed without filter)
 
         Args:
             image_bytes: raw bytes of the image
             skip_rembg:  True when called with a tight bounding box crop
+            yolo_label:  canonical label passed from gateway (overrides CLIP if set)
 
         Returns:
             (vector, category_tag, category_scores, debug_img_b64)
@@ -184,7 +205,7 @@ class LocusVisualizer:
             # ── Step 1: Resize ────────────────────────────────────────────────
             if max(input_image.size) > 512:
                 input_image.thumbnail((512, 512))
-                print(f"Resized {original_size} → {input_image.size}")
+                print(f"Resized {original_size} -> {input_image.size}")
 
             # ── Step 2: Background handling ───────────────────────────────────
             if skip_rembg:
@@ -219,22 +240,26 @@ class LocusVisualizer:
 
             # ── Step 4: CLIP Classification ───────────────────────────────────
             similarity    = (100.0 * image_features @ self.text_features.T).softmax(dim=-1)
-            scores_tensor = similarity[0]
+            scores_tensor = similarity[0]   # shape: (15,)
 
             category_scores = {
                 label: round(scores_tensor[i].item(), 4)
                 for i, label in enumerate(self.clip_labels)
             }
 
-            clip_conf  = scores_tensor.max().item()
-            clip_label = self.clip_labels[scores_tensor.argmax().item()]
-
-            if clip_conf >= 0.45:
-                category_tag = clip_label
-                print(f"CLIP classification: '{category_tag}' ({clip_conf:.2f})")
+            # If YOLO passed a label, trust it over CLIP (YOLO is the specialist)
+            if yolo_label and yolo_label.strip() in self.clip_labels:
+                category_tag = yolo_label.strip()
+                print(f"Category from YOLO label: '{category_tag}'")
             else:
-                category_tag = None
-                print(f"CLIP low confidence: '{clip_label}' ({clip_conf:.2f}) → no category filter")
+                clip_conf  = scores_tensor.max().item()
+                clip_label = self.clip_labels[scores_tensor.argmax().item()]
+                if clip_conf >= 0.45:
+                    category_tag = clip_label
+                    print(f"CLIP classification: '{category_tag}' ({clip_conf:.2f})")
+                else:
+                    category_tag = None
+                    print(f"CLIP low confidence: '{clip_label}' ({clip_conf:.2f}) -> no category filter")
 
             # ── Step 5: Debug image ───────────────────────────────────────────
             buf = io.BytesIO()
@@ -250,6 +275,7 @@ class LocusVisualizer:
 
     # =========================================================================
     # PRIVATE: _classify_crop()
+    # Passed into both detectors as classify_fn (used by fallback path).
     # =========================================================================
     def _classify_crop(self, pil_image):
         """
