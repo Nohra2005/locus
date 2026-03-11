@@ -22,6 +22,49 @@ from detector_accessories import AccessoryDetector
 from clip_labels import CANONICAL_LABELS
 
 
+# =============================================================================
+# NMS helpers (cross-model deduplication)
+# =============================================================================
+
+def _iou(a, b):
+    """Intersection over Union for two [x1,y1,x2,y2] boxes."""
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    ix1 = max(ax1, bx1); iy1 = max(ay1, by1)
+    ix2 = min(ax2, bx2); iy2 = min(ay2, by2)
+    inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+    if inter == 0:
+        return 0.0
+    area_a = (ax2 - ax1) * (ay2 - ay1)
+    area_b = (bx2 - bx1) * (by2 - by1)
+    return inter / (area_a + area_b - inter)
+
+
+def _nms(detections, iou_threshold=0.45):
+    """
+    Greedy NMS across ALL detections regardless of which model produced them.
+    Sort by confidence descending, keep the best box, suppress anything that
+    overlaps it by more than iou_threshold.
+    """
+    dets = sorted(detections, key=lambda d: d["score"], reverse=True)
+    kept = []
+    suppressed = set()
+    for i, d in enumerate(dets):
+        if i in suppressed:
+            continue
+        kept.append(d)
+        for j, other in enumerate(dets):
+            if j <= i or j in suppressed:
+                continue
+            if _iou(d["bbox"], other["bbox"]) > iou_threshold:
+                suppressed.add(j)
+    return kept
+
+
+# =============================================================================
+# Main class
+# =============================================================================
+
 class LocusVisualizer:
     def __init__(self):
 
@@ -42,7 +85,6 @@ class LocusVisualizer:
         self.clip_labels = CANONICAL_LABELS   # 15 canonical labels from clip_labels.py
 
         # Pre-compute text embeddings once at startup — shape (15, 512)
-        # Every classification call is then just one matrix multiply (fast)
         print(f"Pre-computing CLIP text embeddings for {len(self.clip_labels)} labels...")
         text_inputs = self.clip_processor(
             text=self.clip_labels, return_tensors="pt", padding=True
@@ -62,12 +104,12 @@ class LocusVisualizer:
     # =========================================================================
     def detect_objects(self, image_bytes):
         """
-        Runs both detection models on the same image and merges results.
+        Runs both detection models on the same image, merges, then deduplicates.
 
         Flow:
             1. ClothingDetector  → shirts, pants, dresses, skirts, jackets
             2. AccessoryDetector → sweaters, coats, jumpsuits, shoes, bags, etc.
-            3. Results merged
+            3. Cross-model NMS   → removes duplicate boxes from overlapping detectors
             4. Fallback to full-image CLIP if both models find nothing
 
         Returns:
@@ -78,9 +120,14 @@ class LocusVisualizer:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
             W, H  = image.size
 
-            clothing       = self.clothing_detector.detect(image, self._classify_crop)
-            accessories    = self.accessory_detector.detect(image, self._classify_crop)
-            all_detections = clothing + accessories
+            clothing    = self.clothing_detector.detect(image, self._classify_crop)
+            accessories = self.accessory_detector.detect(image, self._classify_crop)
+
+            # Merge then deduplicate — this is the key fix for multiple boxes
+            # on the same item produced by both models firing simultaneously
+            all_detections = _nms(clothing + accessories, iou_threshold=0.45)
+
+            print(f"  Before NMS: {len(clothing) + len(accessories)}  →  After NMS: {len(all_detections)}")
 
             if not all_detections:
                 print("Both models found nothing — running full-image CLIP fallback.")
@@ -124,10 +171,6 @@ class LocusVisualizer:
 
         Returns:
             (vector, category_tag, category_scores, debug_img_b64)
-            vector:          list[float] — 512-dim CLIP embedding
-            category_tag:    str | None  — top label if conf ≥ 0.45, else None
-            category_scores: dict        — all 15 scores {"shirt": 0.02, "dress": 0.91, ...}
-            debug_img_b64:   str         — base64 PNG of preprocessed image
         """
         t0 = time.time()
         try:
@@ -176,10 +219,8 @@ class LocusVisualizer:
 
             # ── Step 4: CLIP Classification ───────────────────────────────────
             similarity    = (100.0 * image_features @ self.text_features.T).softmax(dim=-1)
-            scores_tensor = similarity[0]   # shape: (15,)
+            scores_tensor = similarity[0]
 
-            # All 15 scores stored in Qdrant — useful for future re-classification
-            # without re-running the visual engine
             category_scores = {
                 label: round(scores_tensor[i].item(), 4)
                 for i, label in enumerate(self.clip_labels)
@@ -209,7 +250,6 @@ class LocusVisualizer:
 
     # =========================================================================
     # PRIVATE: _classify_crop()
-    # Passed into both detectors as classify_fn (used by fallback path).
     # =========================================================================
     def _classify_crop(self, pil_image):
         """

@@ -5,9 +5,7 @@
 # Does NOT detect: shoes, bags, accessories, sweaters, coats — see detector_accessories.py
 #
 # CHANGES vs previous version:
-#   - Imports YOLO_TO_CANONICAL from clip_labels.py
-#   - search_label assigned via YOLO_TO_CANONICAL directly (no CLIP call per crop)
-#   - classify_fn still accepted for interface compatibility but not used
+#   - MIN_CONFIDENCE raised 0.30 → 0.50 to reduce over-detection
 # =============================================================================
 
 from ultralytics import YOLO
@@ -33,8 +31,8 @@ DEEPFASHION2_LABELS = {
     12: "sling dress",
 }
 
-MIN_CONFIDENCE = 0.30
-MIN_AREA       = 1500  # px²
+MIN_CONFIDENCE = 0.50   # raised from 0.30 — reduces duplicate/weak boxes
+MIN_AREA       = 1500   # px²
 
 
 class ClothingDetector:

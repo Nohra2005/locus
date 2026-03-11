@@ -5,10 +5,7 @@
 #          + shoes, bag, glasses, hat, watch, scarf
 #
 # CHANGES vs previous version:
-#   - FASHIONPEDIA_TO_CANONICAL and SEARCHABLE_IDS imported from clip_labels.py
-#   - ACCESSORY_ONLY_IDS renamed to SEARCHABLE_IDS (now includes clothing items)
-#   - Safety check added: warns if a searchable ID has no canonical mapping
-#   - MIN_CONFIDENCE lowered to 0.35 (accessories harder to detect than clothing)
+#   - MIN_CONFIDENCE raised 0.35 → 0.45 to reduce over-detection
 # =============================================================================
 
 import torch
@@ -67,7 +64,7 @@ FASHIONPEDIA_CATS = [
     'tassel',                                  # 45
 ]
 
-MIN_CONFIDENCE = 0.35   # lowered from 0.50 — accessories harder to detect
+MIN_CONFIDENCE = 0.45   # raised from 0.35 — reduces duplicate/weak boxes
 MIN_AREA       = 1500   # px²
 
 
