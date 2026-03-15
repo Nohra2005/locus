@@ -12,7 +12,16 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.models import Distance, PointStruct, VectorParams
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 VISUAL_URL       = os.getenv("VISUAL_HOST",   "http://visual_engine:8001")
 RANKING_URL      = os.getenv("RANKING_HOST",  "http://ranking_engine:8002")

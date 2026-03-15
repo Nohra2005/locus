@@ -26,10 +26,10 @@ const T = {
 // SHARED BATCH INDEXING HELPER
 // Sends items in chunks of 50 to /add-bulk-batch.
 // Server runs 10 of those in parallel — much faster than 1-by-1.
-// Same image_url always produces the same ID → no duplicates.
+// Each image × 2 (normal + dark vector) — deterministic IDs → no duplicates.
 // ══════════════════════════════════════════════════════════════════
 
-async function runBatchIndex(items, storeName, mallName, setProgress, setErrors, setStatus) {
+async function runBatchIndex(items, storeName, address, setProgress, setErrors, setStatus) {
   setStatus("indexing");
   setErrors([]);
 
@@ -58,12 +58,13 @@ async function runBatchIndex(items, storeName, mallName, setProgress, setErrors,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           items: chunk.map(row => ({
-            name:      row.name      || "Product",
-            store:     storeName,
-            mall:      mallName,
-            image_url: row.image_url || row.image || "",
-            price:     row.price     || "",
-            category:  row.category  || "",
+            name:       row.name       || "Product",
+            store:      storeName,
+            mall:       address,
+            image_urls: row.image_urls || (row.image_url ? [row.image_url] : []),
+            image_url:  row.image_url  || row.image || "",
+            price:      row.price      || "",
+            category:   row.category   || "",
           })),
         }),
       });
@@ -95,11 +96,11 @@ async function runBatchIndex(items, storeName, mallName, setProgress, setErrors,
 export default function StoreDashboardView() {
   const [activeTab, setActiveTab] = useState("csv");
   const [storeName, setStoreName] = useState("");
-  const [mallName,  setMallName]  = useState("");
+  const [address,   setAddress]   = useState("");
   const [infoSaved, setInfoSaved] = useState(false);
 
   const handleSaveInfo = () => {
-    if (storeName.trim() && mallName.trim()) setInfoSaved(true);
+    if (storeName.trim() && address.trim()) setInfoSaved(true);
   };
 
   return (
@@ -127,7 +128,7 @@ export default function StoreDashboardView() {
           Catalogue Manager
         </h1>
         <p style={{ marginTop: 10, fontSize: "0.82rem", color: T.textMuted, lineHeight: 1.7 }}>
-          Index your store's products into Locus so shoppers can find them visually.
+          Put your boutique on the map. Let shoppers discover your products visually, right from their phone.
         </p>
       </div>
 
@@ -147,24 +148,24 @@ export default function StoreDashboardView() {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-          <StoreInput label="Store name" placeholder="e.g. Zara, Pull & Bear…"
+          <StoreInput label="Store name" placeholder="e.g. Key Couture, Vanina…"
             value={storeName} onChange={setStoreName} disabled={infoSaved} />
-          <StoreInput label="Mall name" placeholder="e.g. ABC Achrafieh…"
-            value={mallName} onChange={setMallName} disabled={infoSaved} />
+          <StoreInput label="Address" placeholder="e.g. Damascus Street, Beirut…"
+            value={address} onChange={setAddress} disabled={infoSaved} />
         </div>
 
         {!infoSaved ? (
           <button className="btn-primary" onClick={handleSaveInfo}
-            disabled={!storeName.trim() || !mallName.trim()}
-            style={{ opacity: (!storeName.trim() || !mallName.trim()) ? 0.4 : 1 }}>
+            disabled={!storeName.trim() || !address.trim()}
+            style={{ opacity: (!storeName.trim() || !address.trim()) ? 0.4 : 1 }}>
             <span style={{ color: T.accent }}>✦</span> Confirm store
           </button>
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
             <div style={{ fontSize: "0.8rem", color: T.text }}>
               <strong style={{ color: T.accent }}>{storeName}</strong>
-              <span style={{ color: T.textMuted }}> at </span>
-              <strong style={{ color: T.text }}>{mallName}</strong>
+              <span style={{ color: T.textMuted }}> · </span>
+              <strong style={{ color: T.text }}>{address}</strong>
             </div>
             <button className="btn-ghost" onClick={() => setInfoSaved(false)}
               style={{ fontSize: "0.72rem" }}>Edit</button>
@@ -182,9 +183,9 @@ export default function StoreDashboardView() {
             borderRadius: 10, padding: 4, width: "fit-content",
           }}>
             {[
-              { id: "csv",       label: "CSV / Excel",    icon: "📋" },
-              { id: "scrape",    label: "Scrape Website",  icon: "🌐" },
-              { id: "catalogue", label: "My Catalogue",    icon: "🗄️" },
+              { id: "csv",       label: "CSV / Excel",   icon: "📋" },
+              { id: "scrape",    label: "Scrape Website", icon: "🌐" },
+              { id: "catalogue", label: "My Catalogue",   icon: "🗄️" },
             ].map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
                 padding: "8px 20px", borderRadius: 7, border: "none", cursor: "pointer",
@@ -199,8 +200,8 @@ export default function StoreDashboardView() {
             ))}
           </div>
 
-          {activeTab === "csv"       && <CsvUploadPanel     storeName={storeName} mallName={mallName} />}
-          {activeTab === "scrape"    && <ScrapeWebsitePanel storeName={storeName} mallName={mallName} />}
+          {activeTab === "csv"       && <CsvUploadPanel     storeName={storeName} address={address} />}
+          {activeTab === "scrape"    && <ScrapeWebsitePanel storeName={storeName} address={address} />}
           {activeTab === "catalogue" && <CataloguePanel     storeName={storeName} />}
         </div>
       )}
@@ -240,7 +241,7 @@ function CataloguePanel({ storeName }) {
     }
   }, [storeName]);
 
-  useEffect(() => { fetchProducts(0); }, [storeName, fetchProducts]);
+  useEffect(() => { fetchProducts(0); }, [fetchProducts]);
 
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Remove "${name}" from the catalogue?`)) return;
@@ -433,7 +434,7 @@ function CatalogueCard({ product: p, catColor, deleting, onDelete }) {
 // ══════════════════════════════════════════════════════════════════
 // CSV UPLOAD PANEL
 // ══════════════════════════════════════════════════════════════════
-function CsvUploadPanel({ storeName, mallName }) {
+function CsvUploadPanel({ storeName, address }) {
   const [file,     setFile]     = useState(null);
   const [rows,     setRows]     = useState([]);
   const [headers,  setHeaders]  = useState([]);
@@ -461,9 +462,8 @@ function CsvUploadPanel({ storeName, mallName }) {
 
   const hasRequired = headers.includes("name") && headers.includes("image_url");
 
-  // ── Uses shared batch helper — parallel, dedup-safe ──
   const handleIndex = () =>
-    runBatchIndex(rows, storeName, mallName, setProgress, setErrors, setStatus);
+    runBatchIndex(rows, storeName, address, setProgress, setErrors, setStatus);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -523,7 +523,7 @@ function CsvUploadPanel({ storeName, mallName }) {
 // ══════════════════════════════════════════════════════════════════
 // SCRAPE WEBSITE PANEL
 // ══════════════════════════════════════════════════════════════════
-function ScrapeWebsitePanel({ storeName, mallName }) {
+function ScrapeWebsitePanel({ storeName, address }) {
   const [url,       setUrl]       = useState("");
   const [scraping,  setScraping]  = useState(false);
   const [products,  setProducts]  = useState(null);
@@ -563,9 +563,8 @@ function ScrapeWebsitePanel({ storeName, mallName }) {
 
   const selectedItems = (products || []).filter((_, i) => selected[i]);
 
-  // ── Uses shared batch helper — parallel, dedup-safe ──
   const handleIndex = () =>
-    runBatchIndex(selectedItems, storeName, mallName, setProgress, setErrors, setStatus);
+    runBatchIndex(selectedItems, storeName, address, setProgress, setErrors, setStatus);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -839,7 +838,7 @@ function DoneCard({ progress, errors, storeName }) {
       </div>
       <div style={{ fontSize: "0.82rem", color: T.textMuted, marginBottom: 16 }}>
         {progress.success > 0 && (
-          <><span style={{ color: T.green }}>{progress.success} products</span> from <strong style={{ color: T.text }}>{storeName}</strong> are now searchable in Locus.</>
+          <><span style={{ color: T.green }}>{progress.success} products</span> from <strong style={{ color: T.text }}>{storeName}</strong> are now discoverable on Locus.</>
         )}
         {progress.failed > 0 && (
           <> <span style={{ color: T.red }}>{progress.failed} failed.</span></>

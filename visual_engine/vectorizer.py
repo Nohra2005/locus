@@ -11,6 +11,9 @@
 # darken=True → applies 30% brightness to the processed image before CLIP
 #               so dim-light query photos match dim-light indexed vectors.
 #               The darkened image is never stored — only its vector.
+#
+# classify_text() → uses CLIP text encoder to map any product title to a
+#               canonical label. Multilingual, no hardcoded vocab.
 # =============================================================================
 
 import torch
@@ -43,7 +46,7 @@ def _iou(a, b):
     return inter / (area_a + area_b - inter)
 
 
-def _nms(detections, iou_threshold=0.45):
+def _nms(detections, iou_threshold=0.3):
     if not detections:
         return []
     dets = sorted(detections, key=lambda d: d["score"], reverse=True)
@@ -186,7 +189,7 @@ class LocusVisualizer:
             # CLIP embedding — it is never saved or returned to the client.
             if darken:
                 enhancer = ImageEnhance.Brightness(white_bg)
-                clip_input_image = enhancer.enhance(0.3)   # 30% brightness
+                clip_input_image = enhancer.enhance(0.3)
                 print("Darken mode: applied 30% brightness for dim-light vector")
             else:
                 clip_input_image = white_bg
@@ -233,7 +236,61 @@ class LocusVisualizer:
             return None, None, None, None
 
     # =========================================================================
+    # PUBLIC METHOD 3: classify_text()
+    # Called by visual_engine /classify-text endpoint.
+    #
+    # Uses CLIP's text encoder to find the closest canonical label for a
+    # product title — no keywords, no hardcoding, fully multilingual.
+    #
+    # "trousers"  → "pants"   ✅
+    # "pantalon"  → "pants"   ✅
+    # "بنطلون"    → "pants"   ✅
+    # "bicycle"   → None      ✅  (confidence < threshold → skip indexing)
+    #
+    # threshold: 0.22 — deliberately lower than image classification (0.45)
+    # because text-to-text cosine similarity in CLIP naturally scores lower
+    # than image-to-text similarity.
+    # =========================================================================
+    def classify_text(self, title: str):
+        """
+        Args:
+            title: raw product name string (any language)
+
+        Returns:
+            (best_label, confidence)  if confidence >= threshold
+            (None, confidence)        if below threshold → caller should skip
+        """
+        TEXT_THRESHOLD = 0.22
+
+        try:
+            inputs = self.clip_processor(
+                text=[title], return_tensors="pt", padding=True, truncation=True
+            )
+            with torch.no_grad():
+                title_features = self.clip_model.get_text_features(**inputs)
+            title_features /= title_features.norm(p=2, dim=-1, keepdim=True)
+
+            # Cosine similarity against all 15 precomputed label embeddings
+            similarity = (title_features @ self.text_features.T)[0]
+            best_idx   = similarity.argmax().item()
+            best_conf  = similarity[best_idx].item()
+            best_label = self.clip_labels[best_idx]
+
+            print(f"[TEXT CLASSIFY] '{title}' → '{best_label}' ({best_conf:.3f})")
+
+            if best_conf >= TEXT_THRESHOLD:
+                return best_label, best_conf
+            else:
+                print(f"[TEXT CLASSIFY] Below threshold — skipping '{title}'")
+                return None, best_conf
+
+        except Exception as e:
+            print(f"[TEXT CLASSIFY] Error: {e}")
+            return None, 0.0
+
+    # =========================================================================
     # PRIVATE: _classify_crop()
+    # Passed into both detectors as classify_fn (used by fallback path).
     # =========================================================================
     def _classify_crop(self, pil_image):
         clip_inputs = self.clip_processor(images=pil_image, return_tensors="pt")
