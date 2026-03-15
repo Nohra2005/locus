@@ -446,8 +446,8 @@ function SelectView({ imageURL, detections, onSelect, onBack }) {
                 return (
                   <g key={i}>
                     <rect x={b.x} y={b.y} width={b.w} height={b.h} fill={hovered === i ? `${color}20` : "transparent"} stroke={color} strokeWidth={hovered === i ? 2.5 : 1.5} rx={4} style={{ pointerEvents: "all", cursor: "pointer" }} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)} onClick={() => onSelect(det)} />
-                    <rect x={b.x} y={b.y - 22} width={Math.min((det.label || "").length * 7 + 16, 200)} height={20} fill={color} rx={3} />
-                    <text x={b.x + 8} y={b.y - 8} fill={T.bg} fontSize={10} fontFamily="DM Sans, sans-serif" fontWeight={500}>{(det.label || "item").toUpperCase()}</text>
+                    <rect x={b.x} y={b.y - 22} width={Math.min((det.search_label || "").length * 7 + 16, 120)} height={20} fill={color} rx={3} />
+                    <text x={b.x + 8} y={b.y - 8} fill={T.bg} fontSize={10} fontFamily="DM Sans, sans-serif" fontWeight={500}>{(det.search_label || "item").toUpperCase()}</text>
                   </g>
                 );
               })}
@@ -463,7 +463,7 @@ function SelectView({ imageURL, detections, onSelect, onBack }) {
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <div style={{ width: 10, height: 10, borderRadius: "2px", background: color, flexShrink: 0 }} />
                   <div>
-                    <div style={{ fontSize: "0.88rem", fontWeight: 500, textTransform: "capitalize" }}>{det.label || det.search_label || "Item"}</div>
+                    <div style={{ fontSize: "0.88rem", fontWeight: 500, textTransform: "capitalize" }}>{det.search_label || det.label || "Item"}</div>
                     {det.score != null && <div style={{ fontSize: "0.68rem", color: T.textMuted, marginTop: "2px" }}>confidence {Math.round(det.score * 100)}%</div>}
                   </div>
                 </div>

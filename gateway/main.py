@@ -1,78 +1,26 @@
+import asyncio
+import json as _json
 import os
 import uuid
-import io
-import json as _json
+from urllib.parse import urlparse
+
 import httpx
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 from bs4 import BeautifulSoup
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
-from qdrant_client.http.models import Distance, VectorParams, PointStruct
-from PIL import Image
-from urllib.parse import urlparse
-import asyncio
+from qdrant_client.http.models import Distance, PointStruct, VectorParams
 
 app = FastAPI()
 
-# ── CORS ───────────────────────────────────────────────────────────────────────
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+VISUAL_URL       = os.getenv("VISUAL_HOST",   "http://visual_engine:8001")
+RANKING_URL      = os.getenv("RANKING_HOST",  "http://ranking_engine:8002")
+QDRANT_HOST      = os.getenv("QDRANT_HOST",   "qdrant")
+QDRANT_PORT      = int(os.getenv("QDRANT_PORT", 6333))
+COLLECTION_NAME  = "locus_items"
 
-DATASET_DIR = os.environ.get("DATASET_DIR", "/app/dataset")
-try:
-    if os.path.exists(DATASET_DIR):
-        app.mount("/static", StaticFiles(directory=DATASET_DIR), name="static")
-        print(f"Serving dataset images from {DATASET_DIR}")
-    else:
-        print(f"WARNING: DATASET_DIR not found: {DATASET_DIR}")
-except Exception as e:
-    print(f"WARNING: Could not mount static files: {e}")
-
-VISUAL_URL      = "http://visual_engine:8001"
-QDRANT_HOST     = "qdrant"
-QDRANT_PORT     = 6333
-COLLECTION_NAME = "locus_items"
-
-LABEL_TO_CATEGORY = {
-    "short sleeved shirt":   "blouses shirts",
-    "long sleeved shirt":    "blouses shirts",
-    "short sleeved outwear": "jackets vests",
-    "long sleeved outwear":  "jackets vests",
-    "vest":                  "jackets vests",
-    "sling":                 "blouses shirts",
-    "shorts":                "shorts",
-    "trousers":              "pants capris",
-    "skirt":                 "skirts",
-    "short sleeved dress":   "dresses",
-    "long sleeved dress":    "dresses",
-    "vest dress":            "dresses",
-    "sling dress":           "dresses",
-    "shoe":                  "shoes",
-    "bag, wallet":           "accessories",
-    "glasses":               "accessories",
-    "hat":                   "accessories",
-    "shirt":                 "blouses shirts",
-    "t-shirt":               "blouses shirts",
-    "dress":                 "dresses",
-    "pants":                 "pants capris",
-    "jeans":                 "denim",
-    "jacket":                "jackets vests",
-    "coat":                  "jackets vests",
-    "shoes":                 "shoes",
-    "sneakers":              "shoes",
-    "bag":                   "accessories",
-    "handbag":               "accessories",
-}
-
-client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+client = QdrantClient(url=QDRANT_HOST, port=QDRANT_PORT)
 
 @app.on_event("startup")
 def startup_event():
@@ -91,7 +39,7 @@ def read_root():
 @app.post("/feedback")
 async def receive_feedback(
     query_category: str = Form("Unknown"),
-    rating: str = Form(...),
+    rating:         str = Form(...),
 ):
     if rating == "upvote":
         print(f"[FEEDBACK] SUCCESS: User loved results for '{query_category}'")
@@ -99,6 +47,17 @@ async def receive_feedback(
         print(f"[FEEDBACK] FAILURE: User rejected '{query_category}'. Needs fine-tuning.")
     return {"status": "logged"}
 
+@app.post("/detect")
+async def detect_items(file: UploadFile = File(...)):
+    image_bytes = await file.read()
+    async with httpx.AsyncClient() as http:
+        resp = await http.post(
+            f"{VISUAL_URL}/detect",
+            files={"file": (file.filename, image_bytes, file.content_type)},
+            timeout=60.0,
+        )
+        resp.raise_for_status()
+        return resp.json()
 
 # ── Health Check ───────────────────────────────────────────────────────────────
 @app.get("/health")
@@ -123,8 +82,9 @@ async def health_check():
 @app.get("/store-catalogue")
 async def store_catalogue(store_name: str, limit: int = 100, offset: int = 0):
     """
-    Returns all indexed products for a given store_name.
-    Supports pagination via limit + offset.
+    Returns unique products for a given store_name.
+    Deduplicates by product_id so multi-image + dark variants
+    don't appear as separate entries in the catalogue UI.
     """
     results, _ = client.scroll(
         collection_name=COLLECTION_NAME,
@@ -134,41 +94,37 @@ async def store_catalogue(store_name: str, limit: int = 100, offset: int = 0):
                 match=models.MatchValue(value=store_name)
             )]
         ),
-        limit=limit,
-        offset=offset,
+        limit=1000,   # fetch a large batch then deduplicate
         with_payload=True,
         with_vectors=False,
     )
 
-    products = []
+    # Deduplicate by product_id — keep the first point seen per product
+    seen_products = {}
     for point in results:
-        p = point.payload
-        products.append({
-            "id":           str(point.id),
-            "name":         p.get("name", ""),
-            "price":        p.get("price", ""),
-            "category_tag": p.get("category_tag", ""),
-            "image_url":    p.get("image_url", ""),   # ✔ fixed: was p.get("filename", "")
-            "store_name":   p.get("store_name", ""),
-            "mall_name":    p.get("mall_name", ""),
-        })
+        p          = point.payload
+        product_id = p.get("product_id", str(point.id))
+        if product_id not in seen_products:
+            seen_products[product_id] = {
+                "id":           str(point.id),
+                "name":         p.get("name", ""),
+                "price":        p.get("price", ""),
+                "category_tag": p.get("category_tag", ""),
+                "image_url":    p.get("image_url", ""),
+                "store_name":   p.get("store_name", ""),
+                "mall_name":    p.get("mall_name", ""),
+            }
 
-    count = client.count(
-        collection_name=COLLECTION_NAME,
-        count_filter=models.Filter(
-            must=[models.FieldCondition(
-                key="store_name",
-                match=models.MatchValue(value=store_name)
-            )]
-        ),
-    ).count
+    unique_products = list(seen_products.values())
+    total           = len(unique_products)
+    paginated       = unique_products[offset: offset + limit]
 
-    return {"products": products, "total": count, "offset": offset, "limit": limit}
+    return {"products": paginated, "total": total, "offset": offset, "limit": limit}
 
 
 @app.delete("/store-catalogue/item/{item_id}")
 async def delete_catalogue_item(item_id: str):
-    """Delete a single product from the catalogue by its Qdrant point ID."""
+    """Delete a single product point from the catalogue by its Qdrant point ID."""
     try:
         client.delete(
             collection_name=COLLECTION_NAME,
@@ -176,45 +132,26 @@ async def delete_catalogue_item(item_id: str):
         )
         return {"status": "deleted", "id": item_id}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Step 1: Detect ─────────────────────────────────────────────────────────────
-@app.post("/detect")
-async def detect_objects(file: UploadFile = File(...)):
-    async with httpx.AsyncClient() as http_client:
-        files    = {"file": (file.filename, await file.read(), file.content_type)}
-        response = await http_client.post(f"{VISUAL_URL}/detect", files=files, timeout=60.0)
-        response.raise_for_status()
-        return response.json()
-
-
-# ── Step 2: Search ─────────────────────────────────────────────────────────────
+# ── Search ─────────────────────────────────────────────────────────────────────
 @app.post("/search")
-async def search(
-    file: UploadFile = File(...),
-    x1: int = Form(None),
-    y1: int = Form(None),
-    x2: int = Form(None),
-    y2: int = Form(None),
-    search_label: str = Form(None),
+async def search_items(
+    file:         UploadFile = File(...),
+    x1:           float      = Form(0),
+    y1:           float      = Form(0),
+    x2:           float      = Form(0),
+    y2:           float      = Form(0),
+    search_label: str        = Form(""),
 ):
     image_bytes = await file.read()
-    is_cropped  = all(v is not None for v in [x1, y1, x2, y2])
 
-    if is_cropped:
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        img = img.crop((x1, y1, x2, y2))
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        image_bytes = buf.getvalue()
-
-    async with httpx.AsyncClient() as http_client:
-        vis_response = await http_client.post(
+    async with httpx.AsyncClient() as http:
+        vis_response = await http.post(
             f"{VISUAL_URL}/vectorize",
-            files={"file": ("crop.png", image_bytes, "image/png")},
-            data={"skip_rembg": "true" if is_cropped else "false",
-                  "yolo_label": search_label or ""},
+            files={"file": (file.filename, image_bytes, file.content_type)},
+            data={"skip_rembg": "false", "yolo_label": "", "darken": "false"},
             timeout=60.0,
         )
         vis_response.raise_for_status()
@@ -225,7 +162,7 @@ async def search(
     category_confidence = vis_data.get("category_confidence", 0.0)
     processed_image     = vis_data.get("debug_image")
 
-    query_filter = None
+    query_filter    = None
     effective_label = search_label or detected_category
     if effective_label:
         query_filter = models.Filter(
@@ -235,46 +172,52 @@ async def search(
             )]
         )
 
-    results = client.search(
+    # Fetch more candidates than needed so deduplication still returns 25
+    raw_results = client.search(
         collection_name=COLLECTION_NAME,
         query_vector=vector,
         query_filter=query_filter,
-        limit=20,
+        limit=100,
     )
 
-    matches = []
-    for hit in results:
-        matches.append({
-            "name":           hit.payload.get("name", "Unknown"),
-            "store_name":     hit.payload.get("store_name", "Unknown"),
-            "mall_name":      hit.payload.get("mall_name", "Unknown"),
-            "price":          hit.payload.get("price", "Unknown"),
-            "score":          round(hit.score, 3),
-            "image_url":      hit.payload.get("image_url"),
-            "item_id":        hit.payload.get("item_id"),
-        })
+    # ── Deduplicate by product_id — keep highest-scoring point per product ──
+    best_per_product = {}
+    for hit in raw_results:
+        product_id = hit.payload.get("product_id", hit.payload.get("image_url", str(hit.id)))
+        if product_id not in best_per_product or hit.score > best_per_product[product_id]["score"]:
+            best_per_product[product_id] = {
+                "name":       hit.payload.get("name", "Unknown"),
+                "store_name": hit.payload.get("store_name", "Unknown"),
+                "mall_name":  hit.payload.get("mall_name", "Unknown"),
+                "price":      hit.payload.get("price", ""),
+                "score":      round(hit.score, 3),
+                "image_url":  hit.payload.get("image_url", ""),
+                "item_id":    hit.payload.get("item_id", ""),
+            }
+
+    matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:25]
 
     return {
         "matches":             matches,
         "debug_image":         processed_image,
         "detected_category":   detected_category,
-        "category_confidence": category_confidence
+        "category_confidence": category_confidence,
     }
 
 
-# ── Add Item (single, multipart form) ─────────────────────────────────────────
+# ── Add Item (single, multipart form — legacy) ────────────────────────────────
 @app.post("/add")
 async def add_item(
     name:  str        = Form(...),
     store: str        = Form(...),
     mall:  str        = Form(...),
-    file:  UploadFile = File(...)
+    file:  UploadFile = File(...),
 ):
     async with httpx.AsyncClient() as http_client:
         vis_response = await http_client.post(
             f"{VISUAL_URL}/vectorize",
             files={"file": (file.filename, await file.read(), file.content_type)},
-            timeout=30.0
+            timeout=30.0,
         )
         vis_response.raise_for_status()
         data              = vis_response.json()
@@ -291,117 +234,55 @@ async def add_item(
                 "store_name":   store,
                 "mall_name":    mall,
                 "image_url":    f"/static/{file.filename}",
-                "category_tag": detected_category
+                "category_tag": detected_category,
             }
         )]
     )
     return {"status": "saved", "item": name}
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# /add-bulk  — index a single product from a public image URL (JSON body)
-# ══════════════════════════════════════════════════════════════════════════════
-
+# ── Add Bulk Single (legacy JSON body) ────────────────────────────────────────
 class BulkItem(BaseModel):
-    name:      str
-    store:     str
-    mall:      str
-    image_url: str
-    price:     str = ""
-    category:  str = ""
+    name:       str
+    store:      str
+    mall:       str
+    image_url:  str        = ""
+    image_urls: list[str]  = []   # ← NEW: all image angles from Shopify
+    price:      str        = ""
+    category:   str        = ""
+    product_id: str        = ""   # ← NEW: stable per-product identifier
 
 
 @app.post("/add-bulk")
 async def add_bulk_item(item: BulkItem):
+    """Legacy single-item endpoint. Kept for backwards compatibility."""
+    urls = item.image_urls if item.image_urls else ([item.image_url] if item.image_url else [])
+    if not urls:
+        raise HTTPException(status_code=400, detail="No image URL provided")
+
+    product_id = item.product_id or str(uuid.uuid5(
+        uuid.NAMESPACE_URL, f"{item.name}::{item.store}"
+    ))
+
+    inserted = 0
     async with httpx.AsyncClient() as http:
-        try:
-            img_resp = await http.get(item.image_url, timeout=15.0, follow_redirects=True)
-            img_resp.raise_for_status()
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Cannot fetch image URL: {e}")
+        for img_url in urls:
+            img_bytes = (await http.get(img_url, timeout=15.0, follow_redirects=True)).content
+            content_type = "image/jpeg"
 
-        content_type = img_resp.headers.get("content-type", "image/jpeg")
-
-        vis_resp = await http.post(
-            f"{VISUAL_URL}/vectorize",
-            files={"file": ("product.jpg", img_resp.content, content_type)},
-            timeout=60.0,
-        )
-        vis_resp.raise_for_status()
-        vis_data          = vis_resp.json()
-        vector            = vis_data.get("vector")
-        detected_category = vis_data.get("category")
-
-    final_category = detected_category or item.category or "unknown"
-
-    client.upsert(
-        collection_name=COLLECTION_NAME,
-        points=[PointStruct(
-            id      = str(uuid.uuid5(uuid.NAMESPACE_URL, item.image_url)),  # ✔ fixed: removed double comma
-            vector  = vector,
-            payload = {
-                "name":         item.name,
-                "store_name":   item.store,
-                "mall_name":    item.mall,
-                "image_url":    item.image_url,
-                "category_tag": final_category,
-                "price":        item.price,
-            }
-        )]
-    )
-
-    return {"status": "indexed", "item": item.name, "category": final_category}
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# /add-bulk-batch  — index many products in parallel
-# ══════════════════════════════════════════════════════════════════════════════
-
-class BulkBatchRequest(BaseModel):
-    items: list[dict]
-
-
-@app.post("/add-bulk-batch")
-async def add_bulk_batch(batch: BulkBatchRequest):
-    """
-    Index many products in parallel instead of one-by-one.
-    - Receives up to 50 items at a time from the frontend
-    - Runs up to 10 simultaneously using asyncio.Semaphore
-    - Deterministic ID from image_url → no duplicates on re-index
-    - Failed items are reported but don't stop the rest
-    """
-    semaphore = asyncio.Semaphore(10)
-
-    async def index_one(raw: dict):
-        item = BulkItem(
-            name      = raw.get("name", "Product"),
-            store     = raw.get("store", ""),
-            mall      = raw.get("mall", ""),
-            image_url = raw.get("image_url", ""),
-            price     = raw.get("price", ""),
-            category  = raw.get("category", ""),
-        )
-        async with semaphore:
-            try:
-                async with httpx.AsyncClient() as http:
-                    img_resp = await http.get(
-                        item.image_url, timeout=15.0, follow_redirects=True
-                    )
-                    img_resp.raise_for_status()
-                    content_type = img_resp.headers.get("content-type", "image/jpeg")
-
-                    vis_resp = await http.post(
-                        f"{VISUAL_URL}/vectorize",
-                        files={"file": ("product.jpg", img_resp.content, content_type)},
-                        timeout=60.0,
-                    )
-                    vis_resp.raise_for_status()
-                    vis_data = vis_resp.json()
-
+            for darken in [False, True]:
+                vis_resp = await http.post(
+                    f"{VISUAL_URL}/vectorize",
+                    files={"file": ("product.jpg", img_bytes, content_type)},
+                    data={"darken": "true" if darken else "false"},
+                    timeout=60.0,
+                )
+                vis_data          = vis_resp.json()
                 vector            = vis_data.get("vector")
                 detected_category = vis_data.get("category")
                 final_category    = detected_category or item.category or "unknown"
-                point_id          = str(uuid.uuid5(uuid.NAMESPACE_URL, item.image_url))
+                suffix            = "_dark" if darken else ""
+                point_id          = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url + suffix))
 
                 client.upsert(
                     collection_name=COLLECTION_NAME,
@@ -412,49 +293,131 @@ async def add_bulk_batch(batch: BulkBatchRequest):
                             "name":         item.name,
                             "store_name":   item.store,
                             "mall_name":    item.mall,
-                            "image_url":    item.image_url,
+                            "image_url":    img_url,
                             "category_tag": final_category,
                             "price":        item.price,
+                            "product_id":   product_id,
+                            "is_dark":      darken,
                         }
                     )]
                 )
-                return {"status": "ok", "item": item.name}
+                inserted += 1
+
+    return {"status": "indexed", "item": item.name, "points_inserted": inserted}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /add-bulk-batch  — index many products in parallel
+#
+# Each item can now have image_urls (list).
+# For every image URL we create 2 Qdrant points:
+#   • normal vector  — id = uuid5(url)
+#   • dark vector    — id = uuid5(url + "_dark")   brightness=0.3
+# Both points share the same product_id payload so search can deduplicate.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class BulkBatchRequest(BaseModel):
+    items: list[dict]
+
+
+@app.post("/add-bulk-batch")
+async def add_bulk_batch(batch: BulkBatchRequest):
+    semaphore = asyncio.Semaphore(10)
+
+    async def index_one(raw: dict):
+        name       = raw.get("name", "Product")
+        store      = raw.get("store", "")
+        mall       = raw.get("mall", "")
+        price      = raw.get("price", "")
+        category   = raw.get("category", "")
+
+        # Accept both image_urls (list) and image_url (single string)
+        image_urls = raw.get("image_urls") or []
+        if not image_urls and raw.get("image_url"):
+            image_urls = [raw["image_url"]]
+        if not image_urls:
+            return {"status": "failed", "item": name, "error": "no image URL"}
+
+        # Stable product_id — same regardless of how many images the product has
+        product_id = raw.get("product_id") or str(uuid.uuid5(
+            uuid.NAMESPACE_URL, f"{name}::{store}"
+        ))
+
+        async with semaphore:
+            try:
+                async with httpx.AsyncClient() as http:
+                    for img_url in image_urls:
+                        # Fetch image bytes once, reuse for both normal + dark
+                        img_resp = await http.get(img_url, timeout=15.0, follow_redirects=True)
+                        img_resp.raise_for_status()
+                        img_bytes    = img_resp.content
+                        content_type = img_resp.headers.get("content-type", "image/jpeg")
+
+                        for darken in [False, True]:
+                            vis_resp = await http.post(
+                                f"{VISUAL_URL}/vectorize",
+                                files={"file": ("product.jpg", img_bytes, content_type)},
+                                data={"darken": "true" if darken else "false"},
+                                timeout=60.0,
+                            )
+                            vis_resp.raise_for_status()
+                            vis_data = vis_resp.json()
+
+                            vector            = vis_data.get("vector")
+                            detected_category = vis_data.get("category")
+                            final_category    = detected_category or category or "unknown"
+                            suffix            = "_dark" if darken else ""
+                            point_id          = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url + suffix))
+
+                            client.upsert(
+                                collection_name=COLLECTION_NAME,
+                                points=[PointStruct(
+                                    id      = point_id,
+                                    vector  = vector,
+                                    payload = {
+                                        "name":         name,
+                                        "store_name":   store,
+                                        "mall_name":    mall,
+                                        "image_url":    img_url,
+                                        "category_tag": final_category,
+                                        "price":        price,
+                                        "product_id":   product_id,
+                                        "is_dark":      darken,
+                                    }
+                                )]
+                            )
+
+                return {"status": "ok", "item": name}
 
             except Exception as e:
-                print(f"[BATCH] Failed: {item.name} — {e}")
-                return {"status": "failed", "item": item.name, "error": str(e)}
+                print(f"[BATCH] Failed: {name} — {e}")
+                return {"status": "failed", "item": name, "error": str(e)}
 
     results = await asyncio.gather(*[index_one(raw) for raw in batch.items])
-
     success = sum(1 for r in results if r["status"] == "ok")
     failed  = [r for r in results if r["status"] == "failed"]
-
     return {"success": success, "total": len(batch.items), "failed": failed}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# /scrape  — smart scraper with Shopify API as Strategy 1
+# /scrape  — smart multi-strategy scraper
 #
 # Strategy order:
-#   1. Shopify products.json API  (no auth needed, works on all Shopify stores)
-#   2. JSON-LD structured data    (WooCommerce, most modern stores)
-#   3. Open Graph meta tags       (single-product pages)
-#   4. Generic product card HTML  (last resort)
+#   1. Shopify products.json API  — returns ALL image angles per product
+#   2. JSON-LD structured data
+#   3. Open Graph meta tags
+#   4. Generic HTML product cards
 # ══════════════════════════════════════════════════════════════════════════════
 
 class ScrapeRequest(BaseModel):
     url:          str
-    max_products: int = 0   # 0 = no limit
+    max_products: int = 0
 
 
 @app.post("/scrape")
 async def scrape_store(req: ScrapeRequest):
     req_headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
+        "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept":          "application/json, text/html, */*",
         "Accept-Language": "en-US,en;q=0.9",
     }
@@ -464,7 +427,7 @@ async def scrape_store(req: ScrapeRequest):
 
     async with httpx.AsyncClient(follow_redirects=True, timeout=20.0) as http:
 
-        # ── Strategy 1: Shopify products.json API ─────────────────────────────
+        # ── Strategy 1: Shopify ───────────────────────────────────────────────
         shopify_products = await _try_shopify_api(
             http, req.url, base_url, req.max_products, req_headers
         )
@@ -512,9 +475,10 @@ async def scrape_store(req: ScrapeRequest):
             og_price = soup.find("meta", property="product:price:amount")
             if og_image and og_image.get("content"):
                 products.append({
-                    "name":      (og_title["content"] if og_title else "Product").strip(),
-                    "image_url": og_image["content"].strip(),
-                    "price":     (og_price["content"] if og_price else ""),
+                    "name":       (og_title["content"] if og_title else "Product").strip(),
+                    "image_url":  og_image["content"].strip(),
+                    "image_urls": [og_image["content"].strip()],
+                    "price":      (og_price["content"] if og_price else ""),
                 })
 
         # Strategy 4: HTML cards
@@ -524,7 +488,7 @@ async def scrape_store(req: ScrapeRequest):
     # Deduplicate
     seen, unique = set(), []
     for p in products:
-        key = p.get("image_url", "")
+        key = p.get("image_url", "") or (p.get("image_urls") or [""])[0]
         if key and key not in seen and p.get("name"):
             seen.add(key)
             unique.append(p)
@@ -538,7 +502,6 @@ async def scrape_store(req: ScrapeRequest):
 
 
 # ── Shopify API helper ─────────────────────────────────────────────────────────
-
 async def _try_shopify_api(
     http: httpx.AsyncClient,
     original_url: str,
@@ -546,23 +509,12 @@ async def _try_shopify_api(
     max_products: int,
     headers: dict,
 ) -> list:
-    """
-    Tries Shopify's public /products.json endpoint (no API key needed).
-    Paginates automatically — 250 per page until the store returns empty.
-
-    Two endpoints tried:
-      A) /collections/{handle}/products.json  — collection-specific
-      B) /products.json                        — store-wide fallback
-    """
     path  = urlparse(original_url).path
     parts = [p for p in path.split("/") if p]
 
     base_endpoints = []
     if len(parts) >= 2 and parts[0] == "collections":
-        collection_handle = parts[1]
-        base_endpoints.append(
-            f"{base_url}/collections/{collection_handle}/products.json"
-        )
+        base_endpoints.append(f"{base_url}/collections/{parts[1]}/products.json")
     base_endpoints.append(f"{base_url}/products.json")
 
     for base_endpoint in base_endpoints:
@@ -578,9 +530,7 @@ async def _try_shopify_api(
                 if resp.status_code != 200:
                     break
 
-                data         = resp.json()
-                raw_products = data.get("products", [])
-
+                raw_products = resp.json().get("products", [])
                 if not raw_products:
                     break
 
@@ -589,26 +539,33 @@ async def _try_shopify_api(
                     if not name:
                         continue
 
-                    image_url = ""
-                    images = p.get("images", [])
-                    if images:
-                        image_url = images[0].get("src", "")
+                    # ── Collect ALL image angles ──────────────────────────────
+                    images     = p.get("images", [])
+                    image_urls = [img.get("src", "") for img in images if img.get("src")]
+                    image_url  = image_urls[0] if image_urls else ""
 
-                    price = ""
+                    if not image_url:
+                        continue
+
+                    price    = ""
                     variants = p.get("variants", [])
                     if variants:
                         price_val = variants[0].get("price", "")
                         if price_val:
                             price = f"USD {price_val}"
 
-                    if name and image_url:
-                        all_products.append({
-                            "name":      name,
-                            "image_url": image_url,
-                            "price":     price,
-                        })
+                    all_products.append({
+                        "name":       name,
+                        "image_url":  image_url,    # first image (used for preview card)
+                        "image_urls": image_urls,   # ALL images (used for indexing)
+                        "price":      price,
+                    })
 
-                print(f"[SCRAPE] Page {page}: got {len(raw_products)} products (total so far: {len(all_products)})")
+                print(f"[SCRAPE] Page {page}: {len(raw_products)} products (total: {len(all_products)})")
+
+                if max_products and len(all_products) >= max_products:
+                    all_products = all_products[:max_products]
+                    break
 
                 if len(raw_products) < 250:
                     break
@@ -616,7 +573,7 @@ async def _try_shopify_api(
                 page += 1
 
             if all_products:
-                print(f"[SCRAPE] Shopify API complete: {len(all_products)} total products")
+                print(f"[SCRAPE] Shopify complete: {len(all_products)} products")
                 return all_products
 
         except Exception as e:
@@ -627,7 +584,6 @@ async def _try_shopify_api(
 
 
 # ── HTML scrape helpers ────────────────────────────────────────────────────────
-
 def _extract_ld_product(obj: dict, products: list):
     name = obj.get("name", "").strip()
     if not name:
@@ -635,58 +591,44 @@ def _extract_ld_product(obj: dict, products: list):
     image = obj.get("image", "")
     if isinstance(image, list): image = image[0] if image else ""
     if isinstance(image, dict): image = image.get("url", "")
-    price    = ""
-    offers   = obj.get("offers", {})
+    price  = ""
+    offers = obj.get("offers", {})
     if isinstance(offers, list): offers = offers[0] if offers else {}
     if isinstance(offers, dict):
-        price    = str(offers.get("price", ""))
-        currency = offers.get("priceCurrency", "")
-        if price and currency:
-            price = f"{currency} {price}"
+        price_val = str(offers.get("price", ""))
+        currency  = offers.get("priceCurrency", "")
+        if price_val and currency:
+            price = f"{currency} {price_val}"
     if name and image:
-        products.append({"name": name, "image_url": str(image).strip(), "price": price})
+        image_str = str(image).strip()
+        products.append({
+            "name":       name,
+            "image_url":  image_str,
+            "image_urls": [image_str],
+            "price":      price,
+        })
 
 
 def _scrape_product_cards(soup: BeautifulSoup, base_url: str) -> list:
-    from urllib.parse import urljoin
-    products      = []
-    card_keywords = [
-        "product-card", "product-item", "product_card", "product_item",
-        "item-card", "item_card", "grid-item", "catalogue-item",
-        "collection-product", "product-grid-item",
-    ]
-    candidates = []
-    for kw in card_keywords:
-        candidates += soup.find_all(
-            lambda tag, k=kw: tag.has_attr("class") and
-            any(k in cls.lower() for cls in tag["class"])
-        )
-    seen_ids, unique_candidates = set(), []
-    for c in candidates:
-        eid = id(c)
-        if eid not in seen_ids:
-            seen_ids.add(eid)
-            unique_candidates.append(c)
-    for card in unique_candidates:
-        img_tag = card.find("img")
-        if not img_tag:
+    products = []
+    cards    = soup.select("[class*='product'], [class*='item'], article")
+    for card in cards[:50]:
+        img = card.find("img")
+        if not img:
             continue
-        img_url = img_tag.get("data-src") or img_tag.get("src") or ""
-        if not img_url or img_url.startswith("data:"):
+        src = img.get("src") or img.get("data-src", "")
+        if not src or src.startswith("data:"):
             continue
-        img_url = urljoin(base_url, img_url)
-        name_el = (
-            card.find(class_=lambda c: c and "title" in c.lower()) or
-            card.find(["h2", "h3", "h4"]) or
-            img_tag
-        )
-        name = name_el.get_text(strip=True) if hasattr(name_el, "get_text") else img_tag.get("alt", "").strip()
-        if not name:
-            name = "Product"
-        price_tag = card.find(
-            lambda t: t.has_attr("class") and
-            any("price" in cls.lower() for cls in t["class"])
-        )
-        price = price_tag.get_text(strip=True) if price_tag else ""
-        products.append({"name": name, "image_url": img_url, "price": price})
+        if not src.startswith("http"):
+            src = base_url.rstrip("/") + "/" + src.lstrip("/")
+        title_el = card.find(["h2", "h3", "h4", "a", "[class*='title']", "[class*='name']"])
+        name     = title_el.get_text(strip=True) if title_el else "Product"
+        if len(name) > 120:
+            continue
+        products.append({
+            "name":       name,
+            "image_url":  src,
+            "image_urls": [src],
+            "price":      "",
+        })
     return products

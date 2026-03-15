@@ -42,7 +42,7 @@ YOLO_TO_CANONICAL = {
 
 FASHIONPEDIA_TO_CANONICAL = {
     # Clothing items DeepFashion2 misses — handled by YOLOS
-    "top, t-shirt, sweatshirt":                "sweater",
+    "top, t-shirt, sweatshirt":                "shirt",
     "sweater":                                 "sweater",
     "cardigan":                                "sweater",
     "coat":                                    "coat",
@@ -70,7 +70,7 @@ NON_SEARCHABLE = {
 # Every ID whose Fashionpedia label has a mapping in FASHIONPEDIA_TO_CANONICAL.
 # IDs NOT in this set (tie, glove, belt, garment parts...) are silently skipped.
 SEARCHABLE_IDS = {
-    1,   # top, t-shirt, sweatshirt  → sweater
+    1,   # top, t-shirt, sweatshirt  → shirt
     2,   # sweater                   → sweater
     3,   # cardigan                  → sweater
     9,   # coat                      → coat

@@ -8,17 +8,16 @@
 # process_image() returns 4 values:
 #   vector, category_tag, category_scores, debug_img_b64
 #
-# CHANGES vs previous version:
-#   - Added _iou() and _nms() helpers at module level
-#   - detect_objects() now runs NMS after merging both detectors
-#     to eliminate duplicate boxes from overlapping model coverage
+# darken=True → applies 30% brightness to the processed image before CLIP
+#               so dim-light query photos match dim-light indexed vectors.
+#               The darkened image is never stored — only its vector.
 # =============================================================================
 
 import torch
 import io
 import base64
 import time
-from PIL import Image
+from PIL import Image, ImageEnhance
 from transformers import CLIPProcessor, CLIPModel
 from rembg import remove, new_session
 
@@ -32,10 +31,6 @@ from clip_labels import CANONICAL_LABELS
 # =============================================================================
 
 def _iou(a, b):
-    """
-    Intersection over Union for two bounding boxes [x1, y1, x2, y2].
-    Returns a float between 0.0 (no overlap) and 1.0 (identical boxes).
-    """
     ax1, ay1, ax2, ay2 = a
     bx1, by1, bx2, by2 = b
     ix1 = max(ax1, bx1); iy1 = max(ay1, by1)
@@ -49,24 +44,11 @@ def _iou(a, b):
 
 
 def _nms(detections, iou_threshold=0.45):
-    """
-    Greedy Non-Maximum Suppression across all detections regardless of source model.
-
-    Algorithm:
-        1. Sort all boxes by confidence score (highest first)
-        2. Keep the top box
-        3. Suppress any other box that overlaps it by more than iou_threshold
-        4. Repeat for remaining boxes
-
-    This eliminates duplicates when both DeepFashion2 AND YOLOS fire on the same item.
-    """
     if not detections:
         return []
-
     dets = sorted(detections, key=lambda d: d["score"], reverse=True)
     kept = []
     suppressed = set()
-
     for i, d in enumerate(dets):
         if i in suppressed:
             continue
@@ -76,7 +58,6 @@ def _nms(detections, iou_threshold=0.45):
                 continue
             if _iou(d["bbox"], dets[j]["bbox"]) > iou_threshold:
                 suppressed.add(j)
-
     print(f"  NMS: {len(detections)} -> {len(kept)} detections after suppression")
     return kept
 
@@ -89,8 +70,8 @@ class LocusVisualizer:
     def __init__(self):
 
         # ── Detection models ──────────────────────────────────────────────────
-        self.clothing_detector   = ClothingDetector()
-        self.accessory_detector  = AccessoryDetector()
+        self.clothing_detector  = ClothingDetector()
+        self.accessory_detector = AccessoryDetector()
 
         # ── CLIP ──────────────────────────────────────────────────────────────
         print("Loading CLIP (Vectorization & Classification)")
@@ -102,10 +83,8 @@ class LocusVisualizer:
         self.rembg_session = new_session("u2net")
 
         # ── Labels ────────────────────────────────────────────────────────────
-        self.clip_labels = CANONICAL_LABELS   # 15 canonical labels from clip_labels.py
+        self.clip_labels = CANONICAL_LABELS
 
-        # Pre-compute text embeddings once at startup — shape (15, 512)
-        # Every classification call is then just one matrix multiply (fast)
         print(f"Pre-computing CLIP text embeddings for {len(self.clip_labels)} labels...")
         text_inputs = self.clip_processor(
             text=self.clip_labels, return_tensors="pt", padding=True
@@ -124,20 +103,6 @@ class LocusVisualizer:
     # Called by gateway /detect endpoint.
     # =========================================================================
     def detect_objects(self, image_bytes):
-        """
-        Runs both detection models on the same image, merges results, and
-        applies cross-model NMS to remove duplicate boxes.
-
-        Flow:
-            1. ClothingDetector  -> shirts, pants, dresses, skirts, jackets
-            2. AccessoryDetector -> sweaters, coats, jumpsuits, shoes, bags, etc.
-            3. Merge all results
-            4. NMS — suppress overlapping boxes, keep highest confidence
-            5. Fallback to full-image CLIP if nothing survives
-
-        Returns:
-            (detections, image_width, image_height)
-        """
         t0 = time.time()
         try:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -146,8 +111,7 @@ class LocusVisualizer:
             clothing    = self.clothing_detector.detect(image, self._classify_crop)
             accessories = self.accessory_detector.detect(image, self._classify_crop)
 
-            # Merge then deduplicate with NMS
-            all_detections = _nms(clothing + accessories, iou_threshold=0.45)
+            all_detections = _nms(clothing + accessories, iou_threshold=0.3)
 
             if not all_detections:
                 print("Both models found nothing — running full-image CLIP fallback.")
@@ -171,28 +135,14 @@ class LocusVisualizer:
     # =========================================================================
     # PUBLIC METHOD 2: process_image()
     # Called by gateway /search and /add-bulk endpoints.
+    #
+    # darken=False  →  normal pipeline (white background, full brightness)
+    # darken=True   →  same pipeline but 30% brightness applied before CLIP
+    #                  Used during indexing to create a dim-light variant vector.
+    #                  The darkened image is generated in memory and discarded —
+    #                  only the resulting vector is stored in Qdrant.
     # =========================================================================
-    def process_image(self, image_bytes, skip_rembg=False, yolo_label=""):
-        """
-        Full pipeline for a single item.
-
-        Steps:
-            1. Resize if needed (max 512px)
-            2a. skip_rembg=True  -> bounding box crop, skip background removal
-            2b. skip_rembg=False -> rembg background removal
-            3. CLIP vectorization -> 512-dim embedding
-            4. CLIP classification -> all 15 scores (softmax)
-               top score >= 0.45 -> category_tag = that label
-               top score <  0.45 -> category_tag = None (indexed without filter)
-
-        Args:
-            image_bytes: raw bytes of the image
-            skip_rembg:  True when called with a tight bounding box crop
-            yolo_label:  canonical label passed from gateway (overrides CLIP if set)
-
-        Returns:
-            (vector, category_tag, category_scores, debug_img_b64)
-        """
+    def process_image(self, image_bytes, skip_rembg=False, yolo_label="", darken=False):
         t0 = time.time()
         try:
             try:
@@ -231,23 +181,32 @@ class LocusVisualizer:
                 white_bg = Image.new("RGB", output_image.size, (255, 255, 255))
                 white_bg.paste(output_image, mask=output_image.split()[3])
 
-            # ── Step 3: CLIP Vectorization ────────────────────────────────────
-            clip_inputs = self.clip_processor(images=white_bg, return_tensors="pt")
+            # ── Step 3: Darken (optional) ─────────────────────────────────────
+            # Simulates dim lighting. The darkened image is only used for
+            # CLIP embedding — it is never saved or returned to the client.
+            if darken:
+                enhancer = ImageEnhance.Brightness(white_bg)
+                clip_input_image = enhancer.enhance(0.3)   # 30% brightness
+                print("Darken mode: applied 30% brightness for dim-light vector")
+            else:
+                clip_input_image = white_bg
+
+            # ── Step 4: CLIP Vectorization ────────────────────────────────────
+            clip_inputs = self.clip_processor(images=clip_input_image, return_tensors="pt")
             with torch.no_grad():
                 image_features = self.clip_model.get_image_features(**clip_inputs)
             image_features /= image_features.norm(p=2, dim=-1, keepdim=True)
             vector = image_features[0].tolist()
 
-            # ── Step 4: CLIP Classification ───────────────────────────────────
+            # ── Step 5: CLIP Classification ───────────────────────────────────
             similarity    = (100.0 * image_features @ self.text_features.T).softmax(dim=-1)
-            scores_tensor = similarity[0]   # shape: (15,)
+            scores_tensor = similarity[0]
 
             category_scores = {
                 label: round(scores_tensor[i].item(), 4)
                 for i, label in enumerate(self.clip_labels)
             }
 
-            # If YOLO passed a label, trust it over CLIP (YOLO is the specialist)
             if yolo_label and yolo_label.strip() in self.clip_labels:
                 category_tag = yolo_label.strip()
                 print(f"Category from YOLO label: '{category_tag}'")
@@ -261,12 +220,12 @@ class LocusVisualizer:
                     category_tag = None
                     print(f"CLIP low confidence: '{clip_label}' ({clip_conf:.2f}) -> no category filter")
 
-            # ── Step 5: Debug image ───────────────────────────────────────────
+            # ── Step 6: Debug image (always the normal white_bg, never darkened) ──
             buf = io.BytesIO()
             white_bg.save(buf, format="PNG")
             debug_img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
 
-            print(f"process_image() done in {(time.time()-t0):.2f}s")
+            print(f"process_image(darken={darken}) done in {(time.time()-t0):.2f}s")
             return vector, category_tag, category_scores, debug_img_b64
 
         except Exception as e:
@@ -275,15 +234,8 @@ class LocusVisualizer:
 
     # =========================================================================
     # PRIVATE: _classify_crop()
-    # Passed into both detectors as classify_fn (used by fallback path).
     # =========================================================================
     def _classify_crop(self, pil_image):
-        """
-        CLIP zero-shot classification on a PIL image.
-
-        Returns:
-            (best_label, best_confidence, all_scores)
-        """
         clip_inputs = self.clip_processor(images=pil_image, return_tensors="pt")
         with torch.no_grad():
             image_features = self.clip_model.get_image_features(**clip_inputs)

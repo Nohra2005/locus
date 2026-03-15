@@ -64,7 +64,7 @@ FASHIONPEDIA_CATS = [
     'tassel',                                  # 45
 ]
 
-MIN_CONFIDENCE = 0.45   # raised from 0.35 — reduces duplicate/weak boxes
+MIN_CONFIDENCE = 0.7  
 MIN_AREA       = 1500   # px²
 
 

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 const API = "http://localhost:8000";
 
@@ -221,7 +221,7 @@ function CataloguePanel({ storeName }) {
   const [deleting, setDeleting] = useState({});
   const LIMIT = 24;
 
-  const fetchProducts = async (off = 0) => {
+  const fetchProducts = useCallback(async (off = 0) => {
     setLoading(true);
     setError("");
     try {
@@ -238,9 +238,9 @@ function CataloguePanel({ storeName }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [storeName]);
 
-  useEffect(() => { fetchProducts(0); }, [storeName]);
+  useEffect(() => { fetchProducts(0); }, [storeName, fetchProducts]);
 
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Remove "${name}" from the catalogue?`)) return;
