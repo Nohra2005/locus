@@ -2,11 +2,11 @@
 torch>=2.6.0+cpu
 torchvision>=0.21.0+cpu
 transformers>=4.48.0
-pillow
-rembg
-onnxruntime
+sentence-transformers
+Pillow
 fastapi
 uvicorn
 python-multipart
 ultralytics
 huggingface_hub
+onnxruntime

@@ -619,7 +619,7 @@ function ScrapeWebsitePanel({ storeName, address }) {
 
       {products !== null && status === "idle" && (
         <>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
             <div style={{ fontSize: "0.68rem", color: T.textMuted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
               {products.length} products found · {selectedItems.length} selected
             </div>
@@ -628,6 +628,17 @@ function ScrapeWebsitePanel({ storeName, address }) {
               <button className="btn-ghost" onClick={() => toggleAll(false)} style={{ fontSize: "0.72rem" }}>Deselect all</button>
             </div>
           </div>
+
+          {selectedItems.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <button className="btn-primary" onClick={handleIndex}>
+                <span style={{ color: T.accent }}>✦</span> Index {selectedItems.length} selected
+              </button>
+              <span style={{ fontSize: "0.72rem", color: T.textMuted }}>
+                ~{Math.max(1, Math.ceil(selectedItems.length * 0.5 / 60))} min estimated
+              </span>
+            </div>
+          )}
 
           {products.length === 0 ? (
             <div style={{
@@ -646,16 +657,6 @@ function ScrapeWebsitePanel({ storeName, address }) {
             </div>
           )}
 
-          {selectedItems.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <button className="btn-primary" onClick={handleIndex}>
-                <span style={{ color: T.accent }}>✦</span> Index {selectedItems.length} selected
-              </button>
-              <span style={{ fontSize: "0.72rem", color: T.textMuted }}>
-                ~{Math.max(1, Math.ceil(selectedItems.length * 0.5 / 60))} min estimated
-              </span>
-            </div>
-          )}
         </>
       )}
 

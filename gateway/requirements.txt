@@ -1,10 +1,9 @@
 fastapi
 uvicorn
-requests
-python-dotenv
 python-multipart
+httpx
 qdrant-client==1.10.0
 Pillow
-httpx
 beautifulsoup4
 lxml
+pydantic

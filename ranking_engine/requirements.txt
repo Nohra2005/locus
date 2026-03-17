@@ -1,7 +1,5 @@
-# LOCUS: requirements.txt
 fastapi
 uvicorn
 numpy
 scikit-learn
-requests
 pydantic
