@@ -46,6 +46,16 @@ def startup_event():
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=512, distance=Distance.COSINE),
         )
+    # Required for filtered search on Qdrant Cloud
+    for field in ("category_tag", "store_name", "product_id"):
+        try:
+            client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name=field,
+                field_schema="keyword",
+            )
+        except Exception:
+            pass  # index already exists
 
 
 @app.get("/")
