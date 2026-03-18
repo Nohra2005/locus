@@ -1,31 +1,49 @@
 # LOCUS: docker-compose.yml
-version: '3.8'
+#
+# MODE: CLOUD — Qdrant runs on Qdrant Cloud (shared with teammates).
+#
+# Setup (one time):
+#   1. Go to https://cloud.qdrant.io and create a free cluster
+#   2. Copy your cluster URL and API key
+#   3. Create a .env file in this folder (see .env.example):
+#        QDRANT_URL=https://your-cluster.qdrant.io:6333
+#        QDRANT_API_KEY=your-api-key-here
+#   4. Add .env to your .gitignore — never commit it
+#   5. Run: docker compose up --build
+#
+# To switch back to LOCAL mode:
+#   - Comment out QDRANT_URL and QDRANT_API_KEY in gateway environment
+#   - Uncomment QDRANT_HOST and QDRANT_PORT
+#   - Uncomment the entire `qdrant:` service block at the bottom
 
 services:
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
-    volumes:
-      - qdrant_data:/qdrant/storage
 
+  # ── 1. Gateway ────────────────────────────────────────────────────
   gateway:
     build: ./gateway
     ports:
       - "8000:8000"
     depends_on:
-      - visual_engine
-      - ranking_engine
+      visual_engine:
+        condition: service_started
+      ranking_engine:
+        condition: service_started
     environment:
       - VISUAL_HOST=http://visual_engine:8001
       - RANKING_HOST=http://ranking_engine:8002
-      - QDRANT_HOST=http://qdrant:6333
+      # CLOUD mode (active) — requires .env file
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+      # LOCAL mode (commented out)
+      # - QDRANT_HOST=qdrant
+      # - QDRANT_PORT=6333
     volumes:
       - ./gateway:/app
     dns:
       - 8.8.8.8
       - 1.1.1.1
 
+  # ── 2. Visual Engine ──────────────────────────────────────────────
   visual_engine:
     build: ./visual_engine
     ports:
@@ -39,6 +57,7 @@ services:
       - 8.8.8.8
       - 1.1.1.1
 
+  # ── 3. Ranking Engine ─────────────────────────────────────────────
   ranking_engine:
     build: ./ranking_engine
     ports:
@@ -46,5 +65,19 @@ services:
     volumes:
       - ./ranking_engine:/app
 
+  # ── 4. Local Qdrant (commented out — using cloud instead) ─────────
+  # qdrant:
+  #   image: qdrant/qdrant:latest
+  #   ports:
+  #     - "6333:6333"
+  #   volumes:
+  #     - qdrant_data:/qdrant/storage
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -sf http://localhost:6333/readyz || exit 1"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 10
+  #     start_period: 10s
+
 volumes:
-  qdrant_data:
+  qdrant_data:  # uncomment qdrant service block above to use local mode
