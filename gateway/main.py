@@ -25,33 +25,17 @@ app.add_middleware(
 )
 
 VISUAL_URL      = os.getenv("VISUAL_HOST",    "http://visual_engine:8001")
+QDRANT_URL      = os.getenv("QDRANT_URL")
+QDRANT_API_KEY  = os.getenv("QDRANT_API_KEY")
 QDRANT_HOST     = os.getenv("QDRANT_HOST",    "qdrant")
 QDRANT_PORT     = int(os.getenv("QDRANT_PORT", 6333))
 COLLECTION_NAME = "locus_items"
 
-# ─────────────────────────────────────────────────────────────────
-# Replace the Qdrant client block in gateway/main.py
-# (the section after LABEL_TO_CATEGORY and before @app.on_event)
-#
-# This version auto-detects LOCAL vs CLOUD mode from env vars.
-# ─────────────────────────────────────────────────────────────────
-
-COLLECTION_NAME = "locus_items"
-
-# Cloud mode: QDRANT_URL + QDRANT_API_KEY are set in .env
-# Local mode: QDRANT_HOST + QDRANT_PORT point to the Docker container
-QDRANT_URL     = os.environ.get("QDRANT_URL", "")
-QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY", "")
-QDRANT_HOST    = os.environ.get("QDRANT_HOST", "qdrant")
-QDRANT_PORT    = int(os.environ.get("QDRANT_PORT", 6333))
-
-if QDRANT_URL and QDRANT_API_KEY:
-    # ── Qdrant Cloud ──────────────────────────────────────────────
-    print(f"[QDRANT] Connecting to CLOUD: {QDRANT_URL}")
+if QDRANT_URL:
+    print(f"[QDRANT] Connecting to cloud: {QDRANT_URL}")
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 else:
-    # ── Local Docker container ────────────────────────────────────
-    print(f"[QDRANT] Connecting to LOCAL: {QDRANT_HOST}:{QDRANT_PORT}")
+    print(f"[QDRANT] Connecting to local: {QDRANT_HOST}:{QDRANT_PORT}")
     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
 
 
@@ -63,15 +47,6 @@ def startup_event():
             vectors_config=VectorParams(size=512, distance=Distance.COSINE),
         )
 
-<<<<<<< Updated upstream
-=======
-    # ── Create payload index on store_name so filtering works ──
-    client.create_payload_index(
-        collection_name=COLLECTION_NAME,
-        field_name="store_name",
-        field_schema="keyword",
-    )
->>>>>>> Stashed changes
 
 @app.get("/")
 def read_root():

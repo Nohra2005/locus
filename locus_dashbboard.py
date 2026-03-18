@@ -23,8 +23,11 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
 # ── Config ────────────────────────────────────────────────────────────────────
+import os
+
 GATEWAY_URL     = "http://localhost:8000"
-QDRANT_URL      = "http://localhost:6333"
+QDRANT_URL      = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY  = os.getenv("QDRANT_API_KEY", "")
 COLLECTION_NAME = "locus_items"
 
 st.set_page_config(
@@ -36,6 +39,8 @@ st.set_page_config(
 # ── Qdrant client ─────────────────────────────────────────────────────────────
 @st.cache_resource
 def get_qdrant():
+    if QDRANT_API_KEY:
+        return QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
     return QdrantClient(url=QDRANT_URL)
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -114,7 +119,7 @@ with tab_monitor:
                     resp = requests.post(
                         f"{GATEWAY_URL}/scrape",
                         json={"url": url, "max_products": 0},
-                        timeout=120,
+                        timeout=30,
                     )
                     data = resp.json()
                     st.session_state.scraped_products = data.get("products", [])
@@ -145,12 +150,12 @@ with tab_monitor:
                 st.caption(p.get("name", "")[:40])
 
     # ── Box preview (dry run on first N products) ──────────────────────────────
-    if products and st.button("🔬 Preview boxes", key="preview_btn"):
+    if products and st.button("🔬 Preview boxes (first 8 products)", key="preview_btn"):
         st.markdown("#### Box preview — what the indexer will crop")
         st.caption("Gold box = selected crop · Grey boxes = other detections · No box = full image used")
 
         VISUAL_URL = GATEWAY_URL.replace("8000", "8001")
-        preview_products = products
+        preview_products = products[:8]
         preview_cols = st.columns(4)
 
         for i, p in enumerate(preview_products):
