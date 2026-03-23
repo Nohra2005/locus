@@ -5,11 +5,13 @@ Two-pass re-indexer:
 
 Pass 1 — locus_items: re-indexes products with box_source = "full_image" or
          "unknown" (indexed before the Phase 2 crop fix).
+         Also DELETES products that are now classified as not_fashion
+         (socks, underwear, swimwear etc. that should never have been indexed).
 
 Pass 2 — locus_skipped: retries products that previously got no_consensus.
          These never made it into locus_items so Pass 1 misses them entirely.
-         After a whitelist update (e.g. adding "sleeve", "vest") these products
-         may now classify correctly and can be promoted to locus_items.
+         After a whitelist update they may now classify correctly and can be
+         promoted to locus_items.
 
 Usage:
     docker compose exec gateway python reindex_stale.py
@@ -58,7 +60,8 @@ if DRY_RUN:
     print("[DRY RUN] No writes will be made.\n")
 
 
-# ── Ensure locus_skipped collection exists ────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
 def _ensure_skipped_collection():
     if not client.collection_exists(SKIPPED_COLLECTION):
         client.create_collection(
@@ -77,11 +80,10 @@ def _ensure_skipped_collection():
         print(f"[QDRANT] Created collection '{SKIPPED_COLLECTION}'")
 
 
-# ── Store one skipped product in locus_skipped ────────────────────────────────
 def _store_skipped(product: dict, reason: str):
     """
-    Upserts a skipped product into locus_skipped.
-    Only stores no_consensus and no_box_found — not_fashion is intentional.
+    Upserts a skipped product into locus_skipped for dashboard review.
+    Only stores no_consensus and no_box_found — not_fashion is deleted, not stored.
     """
     if DRY_RUN:
         return
@@ -113,17 +115,17 @@ def _store_skipped(product: dict, reason: str):
         print(f"  [WARN]  Could not store skipped '{product.get('name','')}': {e}")
 
 
-def _delete_from_skipped(point_id: str):
-    """Remove a product from locus_skipped after it successfully indexes."""
+def _delete_from_collection(collection: str, point_id: str, name: str = ""):
+    """Delete a single point from a collection by its point ID."""
     if DRY_RUN or not point_id:
         return
     try:
         client.delete(
-            collection_name=SKIPPED_COLLECTION,
+            collection_name=collection,
             points_selector=models.PointIdsList(points=[point_id]),
         )
     except Exception as e:
-        print(f"  [WARN]  Could not remove from locus_skipped: {e}")
+        print(f"  [WARN]  Could not delete '{name}' from {collection}: {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -131,10 +133,6 @@ def _delete_from_skipped(point_id: str):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def collect_stale_products() -> list[dict]:
-    """
-    Scroll locus_items and find products with box_source = unknown/full_image.
-    These were indexed before the Phase 2 crop fix.
-    """
     stale      = {}
     total_seen = 0
     offset     = None
@@ -194,9 +192,10 @@ async def reindex_one(
     http: httpx.AsyncClient,
 ) -> dict:
     async with semaphore:
-        name    = product["name"]
-        img_url = product["image_url"]
-        old_src = product["box_source"]
+        name     = product["name"]
+        img_url  = product["image_url"]
+        old_src  = product["box_source"]
+        point_id = product["point_id"]
 
         if not img_url:
             return {"status": "skipped_no_url", "item": name, "product_id": product["product_id"]}
@@ -218,15 +217,55 @@ async def reindex_one(
 
             if idx_data.get("skipped"):
                 reason = idx_data.get("skip_reason", "unknown")
+
                 if reason == "no_box_found":
+                    # Keep old vector — stale beats nothing.
+                    # Store in dashboard so owner can see it.
                     print(f"  [KEEP]  '{name}' — no box found, keeping old vector")
                     _store_skipped(product, reason)
-                    return {"status": "kept_no_box", "item": name, "product_id": product["product_id"], "reason": reason}
-                if reason == "no_consensus":
-                    _store_skipped(product, reason)
-                print(f"  [SKIP]  '{name}' — {reason}")
-                return {"status": "skipped", "item": name, "product_id": product["product_id"], "reason": reason}
+                    return {
+                        "status":     "kept_no_box",
+                        "item":       name,
+                        "product_id": product["product_id"],
+                        "reason":     reason,
+                    }
 
+                if reason == "no_consensus":
+                    # Store for whitelist review — a keyword fix may rescue it.
+                    _store_skipped(product, reason)
+                    print(f"  [SKIP]  '{name}' — {reason}")
+                    return {
+                        "status":     "skipped",
+                        "item":       name,
+                        "product_id": product["product_id"],
+                        "reason":     reason,
+                    }
+
+                if reason == "not_fashion":
+                    # DELETE from locus_items — socks, underwear, swimwear etc.
+                    # should never have been indexed in the first place.
+                    if DRY_RUN:
+                        print(f"  [DEL?]  '{name}' — not_fashion (dry run, would delete)")
+                    else:
+                        _delete_from_collection(COLLECTION_NAME, point_id, name)
+                        print(f"  [DEL]   '{name}' — not_fashion, deleted from locus_items")
+                    return {
+                        "status":     "deleted",
+                        "item":       name,
+                        "product_id": product["product_id"],
+                        "reason":     reason,
+                    }
+
+                # Any other skip reason — leave as-is
+                print(f"  [SKIP]  '{name}' — {reason}")
+                return {
+                    "status":     "skipped",
+                    "item":       name,
+                    "product_id": product["product_id"],
+                    "reason":     reason,
+                }
+
+            # Successfully re-indexed — upsert with clean box_source
             vector_normal  = idx_data["vector_normal"]
             new_category   = idx_data.get("category", product["category_tag"])
             new_box_source = idx_data.get("box_source", "unknown")
@@ -251,11 +290,22 @@ async def reindex_one(
                 )
 
             print(f"  [OK]    '{name}'  {old_src} -> {new_box_source}  cat={new_category}")
-            return {"status": "ok", "item": name, "product_id": product["product_id"], "old_box_source": old_src, "new_box_source": new_box_source}
+            return {
+                "status":         "ok",
+                "item":           name,
+                "product_id":     product["product_id"],
+                "old_box_source": old_src,
+                "new_box_source": new_box_source,
+            }
 
         except Exception as e:
             print(f"  [ERR]   '{name}' — {e}")
-            return {"status": "failed", "item": name, "product_id": product["product_id"], "error": str(e)}
+            return {
+                "status":     "failed",
+                "item":       name,
+                "product_id": product["product_id"],
+                "error":      str(e),
+            }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -265,15 +315,14 @@ async def reindex_one(
 async def reindex_from_skipped(http: httpx.AsyncClient):
     """
     Retry products in locus_skipped with skip_reason = no_consensus.
-    These never made it into locus_items so Pass 1 misses them entirely.
-    After a whitelist update they may now classify correctly.
-    Successfully indexed products are moved to locus_items and removed
+    After a whitelist update they may now classify correctly and can be
+    promoted to locus_items. Successfully indexed products are removed
     from locus_skipped. Still-failing products stay in locus_skipped.
     """
     print("\nPass 2 — scanning locus_skipped for no_consensus products...")
 
     all_skipped = []
-    offset = None
+    offset      = None
 
     while True:
         results, next_offset = client.scroll(
@@ -299,7 +348,7 @@ async def reindex_from_skipped(http: httpx.AsyncClient):
 
     print(f"  Found {len(all_skipped)} no_consensus products to retry.\n")
 
-    semaphore = asyncio.Semaphore(CONCURRENCY)
+    semaphore  = asyncio.Semaphore(CONCURRENCY)
     ok_count   = 0
     fail_count = 0
     still_skip = 0
@@ -307,9 +356,9 @@ async def reindex_from_skipped(http: httpx.AsyncClient):
     async def retry_one(product: dict):
         nonlocal ok_count, fail_count, still_skip
         async with semaphore:
-            name      = product.get("name", "")
-            img_url   = product.get("image_url", "")
-            point_id  = product.get("point_id", "")
+            name     = product.get("name", "")
+            img_url  = product.get("image_url", "")
+            point_id = product.get("point_id", "")
 
             if not img_url:
                 return
@@ -333,8 +382,7 @@ async def reindex_from_skipped(http: httpx.AsyncClient):
                     reason = idx_data.get("skip_reason", "unknown")
                     print(f"  [STILL SKIP] '{name}' — {reason}")
                     still_skip += 1
-                    # Update the skip_reason in case it changed
-                    # (e.g. was no_consensus, now no_box_found)
+                    # Update reason if it changed (e.g. no_consensus → no_box_found)
                     if reason != "no_consensus":
                         _store_skipped(product, reason)
                     return
@@ -344,7 +392,6 @@ async def reindex_from_skipped(http: httpx.AsyncClient):
                 new_box_source = idx_data.get("box_source", "unknown")
 
                 if not DRY_RUN:
-                    # Add to locus_items
                     client.upsert(
                         collection_name=COLLECTION_NAME,
                         points=[PointStruct(
@@ -362,8 +409,7 @@ async def reindex_from_skipped(http: httpx.AsyncClient):
                             }
                         )]
                     )
-                    # Remove from locus_skipped
-                    _delete_from_skipped(point_id)
+                    _delete_from_collection(SKIPPED_COLLECTION, point_id, name)
 
                 print(f"  [OK]    '{name}' → {new_category} ({new_box_source})")
                 ok_count += 1
@@ -403,19 +449,19 @@ async def main():
 
         ok           = [r for r in results if r["status"] == "ok"]
         kept_no_box  = [r for r in results if r["status"] == "kept_no_box"]
+        deleted      = [r for r in results if r["status"] == "deleted"]
         skipped      = [r for r in results if r["status"] == "skipped"]
         failed       = [r for r in results if r["status"] == "failed"]
         no_url       = [r for r in results if r["status"] == "skipped_no_url"]
         no_consensus = [r for r in skipped if r.get("reason") == "no_consensus"]
-        not_fashion  = [r for r in skipped if r.get("reason") == "not_fashion"]
 
         print("\n" + "=" * 60)
         print("PASS 1 COMPLETE")
         print("=" * 60)
         print(f"  Re-indexed successfully  : {len(ok)}")
         print(f"  Kept (no box found)      : {len(kept_no_box)}")
+        print(f"  Deleted (not_fashion)    : {len(deleted)}  <- removed from locus_items")
         print(f"  Skipped (no_consensus)   : {len(no_consensus)}")
-        print(f"  Skipped (not_fashion)    : {len(not_fashion)}")
         print(f"  No image URL             : {len(no_url)}")
         print(f"  Failed (network/other)   : {len(failed)}")
 
