@@ -1,0 +1,443 @@
+"""
+reindex_stale.py  —  Phase 5.1
+
+Two-pass re-indexer:
+
+Pass 1 — locus_items: re-indexes products with box_source = "full_image" or
+         "unknown" (indexed before the Phase 2 crop fix).
+
+Pass 2 — locus_skipped: retries products that previously got no_consensus.
+         These never made it into locus_items so Pass 1 misses them entirely.
+         After a whitelist update (e.g. adding "sleeve", "vest") these products
+         may now classify correctly and can be promoted to locus_items.
+
+Usage:
+    docker compose exec gateway python reindex_stale.py
+
+Environment variables:
+    QDRANT_URL      — Qdrant Cloud URL  (optional, falls back to local)
+    QDRANT_API_KEY  — Qdrant Cloud key  (optional)
+    QDRANT_HOST     — local host        (default: localhost)
+    QDRANT_PORT     — local port        (default: 6333)
+    VISUAL_URL      — visual engine URL (default: http://visual_engine:8001)
+    DRY_RUN         — set to 1 to print what would happen without writing
+    CONCURRENCY     — parallel workers  (default: 3)
+"""
+
+import asyncio
+import os
+import uuid
+from datetime import datetime
+
+import httpx
+from qdrant_client import QdrantClient
+from qdrant_client.http import models
+from qdrant_client.http.models import Distance, PointStruct, VectorParams
+
+# ── Config ────────────────────────────────────────────────────────────────────
+QDRANT_URL         = os.getenv("QDRANT_URL")
+QDRANT_API_KEY     = os.getenv("QDRANT_API_KEY")
+QDRANT_HOST        = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT        = int(os.getenv("QDRANT_PORT", 6333))
+VISUAL_URL         = os.getenv("VISUAL_URL", "http://visual_engine:8001")
+COLLECTION_NAME    = "locus_items"
+SKIPPED_COLLECTION = "locus_skipped"
+DRY_RUN            = os.getenv("DRY_RUN", "0") == "1"
+CONCURRENCY        = int(os.getenv("CONCURRENCY", "3"))
+
+STALE_SOURCES = {"full_image", "unknown", None, ""}
+
+if QDRANT_URL:
+    print(f"[QDRANT] Cloud: {QDRANT_URL}")
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+else:
+    print(f"[QDRANT] Local: {QDRANT_HOST}:{QDRANT_PORT}")
+    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+
+if DRY_RUN:
+    print("[DRY RUN] No writes will be made.\n")
+
+
+# ── Ensure locus_skipped collection exists ────────────────────────────────────
+def _ensure_skipped_collection():
+    if not client.collection_exists(SKIPPED_COLLECTION):
+        client.create_collection(
+            collection_name=SKIPPED_COLLECTION,
+            vectors_config=VectorParams(size=1, distance=Distance.COSINE),
+        )
+        for field in ("store_name", "skip_reason", "product_id"):
+            try:
+                client.create_payload_index(
+                    collection_name=SKIPPED_COLLECTION,
+                    field_name=field,
+                    field_schema="keyword",
+                )
+            except Exception:
+                pass
+        print(f"[QDRANT] Created collection '{SKIPPED_COLLECTION}'")
+
+
+# ── Store one skipped product in locus_skipped ────────────────────────────────
+def _store_skipped(product: dict, reason: str):
+    """
+    Upserts a skipped product into locus_skipped.
+    Only stores no_consensus and no_box_found — not_fashion is intentional.
+    """
+    if DRY_RUN:
+        return
+    try:
+        img_url    = product.get("image_url", "")
+        product_id = product.get("product_id", "")
+        key        = img_url or product_id or product.get("name", "unknown")
+
+        client.upsert(
+            collection_name=SKIPPED_COLLECTION,
+            points=[
+                PointStruct(
+                    id     = str(uuid.uuid5(uuid.NAMESPACE_URL, f"skipped::{key}")),
+                    vector = [0.0],
+                    payload = {
+                        "product_id":  product_id,
+                        "name":        product.get("name", ""),
+                        "image_url":   img_url,
+                        "store_name":  product.get("store_name", ""),
+                        "mall_name":   product.get("mall_name", ""),
+                        "price":       product.get("price", ""),
+                        "skip_reason": reason,
+                        "skipped_at":  datetime.utcnow().isoformat(),
+                    }
+                )
+            ]
+        )
+    except Exception as e:
+        print(f"  [WARN]  Could not store skipped '{product.get('name','')}': {e}")
+
+
+def _delete_from_skipped(point_id: str):
+    """Remove a product from locus_skipped after it successfully indexes."""
+    if DRY_RUN or not point_id:
+        return
+    try:
+        client.delete(
+            collection_name=SKIPPED_COLLECTION,
+            points_selector=models.PointIdsList(points=[point_id]),
+        )
+    except Exception as e:
+        print(f"  [WARN]  Could not remove from locus_skipped: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PASS 1 — locus_items (stale box_source)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def collect_stale_products() -> list[dict]:
+    """
+    Scroll locus_items and find products with box_source = unknown/full_image.
+    These were indexed before the Phase 2 crop fix.
+    """
+    stale      = {}
+    total_seen = 0
+    offset     = None
+
+    print("Pass 1 — scanning locus_items for stale vectors...")
+
+    while True:
+        results, next_offset = client.scroll(
+            collection_name=COLLECTION_NAME,
+            limit=250,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        if not results:
+            break
+
+        for pt in results:
+            total_seen += 1
+            p = pt.payload
+
+            if p.get("is_dark") is True:
+                continue
+
+            product_id = p.get("product_id", str(pt.id))
+            box_source = p.get("box_source", None)
+
+            if box_source not in STALE_SOURCES:
+                continue
+
+            if product_id not in stale:
+                stale[product_id] = {
+                    "point_id":     str(pt.id),
+                    "product_id":   product_id,
+                    "name":         p.get("name", ""),
+                    "store_name":   p.get("store_name", ""),
+                    "mall_name":    p.get("mall_name", ""),
+                    "image_url":    p.get("image_url", ""),
+                    "category_tag": p.get("category_tag", ""),
+                    "price":        p.get("price", ""),
+                    "box_source":   box_source,
+                }
+
+        print(f"  ... scanned {total_seen} points, {len(stale)} stale so far", end="\r")
+
+        if next_offset is None:
+            break
+        offset = next_offset
+
+    print(f"\n  Scan complete. Total points: {total_seen}, stale products: {len(stale)}")
+    return list(stale.values())
+
+
+async def reindex_one(
+    semaphore: asyncio.Semaphore,
+    product: dict,
+    http: httpx.AsyncClient,
+) -> dict:
+    async with semaphore:
+        name    = product["name"]
+        img_url = product["image_url"]
+        old_src = product["box_source"]
+
+        if not img_url:
+            return {"status": "skipped_no_url", "item": name, "product_id": product["product_id"]}
+
+        try:
+            img_resp = await http.get(img_url, timeout=15.0, follow_redirects=True)
+            img_resp.raise_for_status()
+            img_bytes    = img_resp.content
+            content_type = img_resp.headers.get("content-type", "image/jpeg")
+
+            idx_resp = await http.post(
+                f"{VISUAL_URL}/index-image",
+                files={"file": ("product.jpg", img_bytes, content_type)},
+                data={"title": name},
+                timeout=90.0,
+            )
+            idx_resp.raise_for_status()
+            idx_data = idx_resp.json()
+
+            if idx_data.get("skipped"):
+                reason = idx_data.get("skip_reason", "unknown")
+                if reason == "no_box_found":
+                    print(f"  [KEEP]  '{name}' — no box found, keeping old vector")
+                    _store_skipped(product, reason)
+                    return {"status": "kept_no_box", "item": name, "product_id": product["product_id"], "reason": reason}
+                if reason == "no_consensus":
+                    _store_skipped(product, reason)
+                print(f"  [SKIP]  '{name}' — {reason}")
+                return {"status": "skipped", "item": name, "product_id": product["product_id"], "reason": reason}
+
+            vector_normal  = idx_data["vector_normal"]
+            new_category   = idx_data.get("category", product["category_tag"])
+            new_box_source = idx_data.get("box_source", "unknown")
+
+            if not DRY_RUN:
+                client.upsert(
+                    collection_name=COLLECTION_NAME,
+                    points=[PointStruct(
+                        id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
+                        vector  = vector_normal,
+                        payload = {
+                            "name":         name,
+                            "store_name":   product["store_name"],
+                            "mall_name":    product["mall_name"],
+                            "image_url":    img_url,
+                            "category_tag": new_category,
+                            "price":        product["price"],
+                            "product_id":   product["product_id"],
+                            "box_source":   new_box_source,
+                        }
+                    )]
+                )
+
+            print(f"  [OK]    '{name}'  {old_src} -> {new_box_source}  cat={new_category}")
+            return {"status": "ok", "item": name, "product_id": product["product_id"], "old_box_source": old_src, "new_box_source": new_box_source}
+
+        except Exception as e:
+            print(f"  [ERR]   '{name}' — {e}")
+            return {"status": "failed", "item": name, "product_id": product["product_id"], "error": str(e)}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PASS 2 — locus_skipped (no_consensus retry)
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def reindex_from_skipped(http: httpx.AsyncClient):
+    """
+    Retry products in locus_skipped with skip_reason = no_consensus.
+    These never made it into locus_items so Pass 1 misses them entirely.
+    After a whitelist update they may now classify correctly.
+    Successfully indexed products are moved to locus_items and removed
+    from locus_skipped. Still-failing products stay in locus_skipped.
+    """
+    print("\nPass 2 — scanning locus_skipped for no_consensus products...")
+
+    all_skipped = []
+    offset = None
+
+    while True:
+        results, next_offset = client.scroll(
+            collection_name=SKIPPED_COLLECTION,
+            limit=250,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        if not results:
+            break
+        for pt in results:
+            p = pt.payload
+            if p.get("skip_reason") == "no_consensus":
+                all_skipped.append({"point_id": str(pt.id), **p})
+        if next_offset is None:
+            break
+        offset = next_offset
+
+    if not all_skipped:
+        print("  No no_consensus products in locus_skipped — nothing to retry.")
+        return
+
+    print(f"  Found {len(all_skipped)} no_consensus products to retry.\n")
+
+    semaphore = asyncio.Semaphore(CONCURRENCY)
+    ok_count   = 0
+    fail_count = 0
+    still_skip = 0
+
+    async def retry_one(product: dict):
+        nonlocal ok_count, fail_count, still_skip
+        async with semaphore:
+            name      = product.get("name", "")
+            img_url   = product.get("image_url", "")
+            point_id  = product.get("point_id", "")
+
+            if not img_url:
+                return
+
+            try:
+                img_resp = await http.get(img_url, timeout=15.0, follow_redirects=True)
+                img_resp.raise_for_status()
+                img_bytes    = img_resp.content
+                content_type = img_resp.headers.get("content-type", "image/jpeg")
+
+                idx_resp = await http.post(
+                    f"{VISUAL_URL}/index-image",
+                    files={"file": ("product.jpg", img_bytes, content_type)},
+                    data={"title": name},
+                    timeout=90.0,
+                )
+                idx_resp.raise_for_status()
+                idx_data = idx_resp.json()
+
+                if idx_data.get("skipped"):
+                    reason = idx_data.get("skip_reason", "unknown")
+                    print(f"  [STILL SKIP] '{name}' — {reason}")
+                    still_skip += 1
+                    # Update the skip_reason in case it changed
+                    # (e.g. was no_consensus, now no_box_found)
+                    if reason != "no_consensus":
+                        _store_skipped(product, reason)
+                    return
+
+                vector_normal  = idx_data["vector_normal"]
+                new_category   = idx_data.get("category", "")
+                new_box_source = idx_data.get("box_source", "unknown")
+
+                if not DRY_RUN:
+                    # Add to locus_items
+                    client.upsert(
+                        collection_name=COLLECTION_NAME,
+                        points=[PointStruct(
+                            id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
+                            vector  = vector_normal,
+                            payload = {
+                                "name":         name,
+                                "store_name":   product.get("store_name", ""),
+                                "mall_name":    product.get("mall_name", ""),
+                                "image_url":    img_url,
+                                "category_tag": new_category,
+                                "price":        product.get("price", ""),
+                                "product_id":   product.get("product_id", ""),
+                                "box_source":   new_box_source,
+                            }
+                        )]
+                    )
+                    # Remove from locus_skipped
+                    _delete_from_skipped(point_id)
+
+                print(f"  [OK]    '{name}' → {new_category} ({new_box_source})")
+                ok_count += 1
+
+            except Exception as e:
+                print(f"  [ERR]   '{name}' — {e}")
+                fail_count += 1
+
+    await asyncio.gather(*[retry_one(p) for p in all_skipped])
+
+    print(f"\nPass 2 complete:")
+    print(f"  Promoted to locus_items : {ok_count}")
+    print(f"  Still skipping          : {still_skip}")
+    print(f"  Failed                  : {fail_count}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def main():
+    print("=" * 60)
+    print("LOCUS Re-index — Phase 5.1 (two-pass)")
+    print("=" * 60)
+
+    _ensure_skipped_collection()
+
+    # ── Pass 1: stale vectors in locus_items ──────────────────────────────────
+    stale = collect_stale_products()
+    print(f"\nFound {len(stale)} stale products to re-index.\n")
+
+    if stale:
+        semaphore = asyncio.Semaphore(CONCURRENCY)
+        async with httpx.AsyncClient() as http:
+            tasks   = [reindex_one(semaphore, p, http) for p in stale]
+            results = await asyncio.gather(*tasks)
+
+        ok           = [r for r in results if r["status"] == "ok"]
+        kept_no_box  = [r for r in results if r["status"] == "kept_no_box"]
+        skipped      = [r for r in results if r["status"] == "skipped"]
+        failed       = [r for r in results if r["status"] == "failed"]
+        no_url       = [r for r in results if r["status"] == "skipped_no_url"]
+        no_consensus = [r for r in skipped if r.get("reason") == "no_consensus"]
+        not_fashion  = [r for r in skipped if r.get("reason") == "not_fashion"]
+
+        print("\n" + "=" * 60)
+        print("PASS 1 COMPLETE")
+        print("=" * 60)
+        print(f"  Re-indexed successfully  : {len(ok)}")
+        print(f"  Kept (no box found)      : {len(kept_no_box)}")
+        print(f"  Skipped (no_consensus)   : {len(no_consensus)}")
+        print(f"  Skipped (not_fashion)    : {len(not_fashion)}")
+        print(f"  No image URL             : {len(no_url)}")
+        print(f"  Failed (network/other)   : {len(failed)}")
+
+        if failed:
+            print("\nFailed products:")
+            for r in failed[:20]:
+                print(f"  - {r['item']}: {r.get('error', '?')}")
+            if len(failed) > 20:
+                print(f"  ... and {len(failed) - 20} more")
+    else:
+        print("Pass 1: nothing to do — locus_items is clean.\n")
+
+    # ── Pass 2: no_consensus products in locus_skipped ───────────────────────
+    async with httpx.AsyncClient() as http:
+        await reindex_from_skipped(http)
+
+    if DRY_RUN:
+        print("\n[DRY RUN] No writes were made.")
+
+    print("\nRun GET /index-stats to verify reindex_required=false")
+    print("Check Whitelist Review tab for remaining skipped products.")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

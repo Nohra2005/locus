@@ -3,6 +3,7 @@ import io
 import json as _json
 import os
 import uuid
+from datetime import datetime
 from urllib.parse import urlparse
 
 import httpx
@@ -24,12 +25,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-VISUAL_URL      = os.getenv("VISUAL_HOST",    "http://visual_engine:8001")
-QDRANT_URL      = os.getenv("QDRANT_URL")
-QDRANT_API_KEY  = os.getenv("QDRANT_API_KEY")
-QDRANT_HOST     = os.getenv("QDRANT_HOST",    "qdrant")
-QDRANT_PORT     = int(os.getenv("QDRANT_PORT", 6333))
-COLLECTION_NAME = "locus_items"
+VISUAL_URL           = os.getenv("VISUAL_HOST",    "http://visual_engine:8001")
+QDRANT_URL           = os.getenv("QDRANT_URL")
+QDRANT_API_KEY       = os.getenv("QDRANT_API_KEY")
+QDRANT_HOST          = os.getenv("QDRANT_HOST",    "qdrant")
+QDRANT_PORT          = int(os.getenv("QDRANT_PORT", 6333))
+COLLECTION_NAME      = "locus_items"
+SKIPPED_COLLECTION   = "locus_skipped"        # separate collection for skipped products
+PENDING_PATH         = "/app/pending_whitelist.json"
 
 if QDRANT_URL:
     print(f"[QDRANT] Connecting to cloud: {QDRANT_URL}")
@@ -41,13 +44,13 @@ else:
 
 @app.on_event("startup")
 def startup_event():
+    # ── Main collection ───────────────────────────────────────────────────────
     if not client.collection_exists(collection_name=COLLECTION_NAME):
         client.create_collection(
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=512, distance=Distance.COSINE),
         )
-    # Required for filtered search on Qdrant Cloud
-    for field in ("category_tag", "store_name", "product_id"):
+    for field in ("category_tag", "store_name", "product_id", "box_source"):
         try:
             client.create_payload_index(
                 collection_name=COLLECTION_NAME,
@@ -55,7 +58,30 @@ def startup_event():
                 field_schema="keyword",
             )
         except Exception:
-            pass  # index already exists
+            pass
+
+    # ── Skipped collection ────────────────────────────────────────────────────
+    # Uses a dummy vector of size 1 — we never do vector search here,
+    # only payload scroll and filter.
+    if not client.collection_exists(collection_name=SKIPPED_COLLECTION):
+        client.create_collection(
+            collection_name=SKIPPED_COLLECTION,
+            vectors_config=VectorParams(size=1, distance=Distance.COSINE),
+        )
+    for field in ("store_name", "skip_reason", "product_id"):
+        try:
+            client.create_payload_index(
+                collection_name=SKIPPED_COLLECTION,
+                field_name=field,
+                field_schema="keyword",
+            )
+        except Exception:
+            pass
+
+    # ── Ensure pending whitelist file exists ──────────────────────────────────
+    if not os.path.exists(PENDING_PATH):
+        with open(PENDING_PATH, "w") as f:
+            _json.dump([], f)
 
 
 @app.get("/")
@@ -63,7 +89,8 @@ def read_root():
     return {"status": "online", "service": "Locus Gateway"}
 
 
-# ── Crop helper ───────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
 def _crop_image_bytes(image_bytes: bytes, x1: float, y1: float, x2: float, y2: float) -> bytes:
     img  = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     W, H = img.size
@@ -75,7 +102,57 @@ def _crop_image_bytes(image_bytes: bytes, x1: float, y1: float, x2: float, y2: f
     return buf.getvalue()
 
 
+def _read_pending() -> list:
+    if not os.path.exists(PENDING_PATH):
+        return []
+    try:
+        with open(PENDING_PATH, "r") as f:
+            return _json.load(f)
+    except Exception:
+        return []
+
+
+def _write_pending(data: list):
+    with open(PENDING_PATH, "w") as f:
+        _json.dump(data, f, indent=2)
+
+
+def _store_skipped(
+    product_id: str,
+    name: str,
+    image_url: str,
+    store: str,
+    mall: str,
+    price: str,
+    skip_reason: str,
+):
+    """Upsert a skipped product into locus_skipped collection."""
+    try:
+        client.upsert(
+            collection_name=SKIPPED_COLLECTION,
+            points=[
+                PointStruct(
+                    id     = str(uuid.uuid5(uuid.NAMESPACE_URL, f"skipped::{image_url or product_id}")),
+                    vector = [0.0],   # dummy — never searched by vector
+                    payload = {
+                        "product_id":  product_id,
+                        "name":        name,
+                        "image_url":   image_url,
+                        "store_name":  store,
+                        "mall_name":   mall,
+                        "price":       price,
+                        "skip_reason": skip_reason,
+                        "skipped_at":  datetime.utcnow().isoformat(),
+                    }
+                )
+            ]
+        )
+    except Exception as e:
+        print(f"[SKIPPED] Failed to store skipped product '{name}': {e}")
+
+
 # ── Feedback ───────────────────────────────────────────────────────────────────
+
 @app.post("/feedback")
 async def receive_feedback(
     query_category: str = Form("Unknown"),
@@ -89,6 +166,7 @@ async def receive_feedback(
 
 
 # ── Detect ─────────────────────────────────────────────────────────────────────
+
 @app.post("/detect")
 async def detect_items(file: UploadFile = File(...)):
     image_bytes = await file.read()
@@ -102,7 +180,8 @@ async def detect_items(file: UploadFile = File(...)):
         return resp.json()
 
 
-# ── Health Check ───────────────────────────────────────────────────────────────
+# ── Health ─────────────────────────────────────────────────────────────────────
+
 @app.get("/health")
 async def health_check():
     status = {"gateway": "ready", "visual_engine": "not_ready", "qdrant": "not_ready"}
@@ -121,7 +200,66 @@ async def health_check():
     return {"ready": all(v == "ready" for v in status.values()), "services": status}
 
 
+# ── Index Stats ────────────────────────────────────────────────────────────────
+
+@app.get("/index-stats")
+async def index_stats():
+    try:
+        source_counts: dict[str, int] = {}
+        seen_product_ids: set         = set()
+        total_points                  = 0
+        offset                        = None
+
+        while True:
+            results, next_offset = client.scroll(
+                collection_name=COLLECTION_NAME,
+                limit=250,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            if not results:
+                break
+            for pt in results:
+                total_points += 1
+                p = pt.payload
+                if p.get("is_dark") is True:
+                    continue
+                product_id = p.get("product_id", str(pt.id))
+                if product_id in seen_product_ids:
+                    continue
+                seen_product_ids.add(product_id)
+                src = p.get("box_source", "unknown")
+                source_counts[src] = source_counts.get(src, 0) + 1
+            if next_offset is None:
+                break
+            offset = next_offset
+
+        tier_summary = {
+            "exact": 0, "alias": 0, "best_available": 0,
+            "full_image": 0, "unknown": 0, "other": 0,
+        }
+        for src, count in source_counts.items():
+            if src.endswith("_exact"):            tier_summary["exact"] += count
+            elif src.endswith("_alias"):          tier_summary["alias"] += count
+            elif src.endswith("_best_available"): tier_summary["best_available"] += count
+            elif src == "full_image":             tier_summary["full_image"] += count
+            elif src == "unknown":                tier_summary["unknown"] += count
+            else:                                 tier_summary["other"] += count
+
+        return {
+            "total_points":      total_points,
+            "unique_products":   len(seen_product_ids),
+            "by_box_source_raw": source_counts,
+            "by_tier":           tier_summary,
+            "reindex_required":  (tier_summary["full_image"] + tier_summary["unknown"]) > 0,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Stats query failed: {e}")
+
+
 # ── Store Catalogue ────────────────────────────────────────────────────────────
+
 @app.get("/store-catalogue")
 async def store_catalogue(store_name: str, limit: int = 100, offset: int = 0):
     results, _ = client.scroll(
@@ -136,7 +274,6 @@ async def store_catalogue(store_name: str, limit: int = 100, offset: int = 0):
         with_payload=True,
         with_vectors=False,
     )
-
     seen_products = {}
     for point in results:
         p          = point.payload
@@ -151,7 +288,6 @@ async def store_catalogue(store_name: str, limit: int = 100, offset: int = 0):
                 "store_name":   p.get("store_name", ""),
                 "mall_name":    p.get("mall_name", ""),
             }
-
     unique_products = list(seen_products.values())
     total           = len(unique_products)
     paginated       = unique_products[offset: offset + limit]
@@ -171,6 +307,7 @@ async def delete_catalogue_item(item_id: str):
 
 
 # ── Search ─────────────────────────────────────────────────────────────────────
+
 @app.post("/search")
 async def search_items(
     file:         UploadFile = File(...),
@@ -204,6 +341,16 @@ async def search_items(
     detected_category   = vis_data.get("category")
     category_confidence = vis_data.get("category_confidence", 0.0)
     processed_image     = vis_data.get("debug_image")
+
+    # Category mismatch warning
+    mismatch_warning = None
+    if search_label and detected_category and search_label != detected_category:
+        mismatch_warning = (
+            f"Selected box category '{search_label}' differs from CLIP detection "
+            f"'{detected_category}' (conf={category_confidence:.2f}). "
+            f"Searching in '{search_label}' category as selected."
+        )
+        print(f"[SEARCH] WARNING: {mismatch_warning}")
 
     query_filter    = None
     effective_label = search_label or detected_category
@@ -239,11 +386,324 @@ async def search_items(
     matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:25]
 
     return {
-        "matches":             matches,
-        "debug_image":         processed_image,
-        "detected_category":   detected_category,
-        "category_confidence": category_confidence,
+        "matches":                   matches,
+        "debug_image":               processed_image,
+        "detected_category":         detected_category,
+        "category_confidence":       category_confidence,
+        "category_mismatch_warning": mismatch_warning,
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SKIPPED PRODUCTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/skipped-products")
+async def get_skipped_products(
+    store_name:  str = "",
+    skip_reason: str = "",
+    limit:       int = 50,
+    offset:      int = 0,
+):
+    must_conditions = []
+    if store_name:
+        must_conditions.append(models.FieldCondition(
+            key="store_name", match=models.MatchValue(value=store_name)
+        ))
+    if skip_reason:
+        must_conditions.append(models.FieldCondition(
+            key="skip_reason", match=models.MatchValue(value=skip_reason)
+        ))
+
+    scroll_filter = models.Filter(must=must_conditions) if must_conditions else None
+
+    # Fetch ALL matching results then paginate in Python.
+    # Qdrant scroll offset is a point ID cursor, not a numeric offset —
+    # passing offset=8 skips to point ID 8, not the 8th result.
+    all_results = []
+    cursor      = None
+
+    while True:
+        batch, next_cursor = client.scroll(
+            collection_name=SKIPPED_COLLECTION,
+            scroll_filter=scroll_filter,
+            limit=250,
+            offset=cursor,
+            with_payload=True,
+            with_vectors=False,
+        )
+        if not batch:
+            break
+        all_results.extend(batch)
+        if next_cursor is None:
+            break
+        cursor = next_cursor
+
+    total    = len(all_results)
+    paginated = all_results[offset: offset + limit]
+    products  = [pt.payload | {"point_id": str(pt.id)} for pt in paginated]
+
+    return {
+        "products": products,
+        "total":    total,
+        "offset":   offset,
+        "limit":    limit,
+    }
+
+@app.delete("/skipped-products/{point_id}")
+async def delete_skipped_product(point_id: str):
+    """Remove a product from the skipped list (e.g. after manually resolving)."""
+    try:
+        client.delete(
+            collection_name=SKIPPED_COLLECTION,
+            points_selector=models.PointIdsList(points=[point_id]),
+        )
+        return {"status": "deleted", "id": point_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# WHITELIST SUGGESTIONS
+# ══════════════════════════════════════════════════════════════════════════════
+
+class WhitelistSuggestRequest(BaseModel):
+    word:            str
+    category:        str
+    example_product: str = ""
+    store_name:      str = ""
+
+
+class WhitelistDecisionRequest(BaseModel):
+    word: str
+
+
+@app.post("/whitelist-suggest")
+async def whitelist_suggest(req: WhitelistSuggestRequest):
+    """
+    Shop owner or developer suggests a new word → category mapping.
+    Written to pending_whitelist.json with status 'pending'.
+    """
+    word     = req.word.strip().lower()
+    category = req.category.strip()
+
+    if not word or not category:
+        raise HTTPException(status_code=400, detail="word and category are required")
+
+    pending = _read_pending()
+
+    # Don't add duplicates — update if already pending
+    existing = next((e for e in pending if e.get("word") == word), None)
+    if existing:
+        existing["category"]        = category
+        existing["example_product"] = req.example_product
+        existing["store_name"]      = req.store_name
+        existing["status"]          = "pending"
+        existing["updated_at"]      = datetime.utcnow().isoformat()
+    else:
+        pending.append({
+            "word":            word,
+            "category":        category,
+            "example_product": req.example_product,
+            "store_name":      req.store_name,
+            "status":          "pending",
+            "created_at":      datetime.utcnow().isoformat(),
+        })
+
+    _write_pending(pending)
+    print(f"[WHITELIST] Suggestion added: '{word}' → '{category}'")
+    return {"status": "suggested", "word": word, "category": category}
+
+
+@app.get("/whitelist-suggestions")
+async def whitelist_suggestions(status: str = ""):
+    """
+    List whitelist suggestions. Filter by status: pending | approved | rejected.
+    """
+    pending = _read_pending()
+    if status:
+        pending = [e for e in pending if e.get("status") == status]
+    return {"total": len(pending), "suggestions": pending}
+
+
+@app.post("/whitelist-approve")
+async def whitelist_approve(req: WhitelistDecisionRequest):
+    """
+    Approve a pending suggestion:
+      1. Updates status in pending_whitelist.json
+      2. Calls /whitelist-add on visual engine → writes override + reloads token map
+      3. Triggers background re-index of matching skipped products
+    """
+    word    = req.word.strip().lower()
+    pending = _read_pending()
+
+    entry = next((e for e in pending if e.get("word") == word), None)
+    if not entry:
+        raise HTTPException(status_code=404, detail=f"No suggestion found for word '{word}'")
+
+    category = entry["category"]
+
+    # Step 1: update status
+    entry["status"]      = "approved"
+    entry["approved_at"] = datetime.utcnow().isoformat()
+    _write_pending(pending)
+
+    # Step 2: push to visual engine
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(
+                f"{VISUAL_URL}/whitelist-add",
+                json={"word": word, "category": category},
+                timeout=10.0,
+            )
+            resp.raise_for_status()
+            ve_result = resp.json()
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Visual engine whitelist-add failed: {e}"
+        )
+
+    # Step 3: trigger background re-index of matching skipped products
+    asyncio.create_task(_reindex_matching_skipped(word, category))
+
+    return {
+        "status":         "approved",
+        "word":           word,
+        "category":       category,
+        "visual_engine":  ve_result,
+        "reindex":        "triggered in background",
+    }
+
+
+@app.post("/whitelist-reject")
+async def whitelist_reject(req: WhitelistDecisionRequest):
+    """Reject a pending suggestion."""
+    word    = req.word.strip().lower()
+    pending = _read_pending()
+
+    entry = next((e for e in pending if e.get("word") == word), None)
+    if not entry:
+        raise HTTPException(status_code=404, detail=f"No suggestion found for word '{word}'")
+
+    entry["status"]      = "rejected"
+    entry["rejected_at"] = datetime.utcnow().isoformat()
+    _write_pending(pending)
+
+    return {"status": "rejected", "word": word}
+
+
+# ── Background: re-index skipped products matching an approved word ────────────
+
+async def _reindex_matching_skipped(word: str, category: str):
+    """
+    Background task. After a word is approved, find all skipped products
+    whose name contains that word (case-insensitive), re-index them,
+    and if successful move them to locus_items + remove from locus_skipped.
+    """
+    print(f"[REINDEX] Starting background re-index for word='{word}' category='{category}'")
+
+    # Scroll all skipped products — filter in Python (word match is text search)
+    all_skipped = []
+    offset = None
+    while True:
+        results, next_offset = client.scroll(
+            collection_name=SKIPPED_COLLECTION,
+            limit=250,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        if not results:
+            break
+        for pt in results:
+            p = pt.payload
+            if word.lower() in p.get("name", "").lower():
+                all_skipped.append({"point_id": str(pt.id), **p})
+        if next_offset is None:
+            break
+        offset = next_offset
+
+    if not all_skipped:
+        print(f"[REINDEX] No skipped products match word='{word}'")
+        return
+
+    print(f"[REINDEX] Found {len(all_skipped)} skipped products matching '{word}'")
+
+    semaphore = asyncio.Semaphore(3)
+
+    async def reindex_one(product: dict):
+        async with semaphore:
+            name      = product.get("name", "")
+            img_url   = product.get("image_url", "")
+            point_id  = product.get("point_id", "")
+            store     = product.get("store_name", "")
+            mall      = product.get("mall_name", "")
+            price     = product.get("price", "")
+            product_id = product.get("product_id", "")
+
+            if not img_url:
+                return
+
+            try:
+                async with httpx.AsyncClient() as http:
+                    img_resp = await http.get(img_url, timeout=15.0, follow_redirects=True)
+                    img_resp.raise_for_status()
+                    img_bytes    = img_resp.content
+                    content_type = img_resp.headers.get("content-type", "image/jpeg")
+
+                    idx_resp = await http.post(
+                        f"{VISUAL_URL}/index-image",
+                        files={"file": ("product.jpg", img_bytes, content_type)},
+                        data={"title": name},
+                        timeout=90.0,
+                    )
+                    idx_resp.raise_for_status()
+                    idx_data = idx_resp.json()
+
+                if idx_data.get("skipped"):
+                    print(f"  [REINDEX] Still skipped: '{name}' — {idx_data.get('skip_reason')}")
+                    return
+
+                # Successfully indexed — upsert to locus_items
+                vector_normal  = idx_data["vector_normal"]
+                final_category = idx_data.get("category", category)
+                new_box_source = idx_data.get("box_source", "unknown")
+
+                client.upsert(
+                    collection_name=COLLECTION_NAME,
+                    points=[
+                        PointStruct(
+                            id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
+                            vector  = vector_normal,
+                            payload = {
+                                "name":         name,
+                                "store_name":   store,
+                                "mall_name":    mall,
+                                "image_url":    img_url,
+                                "category_tag": final_category,
+                                "price":        price,
+                                "product_id":   product_id,
+                                "box_source":   new_box_source,
+                            }
+                        )
+                    ]
+                )
+
+                # Remove from skipped collection
+                if point_id:
+                    client.delete(
+                        collection_name=SKIPPED_COLLECTION,
+                        points_selector=models.PointIdsList(points=[point_id]),
+                    )
+
+                print(f"  [REINDEX] OK: '{name}' → {final_category} ({new_box_source})")
+
+            except Exception as e:
+                print(f"  [REINDEX] Failed: '{name}' — {e}")
+
+    await asyncio.gather(*[reindex_one(p) for p in all_skipped])
+    print(f"[REINDEX] Done for word='{word}'")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -259,10 +719,10 @@ async def add_bulk_batch(batch: BulkBatchRequest):
     semaphore = asyncio.Semaphore(5)
 
     async def index_one(raw: dict):
-        name     = raw.get("name", "Product")
-        store    = raw.get("store", "")
-        mall     = raw.get("mall", "")
-        price    = raw.get("price", "")
+        name   = raw.get("name", "Product")
+        store  = raw.get("store", "")
+        mall   = raw.get("mall", "")
+        price  = raw.get("price", "")
 
         image_urls = raw.get("image_urls") or []
         if not image_urls and raw.get("image_url"):
@@ -296,11 +756,23 @@ async def add_bulk_batch(batch: BulkBatchRequest):
                     if idx_data.get("skipped"):
                         reason = idx_data.get("skip_reason", "unknown")
                         print(f"[BATCH] Skipped '{name}': {reason}")
+
+                        # Store in locus_skipped so shop owner can review
+                        _store_skipped(
+                            product_id  = product_id,
+                            name        = name,
+                            image_url   = img_url,
+                            store       = store,
+                            mall        = mall,
+                            price       = price,
+                            skip_reason = reason,
+                        )
+
                         return {"status": "skipped", "item": name, "reason": reason}
 
                     vector_normal  = idx_data["vector_normal"]
-                    vector_dark    = idx_data["vector_dark"]
                     final_category = idx_data.get("category", "unknown")
+                    box_source     = idx_data.get("box_source", "unknown")
 
                     client.upsert(
                         collection_name=COLLECTION_NAME,
@@ -316,21 +788,7 @@ async def add_bulk_batch(batch: BulkBatchRequest):
                                     "category_tag": final_category,
                                     "price":        price,
                                     "product_id":   product_id,
-                                    "is_dark":      False,
-                                }
-                            ),
-                            PointStruct(
-                                id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url + "_dark")),
-                                vector  = vector_dark,
-                                payload = {
-                                    "name":         name,
-                                    "store_name":   store,
-                                    "mall_name":    mall,
-                                    "image_url":    img_url,
-                                    "category_tag": final_category,
-                                    "price":        price,
-                                    "product_id":   product_id,
-                                    "is_dark":      True,
+                                    "box_source":   box_source,
                                 }
                             ),
                         ]
@@ -389,7 +847,6 @@ async def scrape_store(req: ScrapeRequest):
                 "strategy":    "shopify_api",
             }
 
-        # HTML fallback
         try:
             page_resp = await http.get(req.url, headers=req_headers)
             if page_resp.status_code == 429:
@@ -483,11 +940,9 @@ async def _try_shopify_api(http, original_url, base_url, max_products, headers):
                 if resp.status_code != 200:
                     break
 
-                # Guard against compressed or non-JSON responses
                 try:
                     import gzip as _gzip
                     content = resp.content
-                    # Try gzip decompression if needed
                     if content[:2] == b'\x1f\x8b':
                         content = _gzip.decompress(content)
                     data = _json.loads(content)

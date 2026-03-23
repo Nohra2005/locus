@@ -1,56 +1,70 @@
 # =============================================================================
 # clip_labels.py — Single source of truth for all category labels
+#
+# 13 canonical categories (finalized):
+#   top, sports_bra, pants, leggings, shorts, skirt, dress,
+#   sweater, jacket, shoes, hat, bag, jumpsuit
+#
+# MATCHING APPROACH: exact token matching (split on spaces).
+# Substring matching was considered but rejected — "hat" inside "that",
+# "cap" inside "capsule", "bag" inside "baggy" all produce silent wrong
+# classifications. When a word and its compound form both need to match
+# (sleeve / sleeveless), add both explicitly.
 # =============================================================================
 
 CANONICAL_LABELS = [
-    "shirt",
+    "top",
+    "sports_bra",
+    "pants",
+    "leggings",
+    "shorts",
+    "skirt",
+    "dress",
     "sweater",
     "jacket",
-    "coat",
-    "dress",
-    "jumpsuit",
-    "skirt",
-    "pants",
-    "shorts",
     "shoes",
-    "bag",
-    "glasses",
     "hat",
-    "watch",
-    "scarf",
+    "bag",
+    "jumpsuit",
 ]
 
 # =============================================================================
 # UNAMBIGUOUS_TOKEN_MAP
-#
-# Whitelist of single tokens that map to exactly one category regardless
-# of context. The test: "can this word alone ever correctly mean a different
-# category?" If yes — it is NOT here. Sentence-transformers handles it.
-#
-# Rules:
-#   - No brand names (brands are not categories)
-#   - No modifier words (hiking, ski, compression, training, running...)
-#   - No fabric/material words (wool, cotton, linen...)
-#   - No style words (classic, slim, wide, oversized...)
-#   - Only the word alone = the category, unambiguously, always
 # =============================================================================
 
 UNAMBIGUOUS_TOKEN_MAP = {
 
-    # ── shirt ──────────────────────────────────────────────────────────────
-    "shirt":        "shirt",
-    "blouse":       "shirt",
-    "tee":          "shirt",
-    "tees":         "shirt",
-    "t-shirt":      "shirt",
-    "camisole":     "shirt",
-    "bustier":      "shirt",
-    "corset":       "shirt",
-    "halterneck":   "shirt",
-    "bodysuit":     "shirt",
-    "bra":          "shirt",   # sports bra / bra → shirt (closest category)
-    "tankini":      "shirt",
-    "polo":         "shirt",
+    # ── top ────────────────────────────────────────────────────────────────
+    "shirt":        "top",
+    "blouse":       "top",
+    "tee":          "top",
+    "tees":         "top",
+    "tshirt":       "top",
+    "t-shirt":      "top",
+    "top":          "top",
+    "tops":         "top",
+    "camisole":     "top",
+    "bustier":      "top",
+    "corset":       "top",
+    "halterneck":   "top",
+    "bodysuit":     "top",
+    "tankini":      "top",
+    "polo":         "top",
+    "tank":         "top",
+    "sleeve":       "top",      # catches "long sleeve", "short sleeve"
+    "sleeved":      "top",      # catches "short sleeved", "long sleeved"
+    "sleeveless":   "top",
+    "baselayer":    "top",
+    "base":         "top",      # catches "base layer" after split
+    "chemise":      "top",
+    "débardeur":    "top",
+
+    # ── sports_bra ─────────────────────────────────────────────────────────
+    "bra":          "sports_bra",
+    "bralette":     "sports_bra",
+    "sports bra":   "sports_bra",
+    "sport bra":    "sports_bra",
+    "brassière":    "sports_bra",
 
     # ── sweater ────────────────────────────────────────────────────────────
     "sweater":      "sweater",
@@ -63,14 +77,17 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "jumper":       "sweater",
     "crewneck":     "sweater",
     "turtleneck":   "sweater",
-    "fleece":       "sweater",  # fleece top/jacket ambiguous? No — fleece alone = sweater
+    "fleece":       "sweater",
     "sherpa":       "sweater",
+    "pull":         "sweater",
+    "tricot":       "sweater",
 
     # ── jacket ─────────────────────────────────────────────────────────────
     "jacket":       "jacket",
     "blazer":       "jacket",
     "gilet":        "jacket",
     "waistcoat":    "jacket",
+    "vest":         "jacket",
     "bomber":       "jacket",
     "windbreaker":  "jacket",
     "anorak":       "jacket",
@@ -80,15 +97,18 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "shacket":      "jacket",
     "varsity":      "jacket",
     "letterman":    "jacket",
-
-    # ── coat ───────────────────────────────────────────────────────────────
-    "coat":         "coat",
-    "overcoat":     "coat",
-    "trench":       "coat",
-    "peacoat":      "coat",
-    "parka":        "coat",
-    "raincoat":     "coat",
-    "mackintosh":   "coat",
+    "coat":         "jacket",
+    "overcoat":     "jacket",
+    "trench":       "jacket",
+    "peacoat":      "jacket",
+    "parka":        "jacket",
+    "raincoat":     "jacket",
+    "mackintosh":   "jacket",
+    "veste":        "jacket",
+    "blouson":      "jacket",
+    "doudoune":     "jacket",
+    "manteau":      "jacket",
+    "imperméable":  "jacket",
 
     # ── dress ──────────────────────────────────────────────────────────────
     "dress":        "dress",
@@ -98,7 +118,7 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "kaftan":       "dress",
     "abaya":        "dress",
     "jalabiya":     "dress",
-    "robe":         "dress",   # French: robe = dress
+    "robe":         "dress",
 
     # ── jumpsuit ───────────────────────────────────────────────────────────
     "jumpsuit":     "jumpsuit",
@@ -108,35 +128,42 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "dungarees":    "jumpsuit",
     "catsuit":      "jumpsuit",
     "boilersuit":   "jumpsuit",
-    "combinaison":  "jumpsuit",  # French
+    "combinaison":  "jumpsuit",
+    "salopette":    "jumpsuit",
 
     # ── skirt ──────────────────────────────────────────────────────────────
     "skirt":        "skirt",
     "skorts":       "skirt",
     "skort":        "skirt",
-    "jupe":         "skirt",    # French
+    "jupe":         "skirt",
 
     # ── pants ──────────────────────────────────────────────────────────────
     "pants":        "pants",
     "trousers":     "pants",
     "jeans":        "pants",
-    "leggings":     "pants",
-    "tights":       "pants",
     "joggers":      "pants",
     "sweatpants":   "pants",
     "trackpants":   "pants",
     "chinos":       "pants",
+    "chino":        "pants",
     "khakis":       "pants",
     "culottes":     "pants",
     "palazzos":     "pants",
-    "pantalon":     "pants",    # French
+    "pantalon":     "pants",
     "pant":         "pants",
+
+    # ── leggings ───────────────────────────────────────────────────────────
+    "leggings":     "leggings",
+    "legging":      "leggings",
+    "tight":        "leggings",
+    "tights":       "leggings",
+    "collant":      "leggings",
 
     # ── shorts ─────────────────────────────────────────────────────────────
     "shorts":       "shorts",
     "short":        "shorts",
     "trunks":       "shorts",
-    "bermuda":      "shorts",   # French/international
+    "bermuda":      "shorts",
 
     # ── shoes ──────────────────────────────────────────────────────────────
     "shoes":        "shoes",
@@ -160,8 +187,8 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "ballerinas":   "shoes",
     "clogs":        "shoes",
     "clog":         "shoes",
-    "chaussures":   "shoes",    # French
-    "bottes":       "shoes",    # French
+    "chaussures":   "shoes",
+    "bottes":       "shoes",
     "footwear":     "shoes",
 
     # ── bag ────────────────────────────────────────────────────────────────
@@ -179,53 +206,25 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "duffel":       "bag",
     "duffle":       "bag",
     "holdall":      "bag",
-    "sac":          "bag",     # French
-
-    # ── glasses ────────────────────────────────────────────────────────────
-    "glasses":      "glasses",
-    "sunglasses":   "glasses",
-    "eyewear":      "glasses",
-    "goggles":      "glasses",
-    "lunettes":     "glasses",  # French
+    "sacoche":      "bag",
+    "pochette":     "bag",
 
     # ── hat ────────────────────────────────────────────────────────────────
     "hat":          "hat",
+    "cap":          "hat",
     "beanie":       "hat",
     "beret":        "hat",
     "snapback":     "hat",
     "visor":        "hat",
     "fedora":       "hat",
     "panama":       "hat",
-    "bonnet":       "hat",     # French
-    "casquette":    "hat",     # French
-    "chapeau":      "hat",     # French
-
-    # ── watch ──────────────────────────────────────────────────────────────
-    "watch":        "watch",
-    "watches":      "watch",
-    "smartwatch":   "watch",
-    "timepiece":    "watch",
-    "chronograph":  "watch",
-    "montre":       "watch",   # French
-
-    # ── scarf ──────────────────────────────────────────────────────────────
-    "scarf":        "scarf",
-    "scarves":      "scarf",
-    "shawl":        "scarf",
-    "snood":        "scarf",
-    "balaclava":    "scarf",
-    "neckerchief":  "scarf",
-    "pashmina":     "scarf",
-    "écharpe":      "scarf",   # French
-    "foulard":      "scarf",   # French
+    "casquette":    "hat",
+    "chapeau":      "hat",
 
     # ── not_fashion ────────────────────────────────────────────────────────
-    # Only include words that are NEVER fashion items
     "jibbitz":      "not_fashion",
-    "charm":        "not_fashion",
     "shinguard":    "not_fashion",
     "shinguards":   "not_fashion",
-    "gloves":       "not_fashion",   # goalkeeper/boxing gloves only
     "goalkeeper":   "not_fashion",
     "shin":         "not_fashion",
     "ball":         "not_fashion",
@@ -238,53 +237,80 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "dumbbells":    "not_fashion",
     "weights":      "not_fashion",
     "flask":        "not_fashion",
+    "swimsuit":     "not_fashion",
+    "bikini":       "not_fashion",
+    "swimwear":     "not_fashion",
+    "swimshirt":    "not_fashion",
+    "socks":        "not_fashion",
+    "sock":         "not_fashion",
+    "underwear":    "not_fashion",
+    "boxer":        "not_fashion",
+    "briefs":       "not_fashion",
 }
 
 
 # =============================================================================
 # LABEL_DESCRIPTIONS
-# Rich text used by sentence-transformers for semantic similarity.
-# Handles ambiguous cases: "hiking pants", "ski jacket", "wool scarf" etc.
-# No brand names — ST handles them via semantic proximity.
+#
+# Used by sentence-transformers for semantic similarity (fallback only —
+# whitelist hits never reach here). Each description must be tight and
+# unambiguous. Rules applied in this version:
+#
+#   - No words from other categories' token maps (e.g. no "shorts" in leggings)
+#   - No swimwear-adjacent words (rashguard removed from top)
+#   - No "knit vest" in sweater — vest now maps to jacket
+#   - No headband/hair accessory in hat — not hats
+#   - No "swim shorts" in shorts — swimwear adjacent
+#   - No "trunk" in not_fashion — trunks maps to shorts
+#   - Kept only words that unambiguously describe the category
 # =============================================================================
 
 LABEL_DESCRIPTIONS = {
 
-    "shirt": (
-        "shirt blouse top t-shirt tee tank camisole tube bodysuit bra sports bra "
-        "crop top halter halterneck bustier corset strapless sleeveless polo "
-        "button down button up henley long sleeve short sleeve "
-        "base layer undershirt thermal top rashguard swim top bikini top "
-        "sports top gym top workout top activewear performance top "
-        "chemise blouse débardeur haut brassière "
+    "top": (
+        "top t-shirt tee tank camisole tube crop top "
+        "halter halterneck polo button down button up henley "
+        "long sleeve short sleeve sleeveless strapless "
+        "base layer baselayer thermal top performance top gym top workout top "
+        "fitted top casual top everyday top "
+        "débardeur haut "
+        # NOTE: "shirt" and "blouse" intentionally omitted — they are in the
+        # token map and whitelist hits never reach this description.
+        # Adding them here risks pulling shirt/blouse products toward top
+        # when the token map already handles them definitively.
+    ),
+
+    "sports_bra": (
+        "sports bra bralette athletic bra workout bra gym bra "
+        "high impact sports bra medium support bra low impact bra "
+        "crop sports bra padded sports bra zip front sports bra "
+        "activewear bra fitness bra running bra yoga bra "
+        "brassière de sport "
     ),
 
     "sweater": (
         "sweater cardigan hoodie sweatshirt pullover knitwear knit jumper "
-        "crewneck turtleneck mock neck zip up quarter zip full zip fleece sherpa "
-        "long cardigan cable knit chunky knit cashmere wool merino "
-        "round neck pullover knit vest "
+        "crewneck turtleneck mock neck zip up quarter zip full zip "
+        "fleece sherpa long cardigan cable knit chunky knit "
+        "cashmere wool merino round neck "
+        # Removed: "knit vest" — vest now maps to jacket, keeping it here
+        # would pull jacket-voted products toward sweater incorrectly.
         "pull tricot sweat chandail "
     ),
 
     "jacket": (
         "jacket blazer gilet waistcoat vest puffer quilted padded "
         "windbreaker anorak rain jacket softshell hardshell "
-        "bomber varsity letterman harrington trucker denim jacket leather jacket "
-        "biker jacket moto jacket track jacket zip jacket fleece jacket "
+        "bomber varsity letterman trucker denim jacket leather jacket "
+        "biker jacket moto jacket track jacket zip jacket "
         "suit jacket sport coat tuxedo jacket "
         "overshirt shacket field jacket utility jacket cargo jacket "
-        "military jacket ski jacket snowboard jacket winter jacket "
-        "body warmer sleeveless jacket "
-        "veste blouson doudoune "
-    ),
-
-    "coat": (
+        "military jacket ski jacket snowboard jacket "
         "coat overcoat trench peacoat duster longline coat "
         "wool coat cashmere coat wrap coat belted coat "
-        "parka hooded coat duffle coat toggle coat raincoat mac "
+        "parka hooded coat duffle coat raincoat mac "
         "faux fur coat shearling coat teddy coat cape poncho "
-        "manteau imperméable pardessus "
+        "veste blouson doudoune manteau imperméable "
     ),
 
     "dress": (
@@ -297,8 +323,8 @@ LABEL_DESCRIPTIONS = {
     ),
 
     "jumpsuit": (
-        "jumpsuit romper playsuit overalls dungarees one-piece "
-        "boilersuit catsuit utility jumpsuit "
+        "jumpsuit romper playsuit overalls dungarees one-piece outfit "
+        "boilersuit catsuit utility jumpsuit wide leg jumpsuit "
         "combinaison salopette "
     ),
 
@@ -311,34 +337,40 @@ LABEL_DESCRIPTIONS = {
     ),
 
     "pants": (
-        "pants trousers jeans leggings tights pant "
-        "wide leg straight leg slim barrel leg flare bootcut "
-        "cropped pants joggers sweatpants trackpants "
-        "cargo pants chinos chino khakis "
-        "dress pants suit pants tailored trousers "
+        "pants trousers jeans pant wide leg straight leg slim "
+        "barrel leg flare bootcut cropped pants "
+        "joggers sweatpants trackpants cargo pants "
+        "chinos chino khakis dress pants suit pants tailored trousers "
         "palazzo culottes parachute pants "
-        "compression tights running tights cycling tights thermal tights "
-        "hiking pants climbing pants ski pants snow pants "
-        "pantalon jean legging collant "
+        "pantalon jean "
+    ),
+
+    "leggings": (
+        "leggings tights tight running tights compression tights "
+        "thermal tights yoga pants gym leggings workout leggings "
+        "high waist leggings seamless leggings printed leggings "
+        "athletic leggings performance leggings activewear leggings "
+        "collant legging "
+        # Removed: "biker shorts", "tight shorts", "cycling shorts", "gym shorts"
+        # These are shorts words — their presence was pulling shorts-voted
+        # products toward leggings and vice versa.
     ),
 
     "shorts": (
-        "shorts short cycling shorts swim shorts board shorts trunks "
-        "running shorts gym shorts sport shorts "
-        "denim shorts cargo shorts chino shorts biker shorts "
-        "hiking shorts climbing shorts "
-        "bermuda short "
+        "shorts denim shorts cargo shorts chino shorts "
+        "running shorts sport shorts board shorts "
+        "hiking shorts casual shorts bermuda trunks "
+        # Removed: "swim shorts" — swimwear adjacent, better to skip than misclassify
     ),
 
     "shoes": (
         "shoes sneakers boots sandals slippers loafers heels pumps "
         "mules flip flops espadrilles wedges platforms ballerinas "
         "ankle boots chelsea boots combat boots knee high boots "
-        "running shoes basketball shoes football boots tennis shoes "
-        "hiking boots trail shoes hiking shoes "
-        "clogs slip-on aqua shoes water shoes "
+        "running shoes basketball shoes tennis shoes "
+        "hiking boots trail shoes clogs slip-on "
         "ski boots snowboard boots "
-        "chaussures bottes sandales pantoufles footwear "
+        "chaussures bottes sandales footwear "
     ),
 
     "bag": (
@@ -350,45 +382,28 @@ LABEL_DESCRIPTIONS = {
         "sac sac à dos sacoche pochette "
     ),
 
-    "glasses": (
-        "glasses sunglasses eyewear goggles "
-        "aviator wayfarer round cat eye oversized "
-        "sports glasses swimming goggles ski goggles "
-        "lunettes lunettes de soleil "
-    ),
-
     "hat": (
         "hat cap beanie bucket hat beret snapback "
         "baseball cap trucker cap fitted cap visor "
         "sun hat straw hat fedora panama "
         "bobble hat ski hat winter hat "
-        "headband hair accessory hair band "
         "chapeau bonnet casquette "
-    ),
-
-    "watch": (
-        "watch smartwatch timepiece chronograph "
-        "digital watch sports watch fitness tracker "
-        "montre "
-    ),
-
-    "scarf": (
-        "scarf scarves shawl snood balaclava neckerchief "
-        "pashmina silk scarf wool scarf neck warmer "
-        "écharpe foulard châle "
+        # Removed: "headband hair accessory hair band" — not hats.
+        # These were pulling ambiguous titles toward hat incorrectly.
     ),
 
     "not_fashion": (
-        "jibbitz charm decoration pin ornament figurine novelty clip "
-        "ball football basketball tennis ball volleyball rugby ball "
+        "swimsuit bikini one piece swimwear bathing suit "
+        "jibbitz decoration pin novelty "
+        "ball football basketball tennis ball volleyball rugby "
         "shinguard shin guard shin pad knee pad elbow pad "
-        "glove goalkeeper glove boxing glove batting glove "
         "racket racquet bat hockey stick "
         "helmet protection guard "
         "towel mat yoga mat water bottle flask "
-        "resistance band jump rope skipping rope weights dumbbells "
-        "sock socks pair pack "
-        "underwear boxer brief trunk "
+        "resistance band jump rope weights dumbbells "
+        "socks underwear boxer brief "
+        # Removed: "trunk" — trunks maps to shorts, not not_fashion
+        "glove goalkeeper glove boxing glove "
     ),
 }
 
@@ -398,12 +413,12 @@ LABEL_DESCRIPTIONS = {
 # =============================================================================
 
 YOLO_TO_CANONICAL = {
-    "short sleeved shirt":   "shirt",
-    "long sleeved shirt":    "shirt",
+    "short sleeved shirt":   "top",
+    "long sleeved shirt":    "top",
     "short sleeved outwear": "jacket",
     "long sleeved outwear":  "jacket",
     "vest":                  "jacket",
-    "sling":                 "shirt",
+    "sling":                 "top",
     "shorts":                "shorts",
     "trousers":              "pants",
     "skirt":                 "skirt",
@@ -419,26 +434,23 @@ YOLO_TO_CANONICAL = {
 # =============================================================================
 
 FASHIONPEDIA_TO_CANONICAL = {
-    "shirt, blouse":                           "shirt",
-    "top, t-shirt, sweatshirt":                "shirt",
+    "shirt, blouse":                           "top",
+    "top, t-shirt, sweatshirt":                "top",
     "sweater":                                 "sweater",
     "cardigan":                                "sweater",
     "jacket":                                  "jacket",
     "vest":                                    "jacket",
-    "coat":                                    "coat",
-    "cape":                                    "coat",
+    "coat":                                    "jacket",
+    "cape":                                    "jacket",
     "pants":                                   "pants",
     "shorts":                                  "shorts",
     "skirt":                                   "skirt",
     "dress":                                   "dress",
     "jumpsuit":                                "jumpsuit",
-    "glasses":                                 "glasses",
     "hat":                                     "hat",
     "headband, head covering, hair accessory": "hat",
-    "watch":                                   "watch",
     "shoe":                                    "shoes",
     "bag, wallet":                             "bag",
-    "scarf":                                   "scarf",
 }
 
 
@@ -447,24 +459,21 @@ FASHIONPEDIA_TO_CANONICAL = {
 # =============================================================================
 
 SEARCHABLE_IDS = {
-    0,   # shirt, blouse
-    1,   # top, t-shirt, sweatshirt
-    2,   # sweater
-    3,   # cardigan
-    4,   # jacket
-    5,   # vest
-    6,   # pants
-    7,   # shorts
-    8,   # skirt
-    9,   # coat
-    10,  # dress
-    11,  # jumpsuit
-    12,  # cape
-    13,  # glasses
-    14,  # hat
-    15,  # headband
-    18,  # watch
-    23,  # shoe
-    24,  # bag, wallet
-    25,  # scarf
+    0,   # shirt, blouse       → top
+    1,   # top, t-shirt        → top
+    2,   # sweater             → sweater
+    3,   # cardigan            → sweater
+    4,   # jacket              → jacket
+    5,   # vest                → jacket
+    6,   # pants               → pants
+    7,   # shorts              → shorts
+    8,   # skirt               → skirt
+    9,   # coat                → jacket
+    10,  # dress               → dress
+    11,  # jumpsuit            → jumpsuit
+    12,  # cape                → jacket
+    14,  # hat                 → hat
+    15,  # headband            → hat
+    23,  # shoe                → shoes
+    24,  # bag, wallet         → bag
 }

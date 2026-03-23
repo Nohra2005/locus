@@ -3,27 +3,34 @@
 #
 # ARCHITECTURE:
 #
-#   CATEGORY DECISION — 2 signals only:
+#   CATEGORY DECISION — title is ground truth, CLIP is fallback only:
 #     Signal 1: title classifier (whitelist → sentence-transformers)
 #     Signal 2: CLIP image classification on full image
+#                ↑ only used when title gives nothing useful
 #
-#   YOLO IS GEOMETRY ONLY — its labels are never used for category decision.
-#   After category is decided, YOLO boxes are re-ranked by CLIP similarity
-#   to the decided category. Best-scoring crop wins.
+#   WHITELIST TITLE = FINAL:
+#     If the title contains an unambiguous token (whitelist hit, conf=1.0),
+#     that category is returned immediately. CLIP cannot override it.
+#     Reason: the image shows context (model wearing multiple items).
+#     Only the title tells us what is actually for sale.
 #
-#   BOUNDING BOX SELECTION:
-#     1. YOLO finds all boxes in the image
-#     2. For each box: crop → CLIP cosine similarity vs final_category text
-#     3. Pick box with highest CLIP-category similarity score
-#     4. If no boxes or best score too low → use full image
+#   WHITELIST OVERRIDES:
+#     At startup, vectorizer loads clip_labels.py (static) and then merges
+#     whitelist_overrides.json on top. Approved community suggestions become
+#     active without editing clip_labels.py. Reload via reload_overrides().
 #
-# VOTING (title + CLIP only):
-#   1. Both agree                        → winner
-#   2. title confident (>= 0.70), CLIP absent/low → title wins
-#   3. CLIP very confident (>= 0.90), title absent/wrong → CLIP wins
-#   4. Both disagree, neither confident  → skip
+#   YOLO IS GEOMETRY ONLY — 3-tier crop selection, no full-image fallback.
+#
+#   DARK VECTORS: removed — never queried, wasted 50% storage.
+#
+# CANONICAL LABELS (13):
+#   top, sports_bra, pants, leggings, shorts, skirt, dress,
+#   sweater, jacket, shoes, hat, bag, jumpsuit
 # =============================================================================
 
+import copy
+import json
+import os
 import torch
 import io
 import base64
@@ -40,10 +47,27 @@ from clip_labels import (
     UNAMBIGUOUS_TOKEN_MAP,
 )
 
-# Minimum CLIP-vs-category similarity for a box to be used as crop.
-# Below this threshold the crop doesn't visually match the category
-# well enough — fall back to full image.
+OVERRIDES_PATH = "/app/whitelist_overrides.json"
 
+# =============================================================================
+# CATEGORY ALIASES
+# Maps voted final_category → acceptable YOLO search_label values (Tier 2).
+# =============================================================================
+CATEGORY_ALIASES = {
+    "top":        ["top", "shirt"],
+    "sports_bra": ["sports_bra", "top", "shirt"],
+    "sweater":    ["sweater", "top", "shirt"],
+    "jacket":     ["jacket", "coat"],
+    "dress":      ["dress", "jumpsuit"],
+    "jumpsuit":   ["jumpsuit", "dress"],
+    "skirt":      ["skirt", "dress"],
+    "pants":      ["pants", "trousers", "jeans"],
+    "leggings":   ["leggings", "pants", "shorts"],
+    "shorts":     ["shorts", "pants"],
+    "shoes":      ["shoes", "sneakers", "boots", "sandals"],
+    "hat":        ["hat", "cap"],
+    "bag":        ["bag", "handbag", "backpack"],
+}
 
 
 # =============================================================================
@@ -97,14 +121,13 @@ class LocusVisualizer:
         self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
         self.clip_labels    = CANONICAL_LABELS
 
-        # Pre-compute CLIP text embeddings for the 15 canonical labels
+        # Pre-compute CLIP text embeddings for canonical labels
         text_inputs = self.clip_processor(
             text=self.clip_labels, return_tensors="pt", padding=True
         )
         with torch.no_grad():
             self.text_features = self.clip_model.get_text_features(**text_inputs)
             self.text_features /= self.text_features.norm(p=2, dim=-1, keepdim=True)
-
 
         print("Loading sentence-transformers (all-MiniLM-L6-v2)...")
         self.st_model         = SentenceTransformer("all-MiniLM-L6-v2")
@@ -114,14 +137,62 @@ class LocusVisualizer:
             desc_texts, convert_to_tensor=True, normalize_embeddings=True
         )
 
+        # Load token map — static whitelist + approved overrides merged on top
+        self._load_token_map()
+
         print("=" * 50)
         print("LOCUS VISUAL ENGINE READY")
         print(f"CLIP labels: {self.clip_labels}")
-        print(f"Whitelist tokens: {len(UNAMBIGUOUS_TOKEN_MAP)}")
+        print(f"Whitelist tokens: {len(self.token_map)} "
+              f"({len(UNAMBIGUOUS_TOKEN_MAP)} static + "
+              f"{len(self.token_map) - len(UNAMBIGUOUS_TOKEN_MAP)} overrides)")
         print("=" * 50)
 
     # =========================================================================
+    # PRIVATE: _load_token_map()
+    # Builds self.token_map = static UNAMBIGUOUS_TOKEN_MAP + approved overrides.
+    # Called at startup and again by reload_overrides().
+    # =========================================================================
+    def _load_token_map(self):
+        self.token_map = copy.deepcopy(UNAMBIGUOUS_TOKEN_MAP)
+
+        if not os.path.exists(OVERRIDES_PATH):
+            print(f"[WHITELIST] No overrides file at {OVERRIDES_PATH} — using static map only")
+            return
+
+        try:
+            with open(OVERRIDES_PATH, "r") as f:
+                overrides = json.load(f)
+
+            count = 0
+            for entry in overrides:
+                if entry.get("status") == "approved":
+                    word     = entry.get("word", "").strip().lower()
+                    category = entry.get("category", "").strip()
+                    if word and category:
+                        self.token_map[word] = category
+                        count += 1
+
+            print(f"[WHITELIST] Loaded {count} approved overrides from {OVERRIDES_PATH}")
+
+        except Exception as e:
+            print(f"[WHITELIST] Failed to load overrides: {e} — using static map only")
+
+    # =========================================================================
+    # PUBLIC: reload_overrides()
+    # Called by the /whitelist-reload endpoint after a new override is approved.
+    # Thread-safe enough for single-worker FastAPI.
+    # =========================================================================
+    def reload_overrides(self):
+        old_count = len(self.token_map)
+        self._load_token_map()
+        new_count = len(self.token_map)
+        print(f"[WHITELIST] Reloaded: {old_count} → {new_count} tokens")
+        return {"tokens_before": old_count, "tokens_after": new_count}
+
+    # =========================================================================
     # PUBLIC: detect_objects() — search time only
+    # Returns only real YOLO boxes. No fake clip_fallback box.
     # =========================================================================
     def detect_objects(self, image_bytes):
         t0 = time.time()
@@ -129,20 +200,12 @@ class LocusVisualizer:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
             W, H  = image.size
 
-            clothing    = self.clothing_detector.detect(image, self._classify_crop)
-            accessories = self.accessory_detector.detect(image, self._classify_crop)
+            clothing       = self.clothing_detector.detect(image, self._classify_crop)
+            accessories    = self.accessory_detector.detect(image, self._classify_crop)
             all_detections = _nms(clothing + accessories, iou_threshold=0.3)
 
             if not all_detections:
-                label, conf, _ = self._classify_crop(image)
-                if conf >= 0.35:
-                    all_detections.append({
-                        "bbox":         [0, 0, W, H],
-                        "label":        label,
-                        "search_label": label,
-                        "score":        round(conf, 3),
-                        "source":       "clip_fallback",
-                    })
+                print("detect_objects(): no boxes found — returning empty list")
 
             print(f"detect_objects(): {len(all_detections)} boxes in {time.time()-t0:.2f}s")
             return all_detections, W, H
@@ -177,16 +240,6 @@ class LocusVisualizer:
 
     # =========================================================================
     # PUBLIC: index_product() — index time only
-    #
-    # Flow:
-    #   1. Classify title → title_cat
-    #   2. CLIP on full image → clip_cat
-    #   3. Vote (title + CLIP only) → final_category
-    #   4. YOLO detects all boxes (labels ignored)
-    #   5. For each box: CLIP-vs-category score
-    #   6. Best scoring box above threshold → crop to it
-    #      else → full image
-    #   7. CLIP embed crop (normal + dark) → vectors
     # =========================================================================
     def index_product(self, image_bytes: bytes, title: str = ""):
         t0 = time.time()
@@ -199,13 +252,17 @@ class LocusVisualizer:
             print(f"[S1-TITLE] '{title}' → '{title_cat}' via {title_method} ({title_conf:.3f})")
 
             # ── Signal 2: CLIP on full image ──────────────────────────────────
+            # Only meaningful when title gives nothing — the image shows context,
+            # not necessarily the product being sold.
             clip_cat, clip_conf, _ = self._classify_crop(image)
             if clip_conf < 0.45:
                 clip_cat = None
             print(f"[S2-CLIP]  '{title}' → '{clip_cat}' ({clip_conf:.3f})")
 
-            # ── Vote (title + CLIP only) ──────────────────────────────────────
-            final_category = self._vote(title_cat, title_conf, clip_cat, clip_conf)
+            # ── Vote ──────────────────────────────────────────────────────────
+            final_category = self._vote(
+                title_cat, title_conf, clip_cat, clip_conf, title_method
+            )
 
             if final_category is None:
                 return {"skipped": True, "skip_reason": "no_consensus"}
@@ -214,43 +271,58 @@ class LocusVisualizer:
 
             print(f"[VOTE]     '{title}' → FINAL: '{final_category}'")
 
-            # ── YOLO: find all boxes (labels ignored) ─────────────────────────
+            # ── YOLO: find all boxes ──────────────────────────────────────────
             clothing    = self.clothing_detector.detect(image, self._classify_crop)
             accessories = self.accessory_detector.detect(image, self._classify_crop)
             detections  = _nms(clothing + accessories, iou_threshold=0.3)
 
-            # ── Select best crop: YOLO box matching voted category ────────────
-            # YOLO's geometry is reliable — pick the highest-confidence box
-            # whose label matches final_category. No extra CLIP passes needed.
-            crop       = image
-            box_source = "full_image"
+            # ── 3-tier box selection — NO full-image fallback ─────────────────
+            selected_box = None
+            box_source   = None
 
             if detections:
-                matching = [d for d in detections if d.get("search_label") == final_category]
-                if matching:
-                    best_match         = max(matching, key=lambda d: d["score"])
-                    bx1, by1, bx2, by2 = best_match["bbox"]
-                    bx1 = max(0, int(bx1)); by1 = max(0, int(by1))
-                    bx2 = min(W, int(bx2)); by2 = min(H, int(by2))
-                    crop               = image.crop((bx1, by1, bx2, by2))
-                    box_source         = best_match["source"]
-                    print(f"[CROP]     Matched '{final_category}' box: {box_source} yolo_conf={best_match['score']:.2f}")
-                else:
-                    # No box matches the category — use full image
-                    # Category is already trusted (voted) so full image is safe
-                    print(f"[CROP]     No '{final_category}' box in detections → full image")
-            else:
-                print(f"[CROP]     No YOLO detections → full image")
+                # Tier 1: exact label match
+                exact = [d for d in detections if d.get("search_label") == final_category]
+                if exact:
+                    selected_box = max(exact, key=lambda d: d["score"])
+                    box_source   = selected_box["source"] + "_exact"
+                    print(f"[CROP T1]  Exact '{final_category}' conf={selected_box['score']:.2f}")
 
-            # ── Resize ────────────────────────────────────────────────────────
+                # Tier 2: alias match
+                if selected_box is None:
+                    accepted   = CATEGORY_ALIASES.get(final_category, [final_category])
+                    alias_hits = [d for d in detections if d.get("search_label") in accepted]
+                    if alias_hits:
+                        selected_box = max(alias_hits, key=lambda d: d["score"])
+                        box_source   = selected_box["source"] + "_alias"
+                        print(f"[CROP T2]  Alias '{selected_box['search_label']}' "
+                              f"for '{final_category}' conf={selected_box['score']:.2f}")
+
+                # Tier 3: best confident box, any label
+                if selected_box is None:
+                    confident_any = [d for d in detections if d["score"] >= 0.50]
+                    if confident_any:
+                        selected_box = max(confident_any, key=lambda d: d["score"])
+                        box_source   = selected_box["source"] + "_best_available"
+                        print(f"[CROP T3]  Best available '{selected_box['search_label']}' "
+                              f"conf={selected_box['score']:.2f}")
+
+            if selected_box is None:
+                print(f"[CROP]     No usable box for '{title}' → skip")
+                return {"skipped": True, "skip_reason": "no_box_found"}
+
+            # ── Crop ──────────────────────────────────────────────────────────
+            bx1, by1, bx2, by2 = selected_box["bbox"]
+            bx1 = max(0, int(bx1)); by1 = max(0, int(by1))
+            bx2 = min(W, int(bx2)); by2 = min(H, int(by2))
+            crop = image.crop((bx1, by1, bx2, by2))
+
             if max(crop.size) > 512:
                 crop = crop.copy()
                 crop.thumbnail((512, 512))
 
-            # ── CLIP embed normal + dark ──────────────────────────────────────
+            # ── CLIP embed ────────────────────────────────────────────────────
             vector_normal, _, _ = self._clip_embed(crop, final_category)
-            dark_crop           = ImageEnhance.Brightness(crop).enhance(0.3)
-            vector_dark,   _, _ = self._clip_embed(dark_crop, final_category)
 
             print(f"[INDEX]    '{title}' done in {time.time()-t0:.2f}s  "
                   f"cat={final_category}  box={box_source}")
@@ -258,7 +330,6 @@ class LocusVisualizer:
                 "skipped":       False,
                 "skip_reason":   None,
                 "vector_normal": vector_normal,
-                "vector_dark":   vector_dark,
                 "category":      final_category,
                 "box_source":    box_source,
             }
@@ -269,64 +340,60 @@ class LocusVisualizer:
 
     # =========================================================================
     # PRIVATE: _vote()
-    # Title + CLIP only. YOLO label is never used here.
     #
-    # Rules:
-    #   1. not_fashion from either signal (if one says not_fashion confidently) → skip
-    #   2. Both agree on same fashion category → winner
-    #   3. title confident (>= 0.70), CLIP absent/low → title wins
-    #   4. CLIP confident (>= 0.90), title absent/wrong → CLIP wins
-    #   5. no consensus → skip
+    # KEY CHANGE: whitelist title hit (title_method == "whitelist") is FINAL.
+    # CLIP cannot override it. The image shows context; the title says what
+    # is actually for sale. A model wearing a t-shirt + leggings while the
+    # product is "leggings" — CLIP sees both garments, title knows the answer.
     # =========================================================================
-    def _vote(self, title_cat, title_conf, clip_cat, clip_conf):
+    def _vote(self, title_cat, title_conf, clip_cat, clip_conf, title_method=""):
 
-        # Rule 1: not_fashion
-        # If title says not_fashion confidently → skip immediately
+        # Whitelist hit — unambiguous token, no appeal
+        if title_method == "whitelist" and title_cat and title_cat != "not_fashion":
+            print(f"[VOTE] Whitelist hit '{title_cat}' — final, CLIP irrelevant")
+            return title_cat
+
+        # not_fashion from title whitelist
         if title_cat == "not_fashion":
             print(f"[VOTE] Title says not_fashion → skip")
             return "not_fashion"
-        # If CLIP says not_fashion very confidently and title has no category → skip
+
+        # not_fashion from CLIP only when title has nothing
         if clip_cat == "not_fashion" and (title_cat is None or title_cat == "not_fashion"):
             print(f"[VOTE] CLIP says not_fashion, no title override → skip")
             return "not_fashion"
 
-        # Only work with fashion categories from here
         t = title_cat if (title_cat and title_cat != "not_fashion") else None
         c = clip_cat  if (clip_cat  and clip_cat  != "not_fashion") else None
 
-        # Rule 2: both agree
+        # Both agree
         if t and c and t == c:
             print(f"[VOTE] Title + CLIP agree on '{t}'")
             return t
 
-        # Rule 3: title confident, CLIP absent or low confidence
+        # Title confident from sentence-transformers, CLIP absent
         if t and title_conf >= 0.70 and c is None:
-            print(f"[VOTE] Title confident ({title_conf:.2f}), CLIP absent → '{t}'")
+            print(f"[VOTE] Title ST confident ({title_conf:.2f}), CLIP absent → '{t}'")
             return t
 
-        # Rule 4: CLIP confident, title absent or wrong
+        # CLIP confident, title gave nothing at all
         if c and clip_conf >= 0.90 and t is None:
             print(f"[VOTE] CLIP confident ({clip_conf:.2f}), title absent → '{c}'")
             return c
 
-        # Rule 4b: CLIP very confident, overrides disagreeing title
-        if c and clip_conf >= 0.95 and t and t != c:
-            print(f"[VOTE] CLIP very confident ({clip_conf:.2f}) overrides title '{t}' → '{c}'")
-            return c
-
-        # Rule 5: title present, CLIP present but they disagree moderately
-        # Trust title if it came from whitelist (conf=1.0) and CLIP isn't dominant
+        # Title ST confident, CLIP uncertain
         if t and title_conf >= 0.70 and c and clip_conf < 0.85:
-            print(f"[VOTE] Title whitelist ({title_conf:.2f}) over uncertain CLIP ({clip_conf:.2f}) → '{t}'")
+            print(f"[VOTE] Title ST ({title_conf:.2f}) over uncertain CLIP ({clip_conf:.2f}) → '{t}'")
             return t
 
-        # Rule 6: no consensus
+        # No consensus
         print(f"[VOTE] No consensus — title='{title_cat}'({title_conf:.2f}) "
               f"clip='{clip_cat}'({clip_conf:.2f}) → skip")
         return None
 
     # =========================================================================
-    # PRIVATE: _classify_title() — whitelist → sentence-transformers
+    # PRIVATE: _classify_title()
+    # Uses self.token_map (static whitelist + approved overrides merged).
     # =========================================================================
     def _classify_title(self, title: str):
         if not title or len(title.strip()) < 2:
@@ -334,12 +401,11 @@ class LocusVisualizer:
 
         tokens = title.lower().replace("-", " ").replace("/", " ").split()
 
-        # Layer 1: whitelist
         fashion_hits     = {}
         not_fashion_hits = 0
 
         for token in tokens:
-            cat = UNAMBIGUOUS_TOKEN_MAP.get(token)
+            cat = self.token_map.get(token)
             if cat is None:
                 continue
             if cat == "not_fashion":
@@ -349,7 +415,7 @@ class LocusVisualizer:
 
         bigrams = [f"{tokens[i]} {tokens[i+1]}" for i in range(len(tokens) - 1)]
         for bigram in bigrams:
-            cat = UNAMBIGUOUS_TOKEN_MAP.get(bigram)
+            cat = self.token_map.get(bigram)
             if cat is None:
                 continue
             if cat == "not_fashion":
@@ -367,7 +433,7 @@ class LocusVisualizer:
         if not_fashion_hits > 0:
             return "not_fashion", "whitelist", 1.0
 
-        # Layer 2: sentence-transformers
+        # Sentence-transformers fallback
         title_emb = self.st_model.encode(
             title, convert_to_tensor=True, normalize_embeddings=True
         )
@@ -395,7 +461,7 @@ class LocusVisualizer:
         return None, "none", 0.0
 
     # =========================================================================
-    # PRIVATE: _clip_embed() — full CLIP forward pass for vectorization
+    # PRIVATE: _clip_embed() — unchanged
     # =========================================================================
     def _clip_embed(self, pil_image: Image.Image, label_hint: str = ""):
         clip_inputs = self.clip_processor(images=pil_image, return_tensors="pt")
@@ -422,7 +488,7 @@ class LocusVisualizer:
         return vector, category_tag, category_scores
 
     # =========================================================================
-    # PRIVATE: _classify_crop() — used by YOLO detectors + Signal 2
+    # PRIVATE: _classify_crop() — unchanged
     # =========================================================================
     def _classify_crop(self, pil_image):
         _, label, scores = self._clip_embed(pil_image)

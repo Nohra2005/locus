@@ -1,9 +1,14 @@
+import json
+import os
+
 from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
 from vectorizer import LocusVisualizer
 
 app = FastAPI()
 visualizer = LocusVisualizer()
+
+OVERRIDES_PATH = "/app/whitelist_overrides.json"
 
 
 @app.get("/")
@@ -65,10 +70,8 @@ async def index_image(
 ):
     """
     Index time only. One HTTP call per product does everything:
-      _classify_title() → YOLO detect → crop → CLIP × 2
-
-    Category is ALWAYS determined by title classifier — YOLO is geometry only.
-    Returns both vectors + category, or {"skipped": true} with reason.
+      _classify_title() → YOLO detect → 3-tier crop → CLIP embed
+    Returns vector + category + box_source, or {"skipped": true} with reason.
     """
     image_data = await file.read()
     result     = visualizer.index_product(image_data, title=title)
@@ -83,73 +86,118 @@ async def debug_index(
     title: str        = Form(""),
 ):
     """
-    Same logic as /index-image but returns an annotated image showing:
-      - All YOLO boxes in grey
-      - The selected crop box highlighted in gold
-      - Category decision + signals
-    Does NOT write to Qdrant. Used by the dev dashboard for box preview.
+    Same logic as /index-image but for dashboard preview only.
+    Does NOT write to Qdrant.
     """
-    import io as _io
-    import base64
-    from PIL import Image as PILImage, ImageDraw
-
     image_data = await file.read()
-
-    # Run indexing logic (without saving)
-    result = visualizer.index_product(image_data, title=title)
-
-    # Run detection to get all boxes for visualization
-    detections, W, H = visualizer.detect_objects(image_data)
-
-    # Draw annotated image
-    image = PILImage.open(_io.BytesIO(image_data)).convert("RGB")
-    draw  = ImageDraw.Draw(image)
-
-    # All boxes in grey
-    for det in detections:
-        x1, y1, x2, y2 = det["bbox"]
-        draw.rectangle([x1, y1, x2, y2], outline="#555555", width=2)
-        lbl = f"{det.get('search_label','?')} {det['score']:.2f}"
-        draw.rectangle([x1, y1 - 14, x1 + len(lbl) * 6, y1], fill="#555555")
-        draw.text((x1 + 2, y1 - 13), lbl, fill="#ffffff")
-
-    # Highlight the selected box in gold
-    if not result.get("skipped") and result.get("box_source") != "full_image":
-        final_cat = result.get("category", "")
-        matching  = [d for d in detections if d.get("search_label") == final_cat]
-        if matching:
-            best       = max(matching, key=lambda d: d["score"])
-            x1, y1, x2, y2 = best["bbox"]
-            draw.rectangle([x1, y1, x2, y2], outline="#c9a96e", width=4)
-            lbl = f"✓ {final_cat}"
-            draw.rectangle([x1, y1 - 18, x1 + len(lbl) * 8, y1], fill="#c9a96e")
-            draw.text((x1 + 2, y1 - 16), lbl, fill="#000000")
-
-    buf = _io.BytesIO()
-    image.save(buf, format="JPEG", quality=85)
-    debug_img = base64.b64encode(buf.getvalue()).decode()
-
-    return {
-        **result,
-        "debug_image":  debug_img,
-        "all_boxes":    detections,
-        "image_width":  W,
-        "image_height": H,
-    }
+    result     = visualizer.index_product(image_data, title=title)
+    return result
 
 
-# ── Text classification (debug utility) ───────────────────────────────────────
+# ── Classify text (debug) ──────────────────────────────────────────────────────
 
-class TextClassifyRequest(BaseModel):
+class ClassifyTextRequest(BaseModel):
     title: str
 
 
 @app.post("/classify-text")
-async def classify_text(req: TextClassifyRequest):
-    """Debug endpoint — classify a product title using the 3-layer cascade."""
-    label, confidence = visualizer.classify_text(req.title)
+async def classify_text(req: ClassifyTextRequest):
+    category, confidence = visualizer.classify_text(req.title)
+    return {"category": category, "confidence": confidence}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# WHITELIST OVERRIDE ENDPOINTS
+#
+# These allow the gateway to add approved whitelist suggestions to the
+# visual engine's runtime token map without restarting the container.
+#
+# Flow:
+#   1. Shop owner suggests word in dashboard → gateway writes to pending_whitelist.json
+#   2. Developer approves in dashboard → gateway calls POST /whitelist-add
+#   3. Visual engine appends to whitelist_overrides.json + reloads token map
+#   4. Gateway triggers re-index of matching skipped products
+# ══════════════════════════════════════════════════════════════════════════════
+
+class WhitelistAddRequest(BaseModel):
+    word:     str
+    category: str
+
+
+def _read_overrides() -> list:
+    if not os.path.exists(OVERRIDES_PATH):
+        return []
+    try:
+        with open(OVERRIDES_PATH, "r") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _write_overrides(data: list):
+    with open(OVERRIDES_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+@app.post("/whitelist-add")
+async def whitelist_add(req: WhitelistAddRequest):
+    """
+    Called by gateway when a whitelist suggestion is approved.
+    Appends the word → category mapping to whitelist_overrides.json,
+    then reloads the in-memory token map immediately.
+    """
+    word     = req.word.strip().lower()
+    category = req.category.strip()
+
+    if not word or not category:
+        return {"error": "word and category are required"}
+
+    overrides = _read_overrides()
+
+    # Update existing entry if word already present, otherwise append
+    existing = next((e for e in overrides if e.get("word") == word), None)
+    if existing:
+        existing["category"] = category
+        existing["status"]   = "approved"
+    else:
+        overrides.append({
+            "word":     word,
+            "category": category,
+            "status":   "approved",
+        })
+
+    _write_overrides(overrides)
+
+    # Reload the in-memory token map immediately
+    result = visualizer.reload_overrides()
+
+    print(f"[WHITELIST] Added override: '{word}' → '{category}'")
     return {
-        "title":      req.title,
-        "category":   label,
-        "confidence": round(confidence, 4),
+        "status":   "added",
+        "word":     word,
+        "category": category,
+        "reload":   result,
+    }
+
+
+@app.post("/whitelist-reload")
+async def whitelist_reload():
+    """
+    Force reload the token map from whitelist_overrides.json.
+    Call this if you manually edited the file.
+    """
+    result = visualizer.reload_overrides()
+    return {"status": "reloaded", **result}
+
+
+@app.get("/whitelist-overrides")
+async def whitelist_overrides():
+    """
+    List all currently active override entries.
+    """
+    overrides = _read_overrides()
+    active    = [e for e in overrides if e.get("status") == "approved"]
+    return {
+        "total":   len(active),
+        "entries": active,
     }
