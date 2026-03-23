@@ -87,6 +87,7 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "blazer":       "jacket",
     "gilet":        "jacket",
     "waistcoat":    "jacket",
+    "waiscoat":     "jacket",   # common product title typo
     "vest":         "jacket",
     "bomber":       "jacket",
     "windbreaker":  "jacket",
@@ -104,6 +105,7 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "parka":        "jacket",
     "raincoat":     "jacket",
     "mackintosh":   "jacket",
+    "cape":         "jacket",   # "DANDY WOOL CAPE", "AGNES WOOL CAPE"
     "veste":        "jacket",
     "blouson":      "jacket",
     "doudoune":     "jacket",
@@ -128,6 +130,7 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "dungarees":    "jumpsuit",
     "catsuit":      "jumpsuit",
     "boilersuit":   "jumpsuit",
+    "tracksuit":    "jumpsuit",  # "LOTTO TRACKSUIT" — one garment unit
     "combinaison":  "jumpsuit",
     "salopette":    "jumpsuit",
 
@@ -140,6 +143,7 @@ UNAMBIGUOUS_TOKEN_MAP = {
     # ── pants ──────────────────────────────────────────────────────────────
     "pants":        "pants",
     "trousers":     "pants",
+    "trouser":      "pants",    # singular — "FELIX BLUSH TROUSER"
     "jeans":        "pants",
     "joggers":      "pants",
     "sweatpants":   "pants",
@@ -185,6 +189,8 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "espadrilles":  "shoes",
     "wedges":       "shoes",
     "ballerinas":   "shoes",
+    "flats":        "shoes",    # "SARAH SUEDE BALLET FLATS"
+    "flat":         "shoes",    # singular
     "clogs":        "shoes",
     "clog":         "shoes",
     "chaussures":   "shoes",
@@ -222,6 +228,13 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "chapeau":      "hat",
 
     # ── not_fashion ────────────────────────────────────────────────────────
+    # Only words that are NEVER a fashion item in any context.
+    # Belt, scarf, tie, sarong, kimono explicitly added after reindex audit.
+    "belt":         "not_fashion",   # all belt products (LEONARD, JASMINE, etc.)
+    "scarf":        "not_fashion",   # all scarf products (THEA, TESSA, TAMINE, etc.)
+    "tie":          "not_fashion",   # ties (THEOPHILE TIE)
+    "sarong":       "not_fashion",   # beach sarong
+    "kimono":       "not_fashion",   # beach kimono
     "jibbitz":      "not_fashion",
     "shinguard":    "not_fashion",
     "shinguards":   "not_fashion",
@@ -251,18 +264,6 @@ UNAMBIGUOUS_TOKEN_MAP = {
 
 # =============================================================================
 # LABEL_DESCRIPTIONS
-#
-# Used by sentence-transformers for semantic similarity (fallback only —
-# whitelist hits never reach here). Each description must be tight and
-# unambiguous. Rules applied in this version:
-#
-#   - No words from other categories' token maps (e.g. no "shorts" in leggings)
-#   - No swimwear-adjacent words (rashguard removed from top)
-#   - No "knit vest" in sweater — vest now maps to jacket
-#   - No headband/hair accessory in hat — not hats
-#   - No "swim shorts" in shorts — swimwear adjacent
-#   - No "trunk" in not_fashion — trunks maps to shorts
-#   - Kept only words that unambiguously describe the category
 # =============================================================================
 
 LABEL_DESCRIPTIONS = {
@@ -274,10 +275,6 @@ LABEL_DESCRIPTIONS = {
         "base layer baselayer thermal top performance top gym top workout top "
         "fitted top casual top everyday top "
         "débardeur haut "
-        # NOTE: "shirt" and "blouse" intentionally omitted — they are in the
-        # token map and whitelist hits never reach this description.
-        # Adding them here risks pulling shirt/blouse products toward top
-        # when the token map already handles them definitively.
     ),
 
     "sports_bra": (
@@ -293,8 +290,6 @@ LABEL_DESCRIPTIONS = {
         "crewneck turtleneck mock neck zip up quarter zip full zip "
         "fleece sherpa long cardigan cable knit chunky knit "
         "cashmere wool merino round neck "
-        # Removed: "knit vest" — vest now maps to jacket, keeping it here
-        # would pull jacket-voted products toward sweater incorrectly.
         "pull tricot sweat chandail "
     ),
 
@@ -324,7 +319,7 @@ LABEL_DESCRIPTIONS = {
 
     "jumpsuit": (
         "jumpsuit romper playsuit overalls dungarees one-piece outfit "
-        "boilersuit catsuit utility jumpsuit wide leg jumpsuit "
+        "boilersuit catsuit tracksuit utility jumpsuit wide leg jumpsuit "
         "combinaison salopette "
     ),
 
@@ -337,7 +332,7 @@ LABEL_DESCRIPTIONS = {
     ),
 
     "pants": (
-        "pants trousers jeans pant wide leg straight leg slim "
+        "pants trousers trouser jeans pant wide leg straight leg slim "
         "barrel leg flare bootcut cropped pants "
         "joggers sweatpants trackpants cargo pants "
         "chinos chino khakis dress pants suit pants tailored trousers "
@@ -351,21 +346,17 @@ LABEL_DESCRIPTIONS = {
         "high waist leggings seamless leggings printed leggings "
         "athletic leggings performance leggings activewear leggings "
         "collant legging "
-        # Removed: "biker shorts", "tight shorts", "cycling shorts", "gym shorts"
-        # These are shorts words — their presence was pulling shorts-voted
-        # products toward leggings and vice versa.
     ),
 
     "shorts": (
         "shorts denim shorts cargo shorts chino shorts "
         "running shorts sport shorts board shorts "
         "hiking shorts casual shorts bermuda trunks "
-        # Removed: "swim shorts" — swimwear adjacent, better to skip than misclassify
     ),
 
     "shoes": (
         "shoes sneakers boots sandals slippers loafers heels pumps "
-        "mules flip flops espadrilles wedges platforms ballerinas "
+        "mules flip flops espadrilles wedges platforms ballerinas flats "
         "ankle boots chelsea boots combat boots knee high boots "
         "running shoes basketball shoes tennis shoes "
         "hiking boots trail shoes clogs slip-on "
@@ -388,12 +379,11 @@ LABEL_DESCRIPTIONS = {
         "sun hat straw hat fedora panama "
         "bobble hat ski hat winter hat "
         "chapeau bonnet casquette "
-        # Removed: "headband hair accessory hair band" — not hats.
-        # These were pulling ambiguous titles toward hat incorrectly.
     ),
 
     "not_fashion": (
         "swimsuit bikini one piece swimwear bathing suit "
+        "belt leather belt scarf tie sarong kimono "
         "jibbitz decoration pin novelty "
         "ball football basketball tennis ball volleyball rugby "
         "shinguard shin guard shin pad knee pad elbow pad "
@@ -402,7 +392,6 @@ LABEL_DESCRIPTIONS = {
         "towel mat yoga mat water bottle flask "
         "resistance band jump rope weights dumbbells "
         "socks underwear boxer brief "
-        # Removed: "trunk" — trunks maps to shorts, not not_fashion
         "glove goalkeeper glove boxing glove "
     ),
 }
