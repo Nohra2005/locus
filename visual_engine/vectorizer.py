@@ -14,12 +14,24 @@
 #     Reason: the image shows context (model wearing multiple items).
 #     Only the title tells us what is actually for sale.
 #
+#   TIE-BREAK:
+#     When two categories score equally in the token map, the one whose
+#     token appeared LAST in the title wins. Brand names and generic words
+#     ("Top Ten", "Women", "Men") appear first; the actual garment word
+#     ("Tight", "Jacket", "Dress") appears later.
+#
 #   WHITELIST OVERRIDES:
 #     At startup, vectorizer loads clip_labels.py (static) and then merges
 #     whitelist_overrides.json on top. Approved community suggestions become
 #     active without editing clip_labels.py. Reload via reload_overrides().
 #
 #   YOLO IS GEOMETRY ONLY — 3-tier crop selection, no full-image fallback.
+#
+#   CLIP RELABEL:
+#     After NMS, each YOLO box is cropped and re-classified by CLIP.
+#     This fixes flat-lay misclassifications where YOLO's "vest" label
+#     covers both gilets (jacket) and tank tops (top). CLIP sees the
+#     actual crop and decides correctly.
 #
 #   DARK VECTORS: removed — never queried, wasted 50% storage.
 #
@@ -201,6 +213,34 @@ class LocusVisualizer:
 
             if not all_detections:
                 print("detect_objects(): no boxes found — returning empty list")
+                return all_detections, W, H
+
+            # ── CLIP relabel each box ─────────────────────────────────────────
+            # YOLO finds geometry; CLIP decides what the item actually is.
+            # Fixes flat-lay misclassifications — e.g. DeepFashion2 calls every
+            # sleeveless garment "vest" (→ jacket), but CLIP on the crop
+            # correctly identifies tank tops, halternecks, etc. as "top".
+            # Only override when CLIP confidence ≥ 0.52; below that keep YOLO.
+            CLIP_RELABEL_THRESHOLD = 0.52
+
+            for det in all_detections:
+                bx1, by1, bx2, by2 = det["bbox"]
+                bx1 = max(0, int(bx1)); by1 = max(0, int(by1))
+                bx2 = min(W, int(bx2)); by2 = min(H, int(by2))
+                if bx2 <= bx1 or by2 <= by1:
+                    continue
+                try:
+                    crop = image.crop((bx1, by1, bx2, by2))
+                    clip_label, clip_conf, _ = self._classify_crop(crop)
+                    if clip_label and clip_conf >= CLIP_RELABEL_THRESHOLD:
+                        if clip_label != det["search_label"]:
+                            print(f"  [CLIP-RELABEL] '{det['search_label']}' "
+                                  f"→ '{clip_label}' (conf={clip_conf:.2f})")
+                        det["search_label"] = clip_label
+                        det["clip_conf"]    = round(clip_conf, 3)
+                except Exception:
+                    pass  # keep original YOLO label on any error
+            # ─────────────────────────────────────────────────────────────────
 
             print(f"detect_objects(): {len(all_detections)} boxes in {time.time()-t0:.2f}s")
             return all_detections, W, H
@@ -235,10 +275,6 @@ class LocusVisualizer:
 
     # =========================================================================
     # PUBLIC: index_product() — index time + debug
-    #
-    # Returns selected_bbox and all_detections in addition to the standard
-    # fields so that /debug-index can draw the actual YOLO boxes on the image.
-    # These extra fields are ignored by the gateway during normal indexing.
     # =========================================================================
     def index_product(self, image_bytes: bytes, title: str = ""):
         t0 = time.time()
@@ -336,7 +372,6 @@ class LocusVisualizer:
                 "vector_normal":   vector_normal,
                 "category":        final_category,
                 "box_source":      box_source,
-                # Extra fields for /debug-index — ignored by gateway
                 "selected_bbox":   [bx1, by1, bx2, by2],
                 "all_detections":  [
                     {
@@ -397,6 +432,14 @@ class LocusVisualizer:
 
     # =========================================================================
     # PRIVATE: _classify_title()
+    #
+    # Tie-break rule: when two categories score equally, the one whose token
+    # appeared LAST in the title wins. Brand names ("Top Ten", "Nike") and
+    # generic descriptors ("Women", "Men", "Lifestyle") appear first;
+    # the actual garment word ("Tight", "Jacket", "Dress") appears later.
+    # Example: "Top Ten Stretchy Women Lifestyle Tight Black"
+    #   → "top" (index 0) ties with "leggings" via "tight" (index 5)
+    #   → last_seen picks leggings. Correct.
     # =========================================================================
     def _classify_title(self, title: str):
         if not title or len(title.strip()) < 2:
@@ -406,8 +449,9 @@ class LocusVisualizer:
 
         fashion_hits     = {}
         not_fashion_hits = 0
+        last_seen        = {}  # category → index of last matching token
 
-        for token in tokens:
+        for idx, token in enumerate(tokens):
             cat = self.token_map.get(token)
             if cat is None:
                 continue
@@ -415,9 +459,10 @@ class LocusVisualizer:
                 not_fashion_hits += 1
             else:
                 fashion_hits[cat] = fashion_hits.get(cat, 0) + 1
+                last_seen[cat]    = idx  # keep updating — we want the last hit
 
         bigrams = [f"{tokens[i]} {tokens[i+1]}" for i in range(len(tokens) - 1)]
-        for bigram in bigrams:
+        for i, bigram in enumerate(bigrams):
             cat = self.token_map.get(bigram)
             if cat is None:
                 continue
@@ -425,10 +470,21 @@ class LocusVisualizer:
                 not_fashion_hits += 2
             else:
                 fashion_hits[cat] = fashion_hits.get(cat, 0) + 2
+                # bigrams sort after all single tokens positionally
+                last_seen[cat] = len(tokens) + i
 
         if fashion_hits:
-            best_cat   = max(fashion_hits, key=fashion_hits.get)
-            best_count = fashion_hits[best_cat]
+            best_count = max(fashion_hits.values())
+            tied = [cat for cat, count in fashion_hits.items() if count == best_count]
+
+            if len(tied) == 1:
+                best_cat = tied[0]
+            else:
+                # Tie-break: last token position wins
+                best_cat = max(tied, key=lambda cat: last_seen.get(cat, 0))
+                print(f"[TITLE TIE] {tied} → '{best_cat}' "
+                      f"(last seen at index {last_seen.get(best_cat, 0)})")
+
             if not_fashion_hits >= best_count:
                 return "not_fashion", "whitelist", 1.0
             return best_cat, "whitelist", 1.0

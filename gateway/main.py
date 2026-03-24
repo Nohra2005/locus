@@ -25,14 +25,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-VISUAL_URL           = os.getenv("VISUAL_HOST",    "http://visual_engine:8001")
-QDRANT_URL           = os.getenv("QDRANT_URL")
-QDRANT_API_KEY       = os.getenv("QDRANT_API_KEY")
-QDRANT_HOST          = os.getenv("QDRANT_HOST",    "qdrant")
-QDRANT_PORT          = int(os.getenv("QDRANT_PORT", 6333))
-COLLECTION_NAME      = "locus_items"
-SKIPPED_COLLECTION   = "locus_skipped"        # separate collection for skipped products
-PENDING_PATH         = "/app/pending_whitelist.json"
+VISUAL_URL          = os.getenv("VISUAL_HOST",    "http://visual_engine:8001")
+QDRANT_URL          = os.getenv("QDRANT_URL")
+QDRANT_API_KEY      = os.getenv("QDRANT_API_KEY")
+QDRANT_HOST         = os.getenv("QDRANT_HOST",    "qdrant")
+QDRANT_PORT         = int(os.getenv("QDRANT_PORT", 6333))
+COLLECTION_NAME     = "locus_items"
+SKIPPED_COLLECTION  = "locus_skipped"
+FEEDBACK_COLLECTION = "locus_feedback"
+PENDING_PATH        = "/app/pending_whitelist.json"
 
 if QDRANT_URL:
     print(f"[QDRANT] Connecting to cloud: {QDRANT_URL}")
@@ -61,8 +62,6 @@ def startup_event():
             pass
 
     # ── Skipped collection ────────────────────────────────────────────────────
-    # Uses a dummy vector of size 1 — we never do vector search here,
-    # only payload scroll and filter.
     if not client.collection_exists(collection_name=SKIPPED_COLLECTION):
         client.create_collection(
             collection_name=SKIPPED_COLLECTION,
@@ -78,7 +77,34 @@ def startup_event():
         except Exception:
             pass
 
-    # ── Ensure pending whitelist file exists ──────────────────────────────────
+    # ── Feedback collection ───────────────────────────────────────────────────
+    # Dummy 1-dim vectors — we never do vector search here.
+    # The training script reads this collection to build (result_id, rating) pairs,
+    # then looks up result vectors from locus_items for contrastive fine-tuning.
+    if not client.collection_exists(collection_name=FEEDBACK_COLLECTION):
+        client.create_collection(
+            collection_name=FEEDBACK_COLLECTION,
+            vectors_config=VectorParams(size=1, distance=Distance.COSINE),
+        )
+    for field in ("category", "store_name", "training_signal", "result_product_id"):
+        try:
+            client.create_payload_index(
+                collection_name=FEEDBACK_COLLECTION,
+                field_name=field,
+                field_schema="keyword",
+            )
+        except Exception:
+            pass
+    try:
+        client.create_payload_index(
+            collection_name=FEEDBACK_COLLECTION,
+            field_name="rating",
+            field_schema="integer",
+        )
+    except Exception:
+        pass
+
+    # ── Pending whitelist ─────────────────────────────────────────────────────
     if not os.path.exists(PENDING_PATH):
         with open(PENDING_PATH, "w") as f:
             _json.dump([], f)
@@ -133,7 +159,7 @@ def _store_skipped(
             points=[
                 PointStruct(
                     id     = str(uuid.uuid5(uuid.NAMESPACE_URL, f"skipped::{image_url or product_id}")),
-                    vector = [0.0],   # dummy — never searched by vector
+                    vector = [0.0],
                     payload = {
                         "product_id":  product_id,
                         "name":        name,
@@ -151,18 +177,151 @@ def _store_skipped(
         print(f"[SKIPPED] Failed to store skipped product '{name}': {e}")
 
 
-# ── Feedback ───────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# FEEDBACK  (1–5 stars, stored to locus_feedback for contrastive fine-tuning)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# Training signal mapping:
+#   5 stars → strong positive pair  (weight 1.0)  pull embeddings closer
+#   4 stars → mild positive pair    (weight 0.8)
+#   3 stars → neutral               (weight 0.0)  skip during training
+#   2 stars → mild negative pair    (weight 0.4)  push embeddings apart
+#   1 star  → strong negative pair  (weight 1.0)
+#
+# The training script (mlops/train.py) reads locus_feedback, looks up each
+# result_product_id in locus_items to retrieve its 512-dim vector, then uses
+# (vector, rating) pairs to fine-tune the CLIP projection layer.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class FeedbackRequest(BaseModel):
+    result_product_id: str           # product_id from locus_items payload
+    result_image_url:  str = ""      # for human-readable audit
+    result_name:       str = ""      # for human-readable audit
+    store_name:        str = ""
+    category:          str = ""
+    rating:            int           # 1–5 stars
+
 
 @app.post("/feedback")
-async def receive_feedback(
-    query_category: str = Form("Unknown"),
-    rating:         str = Form(...),
-):
-    if rating == "upvote":
-        print(f"[FEEDBACK] SUCCESS: '{query_category}'")
+async def receive_feedback(req: FeedbackRequest):
+    """
+    Store a 1-5 star rating for a search result.
+
+    Called by the frontend after a user rates a result card.
+    Each record is an (item, rating) pair that the training script
+    uses to build contrastive learning pairs.
+    """
+    if not 1 <= req.rating <= 5:
+        raise HTTPException(status_code=400, detail="rating must be between 1 and 5")
+
+    if not req.result_product_id:
+        raise HTTPException(status_code=400, detail="result_product_id is required")
+
+    # Pre-compute training signal so the training script doesn't have to
+    if req.rating >= 4:
+        training_signal = "positive"
+        weight          = 0.6 + (req.rating - 4) * 0.4   # 4→0.6, 5→1.0
+    elif req.rating == 3:
+        training_signal = "neutral"
+        weight          = 0.0
     else:
-        print(f"[FEEDBACK] FAILURE: '{query_category}' — needs fine-tuning")
-    return {"status": "logged"}
+        training_signal = "negative"
+        weight          = 0.4 + (2 - req.rating) * 0.6   # 2→0.4, 1→1.0
+
+    try:
+        client.upsert(
+            collection_name=FEEDBACK_COLLECTION,
+            points=[
+                PointStruct(
+                    id     = str(uuid.uuid4()),   # unique per feedback event
+                    vector = [0.0],               # dummy — never searched by vector
+                    payload = {
+                        "result_product_id": req.result_product_id,
+                        "result_image_url":  req.result_image_url,
+                        "result_name":       req.result_name,
+                        "store_name":        req.store_name,
+                        "category":          req.category,
+                        "rating":            req.rating,
+                        "training_signal":   training_signal,
+                        "weight":            round(weight, 2),
+                        "timestamp":         datetime.utcnow().isoformat(),
+                    }
+                )
+            ]
+        )
+        print(f"[FEEDBACK] {req.rating}★ '{req.result_name}' ({req.category}) → {training_signal} w={weight:.2f}")
+        return {"status": "stored", "training_signal": training_signal, "weight": round(weight, 2)}
+
+    except Exception as e:
+        print(f"[FEEDBACK] Failed to store: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to store feedback: {e}")
+
+
+@app.get("/feedback")
+async def get_feedback(
+    training_signal: str = "",   # filter: positive | negative | neutral
+    category:        str = "",
+    min_rating:      int = 1,
+    max_rating:      int = 5,
+    limit:           int = 500,
+):
+    """
+    Read feedback records for the training script.
+    Returns (result_product_id, rating, training_signal, weight) pairs.
+
+    Usage in mlops/train.py:
+        resp = requests.get("http://gateway:8000/feedback?training_signal=positive")
+        pairs = resp.json()["records"]
+    """
+    must_conditions = []
+
+    if training_signal:
+        must_conditions.append(models.FieldCondition(
+            key="training_signal", match=models.MatchValue(value=training_signal)
+        ))
+    if category:
+        must_conditions.append(models.FieldCondition(
+            key="category", match=models.MatchValue(value=category)
+        ))
+    if min_rating > 1 or max_rating < 5:
+        must_conditions.append(models.FieldCondition(
+            key="rating",
+            range=models.Range(gte=min_rating, lte=max_rating),
+        ))
+
+    scroll_filter = models.Filter(must=must_conditions) if must_conditions else None
+
+    all_records = []
+    cursor      = None
+    while True:
+        batch, next_cursor = client.scroll(
+            collection_name=FEEDBACK_COLLECTION,
+            scroll_filter=scroll_filter,
+            limit=250,
+            offset=cursor,
+            with_payload=True,
+            with_vectors=False,
+        )
+        if not batch:
+            break
+        all_records.extend(batch)
+        if next_cursor is None:
+            break
+        cursor = next_cursor
+
+    records = [pt.payload for pt in all_records]
+
+    # Summary stats — useful for checking if there are enough pairs to train
+    positives = sum(1 for r in records if r.get("training_signal") == "positive")
+    negatives = sum(1 for r in records if r.get("training_signal") == "negative")
+    neutrals  = sum(1 for r in records if r.get("training_signal") == "neutral")
+
+    return {
+        "total":    len(records),
+        "summary":  {"positive": positives, "negative": negatives, "neutral": neutrals},
+        "ready_to_train": (positives + negatives) >= 50,  # training threshold from roadmap
+        "records":  records[:limit],
+    }
 
 
 # ── Detect ─────────────────────────────────────────────────────────────────────
@@ -342,7 +501,6 @@ async def search_items(
     category_confidence = vis_data.get("category_confidence", 0.0)
     processed_image     = vis_data.get("debug_image")
 
-    # Category mismatch warning
     mismatch_warning = None
     if search_label and detected_category and search_label != detected_category:
         mismatch_warning = (
@@ -380,7 +538,8 @@ async def search_items(
                 "price":      hit.payload.get("price", ""),
                 "score":      round(hit.score, 3),
                 "image_url":  hit.payload.get("image_url", ""),
-                "item_id":    hit.payload.get("item_id", ""),
+                # product_id is the key the feedback endpoint needs
+                "product_id": product_id,
             }
 
     matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:25]
@@ -417,12 +576,8 @@ async def get_skipped_products(
 
     scroll_filter = models.Filter(must=must_conditions) if must_conditions else None
 
-    # Fetch ALL matching results then paginate in Python.
-    # Qdrant scroll offset is a point ID cursor, not a numeric offset —
-    # passing offset=8 skips to point ID 8, not the 8th result.
     all_results = []
     cursor      = None
-
     while True:
         batch, next_cursor = client.scroll(
             collection_name=SKIPPED_COLLECTION,
@@ -439,20 +594,15 @@ async def get_skipped_products(
             break
         cursor = next_cursor
 
-    total    = len(all_results)
+    total     = len(all_results)
     paginated = all_results[offset: offset + limit]
     products  = [pt.payload | {"point_id": str(pt.id)} for pt in paginated]
 
-    return {
-        "products": products,
-        "total":    total,
-        "offset":   offset,
-        "limit":    limit,
-    }
+    return {"products": products, "total": total, "offset": offset, "limit": limit}
+
 
 @app.delete("/skipped-products/{point_id}")
 async def delete_skipped_product(point_id: str):
-    """Remove a product from the skipped list (e.g. after manually resolving)."""
     try:
         client.delete(
             collection_name=SKIPPED_COLLECTION,
@@ -480,19 +630,13 @@ class WhitelistDecisionRequest(BaseModel):
 
 @app.post("/whitelist-suggest")
 async def whitelist_suggest(req: WhitelistSuggestRequest):
-    """
-    Shop owner or developer suggests a new word → category mapping.
-    Written to pending_whitelist.json with status 'pending'.
-    """
     word     = req.word.strip().lower()
     category = req.category.strip()
 
     if not word or not category:
         raise HTTPException(status_code=400, detail="word and category are required")
 
-    pending = _read_pending()
-
-    # Don't add duplicates — update if already pending
+    pending  = _read_pending()
     existing = next((e for e in pending if e.get("word") == word), None)
     if existing:
         existing["category"]        = category
@@ -517,9 +661,6 @@ async def whitelist_suggest(req: WhitelistSuggestRequest):
 
 @app.get("/whitelist-suggestions")
 async def whitelist_suggestions(status: str = ""):
-    """
-    List whitelist suggestions. Filter by status: pending | approved | rejected.
-    """
     pending = _read_pending()
     if status:
         pending = [e for e in pending if e.get("status") == status]
@@ -528,12 +669,6 @@ async def whitelist_suggestions(status: str = ""):
 
 @app.post("/whitelist-approve")
 async def whitelist_approve(req: WhitelistDecisionRequest):
-    """
-    Approve a pending suggestion:
-      1. Updates status in pending_whitelist.json
-      2. Calls /whitelist-add on visual engine → writes override + reloads token map
-      3. Triggers background re-index of matching skipped products
-    """
     word    = req.word.strip().lower()
     pending = _read_pending()
 
@@ -541,14 +676,11 @@ async def whitelist_approve(req: WhitelistDecisionRequest):
     if not entry:
         raise HTTPException(status_code=404, detail=f"No suggestion found for word '{word}'")
 
-    category = entry["category"]
-
-    # Step 1: update status
+    category             = entry["category"]
     entry["status"]      = "approved"
     entry["approved_at"] = datetime.utcnow().isoformat()
     _write_pending(pending)
 
-    # Step 2: push to visual engine
     try:
         async with httpx.AsyncClient() as http:
             resp = await http.post(
@@ -559,26 +691,21 @@ async def whitelist_approve(req: WhitelistDecisionRequest):
             resp.raise_for_status()
             ve_result = resp.json()
     except Exception as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Visual engine whitelist-add failed: {e}"
-        )
+        raise HTTPException(status_code=502, detail=f"Visual engine whitelist-add failed: {e}")
 
-    # Step 3: trigger background re-index of matching skipped products
     asyncio.create_task(_reindex_matching_skipped(word, category))
 
     return {
-        "status":         "approved",
-        "word":           word,
-        "category":       category,
-        "visual_engine":  ve_result,
-        "reindex":        "triggered in background",
+        "status":        "approved",
+        "word":          word,
+        "category":      category,
+        "visual_engine": ve_result,
+        "reindex":       "triggered in background",
     }
 
 
 @app.post("/whitelist-reject")
 async def whitelist_reject(req: WhitelistDecisionRequest):
-    """Reject a pending suggestion."""
     word    = req.word.strip().lower()
     pending = _read_pending()
 
@@ -589,23 +716,14 @@ async def whitelist_reject(req: WhitelistDecisionRequest):
     entry["status"]      = "rejected"
     entry["rejected_at"] = datetime.utcnow().isoformat()
     _write_pending(pending)
-
     return {"status": "rejected", "word": word}
 
 
-# ── Background: re-index skipped products matching an approved word ────────────
-
 async def _reindex_matching_skipped(word: str, category: str):
-    """
-    Background task. After a word is approved, find all skipped products
-    whose name contains that word (case-insensitive), re-index them,
-    and if successful move them to locus_items + remove from locus_skipped.
-    """
     print(f"[REINDEX] Starting background re-index for word='{word}' category='{category}'")
 
-    # Scroll all skipped products — filter in Python (word match is text search)
     all_skipped = []
-    offset = None
+    offset      = None
     while True:
         results, next_offset = client.scroll(
             collection_name=SKIPPED_COLLECTION,
@@ -629,17 +747,16 @@ async def _reindex_matching_skipped(word: str, category: str):
         return
 
     print(f"[REINDEX] Found {len(all_skipped)} skipped products matching '{word}'")
-
     semaphore = asyncio.Semaphore(3)
 
     async def reindex_one(product: dict):
         async with semaphore:
-            name      = product.get("name", "")
-            img_url   = product.get("image_url", "")
-            point_id  = product.get("point_id", "")
-            store     = product.get("store_name", "")
-            mall      = product.get("mall_name", "")
-            price     = product.get("price", "")
+            name       = product.get("name", "")
+            img_url    = product.get("image_url", "")
+            point_id   = product.get("point_id", "")
+            store      = product.get("store_name", "")
+            mall       = product.get("mall_name", "")
+            price      = product.get("price", "")
             product_id = product.get("product_id", "")
 
             if not img_url:
@@ -665,32 +782,28 @@ async def _reindex_matching_skipped(word: str, category: str):
                     print(f"  [REINDEX] Still skipped: '{name}' — {idx_data.get('skip_reason')}")
                     return
 
-                # Successfully indexed — upsert to locus_items
                 vector_normal  = idx_data["vector_normal"]
                 final_category = idx_data.get("category", category)
                 new_box_source = idx_data.get("box_source", "unknown")
 
                 client.upsert(
                     collection_name=COLLECTION_NAME,
-                    points=[
-                        PointStruct(
-                            id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
-                            vector  = vector_normal,
-                            payload = {
-                                "name":         name,
-                                "store_name":   store,
-                                "mall_name":    mall,
-                                "image_url":    img_url,
-                                "category_tag": final_category,
-                                "price":        price,
-                                "product_id":   product_id,
-                                "box_source":   new_box_source,
-                            }
-                        )
-                    ]
+                    points=[PointStruct(
+                        id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
+                        vector  = vector_normal,
+                        payload = {
+                            "name":         name,
+                            "store_name":   store,
+                            "mall_name":    mall,
+                            "image_url":    img_url,
+                            "category_tag": final_category,
+                            "price":        price,
+                            "product_id":   product_id,
+                            "box_source":   new_box_source,
+                        }
+                    )]
                 )
 
-                # Remove from skipped collection
                 if point_id:
                     client.delete(
                         collection_name=SKIPPED_COLLECTION,
@@ -738,7 +851,6 @@ async def add_bulk_batch(batch: BulkBatchRequest):
         async with semaphore:
             try:
                 async with httpx.AsyncClient() as http:
-
                     img_resp = await http.get(img_url, timeout=15.0, follow_redirects=True)
                     img_resp.raise_for_status()
                     img_bytes    = img_resp.content
@@ -756,8 +868,6 @@ async def add_bulk_batch(batch: BulkBatchRequest):
                     if idx_data.get("skipped"):
                         reason = idx_data.get("skip_reason", "unknown")
                         print(f"[BATCH] Skipped '{name}': {reason}")
-
-                        # Store in locus_skipped so shop owner can review
                         _store_skipped(
                             product_id  = product_id,
                             name        = name,
@@ -767,7 +877,6 @@ async def add_bulk_batch(batch: BulkBatchRequest):
                             price       = price,
                             skip_reason = reason,
                         )
-
                         return {"status": "skipped", "item": name, "reason": reason}
 
                     vector_normal  = idx_data["vector_normal"]
@@ -776,24 +885,21 @@ async def add_bulk_batch(batch: BulkBatchRequest):
 
                     client.upsert(
                         collection_name=COLLECTION_NAME,
-                        points=[
-                            PointStruct(
-                                id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
-                                vector  = vector_normal,
-                                payload = {
-                                    "name":         name,
-                                    "store_name":   store,
-                                    "mall_name":    mall,
-                                    "image_url":    img_url,
-                                    "category_tag": final_category,
-                                    "price":        price,
-                                    "product_id":   product_id,
-                                    "box_source":   box_source,
-                                }
-                            ),
-                        ]
+                        points=[PointStruct(
+                            id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
+                            vector  = vector_normal,
+                            payload = {
+                                "name":         name,
+                                "store_name":   store,
+                                "mall_name":    mall,
+                                "image_url":    img_url,
+                                "category_tag": final_category,
+                                "price":        price,
+                                "product_id":   product_id,
+                                "box_source":   box_source,
+                            }
+                        )]
                     )
-
                 return {"status": "ok", "item": name}
 
             except Exception as e:
@@ -805,12 +911,7 @@ async def add_bulk_batch(batch: BulkBatchRequest):
     skipped = sum(1 for r in results if r["status"] == "skipped")
     failed  = [r for r in results if r["status"] == "failed"]
 
-    return {
-        "success": success,
-        "skipped": skipped,
-        "total":   len(batch.items),
-        "failed":  failed,
-    }
+    return {"success": success, "skipped": skipped, "total": len(batch.items), "failed": failed}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -836,32 +937,16 @@ async def scrape_store(req: ScrapeRequest):
     base_url = f"{parsed.scheme}://{parsed.netloc}"
 
     async with httpx.AsyncClient(follow_redirects=True, timeout=20.0) as http:
-        shopify_products = await _try_shopify_api(
-            http, req.url, base_url, req.max_products, req_headers
-        )
+        shopify_products = await _try_shopify_api(http, req.url, base_url, req.max_products, req_headers)
         if shopify_products:
-            return {
-                "products":    shopify_products,
-                "total_found": len(shopify_products),
-                "source_url":  req.url,
-                "strategy":    "shopify_api",
-            }
+            return {"products": shopify_products, "total_found": len(shopify_products), "source_url": req.url, "strategy": "shopify_api"}
 
         try:
             page_resp = await http.get(req.url, headers=req_headers)
             if page_resp.status_code == 429:
-                return {
-                    "products":    [],
-                    "total_found": 0,
-                    "source_url":  req.url,
-                    "strategy":    "rate_limited",
-                    "error":       "Site is rate-limiting. Use the Chrome extension scraper instead.",
-                }
+                return {"products": [], "total_found": 0, "source_url": req.url, "strategy": "rate_limited", "error": "Site is rate-limiting. Use the Chrome extension scraper instead."}
             if page_resp.status_code not in (200, 301, 302):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Site returned HTTP {page_resp.status_code}"
-                )
+                raise HTTPException(status_code=400, detail=f"Site returned HTTP {page_resp.status_code}")
         except HTTPException:
             raise
         except Exception as e:
@@ -909,12 +994,7 @@ async def scrape_store(req: ScrapeRequest):
             seen.add(key)
             unique.append(p)
 
-    return {
-        "products":    unique,
-        "total_found": len(unique),
-        "source_url":  req.url,
-        "strategy":    "html_fallback",
-    }
+    return {"products": unique, "total_found": len(unique), "source_url": req.url, "strategy": "html_fallback"}
 
 
 async def _try_shopify_api(http, original_url, base_url, max_products, headers):
@@ -934,7 +1014,6 @@ async def _try_shopify_api(http, original_url, base_url, max_products, headers):
             while True:
                 api_url = f"{base_endpoint}?limit=250&page={page}"
                 resp    = await http.get(api_url, headers=headers, timeout=15.0)
-
                 print(f"[SCRAPE] {api_url} → {resp.status_code} ({len(resp.content)} bytes)")
 
                 if resp.status_code != 200:
@@ -969,12 +1048,7 @@ async def _try_shopify_api(http, original_url, base_url, max_products, headers):
                         pv = variants[0].get("price", "")
                         if pv:
                             price = f"USD {pv}"
-                    all_products.append({
-                        "name":       name,
-                        "image_url":  image_url,
-                        "image_urls": image_urls,
-                        "price":      price,
-                    })
+                    all_products.append({"name": name, "image_url": image_url, "image_urls": image_urls, "price": price})
 
                 if max_products and len(all_products) >= max_products:
                     all_products = all_products[:max_products]
