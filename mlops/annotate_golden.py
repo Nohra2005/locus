@@ -6,14 +6,13 @@ Run this script to interactively build your golden dataset for MLFlow experiment
 What it does:
   1. You give it a Qdrant point UUID from your locus_items collection
   2. It fetches that product's info and finds the 20 most similar *unique* products
-     (deduplicating normal vs dark variants — each real product shows up once)
   3. You pick exactly 5 of those as the ground-truth matches
   4. It saves your annotation to golden_dataset.json using product_id as the key
 
 Usage:
   python annotate_golden.py
 
-  # To connect to Qdrant Cloud instead of local:
+  # To connect to Qdrant Cloud:
   QDRANT_URL=https://... QDRANT_API_KEY=... python annotate_golden.py
 
 Requirements:
@@ -26,16 +25,22 @@ from datetime import datetime
 from qdrant_client import QdrantClient
 
 # ─── Configuration ────────────────────────────────────────────────────────────
-QDRANT_URL   = os.getenv("QDRANT_URL")        # set for cloud; None = use local
+QDRANT_URL   = os.getenv("QDRANT_URL")
 QDRANT_HOST  = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT  = int(os.getenv("QDRANT_PORT", 6333))
 QDRANT_KEY   = os.getenv("QDRANT_API_KEY")
 COLLECTION   = "locus_items"
 OUTPUT_FILE  = "golden_dataset.json"
 ANNOTATOR    = "marc"
-CANDIDATES   = 20   # how many similar products to show as options
-GROUND_TRUTH = 5    # how many you must pick as ground truth
+CANDIDATES   = 20
+GROUND_TRUTH = 5
 # ──────────────────────────────────────────────────────────────────────────────
+
+# box_source values that indicate a stale / low-quality vector.
+# Your system stores values like "deepfashion2_exact", "deepfashion2_best_available",
+# "yolos_fashionpedia_exact", etc.  Only "full_image", "unknown", None, and ""
+# are considered stale — everything else is a proper crop-based vector.
+STALE_SOURCES = {"full_image", "unknown", None, ""}
 
 
 def make_client():
@@ -60,7 +65,6 @@ def save_dataset(data):
 
 
 def get_point(client, point_id):
-    """Retrieve a single Qdrant point by its UUID (with vector)."""
     results = client.retrieve(
         collection_name=COLLECTION,
         ids=[point_id],
@@ -71,12 +75,6 @@ def get_point(client, point_id):
 
 
 def find_similar_products(client, vector, exclude_product_id, top_k=CANDIDATES):
-    """
-    Search for similar products, deduplicating normal/dark variants.
-    Each real product (same product_id) appears only once — the higher-scored one.
-    Returns up to top_k unique products.
-    """
-    # Fetch more than needed to account for deduplication
     raw = client.search(
         collection_name=COLLECTION,
         query_vector=vector,
@@ -90,28 +88,27 @@ def find_similar_products(client, vector, exclude_product_id, top_k=CANDIDATES):
         pid = hit.payload.get("product_id") or str(hit.id)
         if pid == exclude_product_id:
             continue
-        # Keep only the best-scoring variant per product
         if pid not in seen_products or hit.score > seen_products[pid].score:
             seen_products[pid] = hit
 
-    # Sort by score descending and cap at top_k
     unique = sorted(seen_products.values(), key=lambda h: h.score, reverse=True)
     return unique[:top_k]
 
 
-STALE_SOURCES = {"full_image", "unknown", None, ""}
-
-
 def box_source_label(box_source):
-    """Return a short display tag for box_source quality."""
-    if box_source in ("yolo_crop", "title_crop"):
+    """Return a short display tag for box_source quality.
+
+    Clean sources look like: deepfashion2_exact, yolos_fashionpedia_best_available, etc.
+    Stale sources are: full_image, unknown, None, or empty string.
+    """
+    if box_source and box_source not in STALE_SOURCES:
         return f"✓ {box_source}"
     return f"⚠ {box_source or 'unknown'}  ← stale vector"
 
 
 def print_candidate(rank, hit):
-    p   = hit.payload
-    url = p.get("image_url", "N/A")
+    p            = hit.payload
+    url          = p.get("image_url", "N/A")
     url_display  = url[:80] + "…" if len(url) > 80 else url
     box_src      = p.get("box_source")
     stale_marker = "  ⚠ STALE" if box_src in STALE_SOURCES else ""
@@ -148,14 +145,13 @@ def pick_five(candidates):
             print("  ⚠️  Duplicate numbers. Pick 5 different ones.\n")
             continue
 
-        return [n - 1 for n in nums]   # convert to 0-based indices
+        return [n - 1 for n in nums]
 
 
 def main():
     client  = make_client()
     dataset = load_dataset()
 
-    # Index by product_id (the stable business identifier)
     annotated_product_ids = {entry["query_product_id"] for entry in dataset}
 
     print()
@@ -170,7 +166,7 @@ def main():
     print("  1. Paste any Qdrant point UUID for a product you want to test")
     print(f"  2. The tool shows the {CANDIDATES} most similar products")
     print(f"  3. You pick {GROUND_TRUTH} that are the correct ground-truth matches")
-    print("  4. Repeat for as many products as you like (20–50 is a solid dataset)")
+    print("  4. Repeat for as many products as you like (20–30 is a solid dataset)")
     print()
     print("  Tip: Open image URLs in your browser to compare products visually.")
     print("  Type 'quit' at any prompt to exit and save.")
@@ -186,7 +182,6 @@ def main():
         if not point_id:
             continue
 
-        # Fetch the point
         print("  🔍 Fetching from Qdrant…")
         point = get_point(client, point_id)
         if not point:
@@ -196,7 +191,6 @@ def main():
         payload    = point.payload
         product_id = payload.get("product_id") or point_id
 
-        # Handle already-annotated product
         if product_id in annotated_product_ids:
             print(f"\n  ⚠️  product_id '{product_id}' is already annotated.")
             choice = input("  Type 'overwrite' to replace it, or Enter to skip: ").strip()
@@ -222,8 +216,7 @@ def main():
             print("  ⚠️  WARNING: This product has a STALE vector (box_source =",
                   repr(query_box_src) + ").")
             print("     Its CLIP embedding was taken from the full image, not a")
-            print("     tight crop. Consider running reindex_stale.py first, or")
-            print("     pick a different query product for more reliable evaluation.")
+            print("     tight crop. Consider picking a different query product.")
             choice = input("\n  Continue anyway? (y/n): ").strip().lower()
             if choice != "y":
                 continue
@@ -242,7 +235,6 @@ def main():
         print(f"  Which {GROUND_TRUTH} are the true ground-truth matches for this product?\n")
         chosen = pick_five(candidates)
 
-        # Build the annotation entry
         relevant_product_ids = [
             candidates[i].payload.get("product_id") or str(candidates[i].id)
             for i in chosen

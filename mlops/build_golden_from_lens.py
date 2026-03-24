@@ -4,16 +4,17 @@ Golden Dataset Builder — Google Lens Workflow
 Builds the golden dataset for MLFlow evaluation by indexing Google Lens results
 into Qdrant under store_name="golden_dataset".
 
-Workflow (repeat 60 times):
+Workflow (repeat 20-30 times):
   1. You find a fashion image on Google → copy its URL
   2. You open it in Google Lens → pick 5 visually similar items → copy their URLs
   3. This script indexes those 5 images into Qdrant (store = "golden_dataset")
   4. It saves the mapping {query image → 5 product_ids} to golden_dataset.json
 
 Usage:
+  cd mlops
   python build_golden_from_lens.py
 
-  # Use a different gateway (e.g. Docker on a different port):
+  # Use a different gateway:
   GATEWAY_URL=http://localhost:8000 python build_golden_from_lens.py
 
 Requirements:
@@ -32,28 +33,15 @@ GATEWAY_URL = os.getenv("GATEWAY_URL", "http://localhost:8000")
 OUTPUT_FILE = "golden_dataset.json"
 STORE_NAME  = "golden_dataset"
 MALL_NAME   = "golden_dataset"
-TARGET      = 60   # total queries to build
+TARGET      = 30   # total queries to build (20-30 is sufficient)
 # ──────────────────────────────────────────────────────────────────────────────
 
 
 def compute_product_id(image_url: str) -> str:
-    """
-    Derive a stable product_id from the image URL.
-    This must match what the gateway stores in the Qdrant payload,
-    because the evaluate script matches on product_id.
-
-    We prefix with "golden::" so these IDs can't collide with real store products.
-    """
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"golden::{image_url}"))
 
 
 def index_images(items: list) -> dict:
-    """
-    Call the gateway /add-bulk-batch endpoint to index a list of images.
-
-    Each item dict must have: name, image_url, store, mall, price, product_id.
-    Returns the gateway's response: {success, skipped, total, failed}.
-    """
     resp = requests.post(
         f"{GATEWAY_URL}/add-bulk-batch",
         json={"items": items},
@@ -77,25 +65,21 @@ def save_dataset(data: list):
 
 
 def check_gateway():
-    """Ping the gateway health endpoint before starting."""
     try:
         resp = requests.get(f"{GATEWAY_URL}/health", timeout=5)
         data = resp.json()
         if data.get("ready"):
             print(f"  ✅  Gateway ready   ({GATEWAY_URL})")
         else:
-            services = data.get("services", {})
+            services  = data.get("services", {})
             not_ready = [k for k, v in services.items() if v != "ready"]
             print(f"  ⚠️  Gateway not fully ready — {not_ready} still loading.")
-            print(f"     You can continue, but indexing may fail.")
     except Exception as e:
         print(f"  ❌  Cannot reach gateway at {GATEWAY_URL}: {e}")
-        print(f"     Make sure Docker is running: docker compose up")
         raise SystemExit(1)
 
 
 def prompt_url(label: str) -> str:
-    """Prompt for a URL, keep asking until something non-empty is entered."""
     while True:
         val = input(f"  {label}: ").strip()
         if val:
@@ -109,10 +93,6 @@ def prompt_name(label: str, fallback: str) -> str:
 
 
 def build_set(set_num: int) -> dict | None:
-    """
-    Interactive prompt for one golden dataset entry.
-    Returns the entry dict, or None if the user wants to quit.
-    """
     print()
     print(f"  ┌── Set {set_num}/{TARGET} " + "─" * 45)
     print(f"  │")
@@ -120,7 +100,6 @@ def build_set(set_num: int) -> dict | None:
     print(f"  │  Step 2: open it in Google Lens → pick 5 similar items → copy their URLs")
     print(f"  │")
 
-    # ── Query image ───────────────────────────────────────────────────────────
     query_url = input("  │  Query image URL (or 'quit'): ").strip()
     if query_url.lower() in ("quit", "q", "exit"):
         return None
@@ -130,14 +109,12 @@ def build_set(set_num: int) -> dict | None:
         f"query_{set_num}"
     )
     query_category = prompt_name(
-        "  │  Category (top / pants / jacket / dress / shorts / skirt / sweater / shoes / bag / hat / jumpsuit / leggings / sports_bra)",
+        "  │  Category (top/pants/jacket/dress/shorts/skirt/sweater/shoes/bag/hat/jumpsuit/leggings/sports_bra)",
         ""
     )
 
-    # ── 5 relevant images from Google Lens ───────────────────────────────────
     print(f"  │")
     print(f"  │  Now enter the 5 Google Lens matches:")
-    print(f"  │  Tip: give each one a descriptive name so CLIP classifies it correctly.")
     print(f"  │")
 
     relevant_pairs = []
@@ -151,7 +128,6 @@ def build_set(set_num: int) -> dict | None:
 
     print(f"  └" + "─" * 55)
 
-    # ── Index the 5 relevant images ───────────────────────────────────────────
     print(f"\n  🔄  Indexing {len(relevant_pairs)} images into Qdrant…")
 
     batch_items = [
@@ -181,13 +157,7 @@ def build_set(set_num: int) -> dict | None:
 
     print(f"  ✅  {ok} indexed  |  {skipped} skipped  |  {len(failed)} failed")
 
-    if failed:
-        print(f"\n  ⚠️  Failed items (will be excluded from ground truth):")
-        for f in failed:
-            print(f"        {f['item']} — {f.get('error', '?')[:80]}")
-
-    # Only keep relevant items that were successfully indexed
-    failed_names = {f["item"] for f in failed}
+    failed_names  = {f["item"] for f in failed}
     accepted_pairs = [(n, u) for n, u in relevant_pairs if n not in failed_names]
 
     if len(accepted_pairs) < 3:
@@ -195,7 +165,6 @@ def build_set(set_num: int) -> dict | None:
         retry = input("  Skip this set and continue? (y/n): ").strip().lower()
         if retry == "y":
             return None
-        # Let it through anyway — evaluation will just give lower scores
 
     relevant_product_ids = [compute_product_id(url) for _, url in accepted_pairs]
     relevant_info = [
@@ -243,8 +212,6 @@ def main():
         entry   = build_set(set_num)
 
         if entry is None:
-            # User typed 'quit' or skipped a failed set
-            # Check if they actually want to stop
             if input("\n  Continue to next set? (y/n): ").strip().lower() != "y":
                 break
             continue
@@ -257,10 +224,9 @@ def main():
             print(f"\n  🎉  Golden dataset complete! ({TARGET}/{TARGET})")
             break
 
-    # ── Final summary ─────────────────────────────────────────────────────────
     print()
     print("═" * 62)
-    n = len(dataset)
+    n          = len(dataset)
     categories = {}
     for e in dataset:
         cat = e.get("query_category_tag", "unknown") or "unknown"

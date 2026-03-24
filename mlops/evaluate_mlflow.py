@@ -11,12 +11,11 @@ Metrics computed (all at K=5):
   ndcg@5       — normalized discounted cumulative gain                  (0–1)
   mrr          — reciprocal rank of the first correct match             (0–1)
 
-Each metric is also averaged across all queries (avg_ prefix in MLFlow).
-
 Usage:
+  cd mlops
   python evaluate_mlflow.py
 
-  # Override defaults via environment variables:
+  # Override defaults:
   GATEWAY_URL=http://localhost:8000 \\
   MLFLOW_TRACKING_URI=http://localhost:5000 \\
   python evaluate_mlflow.py
@@ -25,6 +24,7 @@ Requirements:
   pip install mlflow requests
 """
 
+import base64
 import io
 import json
 import math
@@ -44,16 +44,14 @@ EXPERIMENT_NAME     = "locus_search_accuracy"
 TOP_K               = 5
 # ──────────────────────────────────────────────────────────────────────────────
 
+STALE_SOURCES = {"full_image", "unknown", None, ""}
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Data loading
-# ──────────────────────────────────────────────────────────────────────────────
 
 def load_golden_dataset(path: str) -> list:
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"Golden dataset not found at '{path}'.\n"
-            "Run  python annotate_golden.py  first to create it."
+            "Run  python annotate_golden.py  or  python build_golden_from_lens.py  first."
         )
     with open(path) as f:
         data = json.load(f)
@@ -62,12 +60,19 @@ def load_golden_dataset(path: str) -> list:
     return data
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Search helpers
-# ──────────────────────────────────────────────────────────────────────────────
+def get_image_bytes(url: str) -> bytes:
+    """
+    Fetch image bytes from either an https URL or a data: URI.
 
-def download_image(url: str) -> bytes:
-    """Download an image from a URL and return raw bytes."""
+    data: URIs look like:  data:image/jpeg;base64,/9j/4AAQ...
+    These were accidentally stored when a query image was dragged into
+    the builder instead of pasting a real URL. The pixel data is intact —
+    we just decode the base64 directly instead of making an HTTP request.
+    """
+    if url.startswith("data:"):
+        _, b64data = url.split(",", 1)
+        return base64.b64decode(b64data)
+
     req = urllib.request.Request(
         url,
         headers={"User-Agent": "Mozilla/5.0 (compatible; Locus-Evaluator/1.0)"}
@@ -77,19 +82,10 @@ def download_image(url: str) -> bytes:
 
 
 def run_search(image_bytes: bytes, filename: str = "query.jpg") -> list:
-    """
-    POST the image to the Locus /search endpoint.
-    Returns the list of match objects from the response.
-
-    The gateway returns:
-      { "matches": [ { "product_id": "...", "name": "...", "score": 0.9, ... }, ... ] }
-    """
     files    = {"file": (filename, io.BytesIO(image_bytes), "image/jpeg")}
     response = requests.post(f"{GATEWAY_URL}/search", files=files, timeout=30)
     response.raise_for_status()
     body = response.json()
-
-    # The gateway uses the "matches" key
     if isinstance(body, dict) and "matches" in body:
         return body["matches"]
     if isinstance(body, list):
@@ -98,74 +94,35 @@ def run_search(image_bytes: bytes, filename: str = "query.jpg") -> list:
 
 
 def extract_product_ids(matches: list) -> list:
-    """
-    Extract product_id from each search result.
-    Falls back to image_url-based deduplication if product_id is missing.
-
-    Note: the gateway deduplicates by product_id before returning results,
-    so each real product appears only once in the matches list.
-    """
     ids = []
     for m in matches:
-        pid = (
-            m.get("product_id")
-            or m.get("item_id")
-            or m.get("id")
-        )
+        pid = m.get("product_id") or m.get("item_id") or m.get("id")
         if pid:
             ids.append(str(pid))
     return ids
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Metrics
-# ──────────────────────────────────────────────────────────────────────────────
-
 def compute_metrics(retrieved_ids: list, relevant_ids: list, k: int = TOP_K) -> dict:
-    """
-    Compute retrieval evaluation metrics.
-
-    retrieved_ids : ranked list of product_ids returned by the search engine
-    relevant_ids  : ground-truth product_ids for this query (from your annotation)
-    k             : evaluation cutoff (we use 5)
-
-    Plain-English meaning of each metric:
-      precision@5  = "of the 5 products I showed, how many were actually correct?"
-      recall@5     = "of the 5 correct products, how many did I find?"
-      hit@5        = "did I get at least one right in my top 5?"  (0 or 1)
-      MRR          = "how high up was my first correct result?"
-                     (1.0 = first position, 0.5 = second, 0.2 = fifth)
-      NDCG@5       = "were correct results ranked near the top?"
-                     (penalises correct results buried lower in the list)
-    """
     retrieved_at_k = retrieved_ids[:k]
     relevant_set   = set(str(r) for r in relevant_ids)
     n_relevant     = len(relevant_set)
 
-    # Hit@K
-    hit_at_k = int(any(rid in relevant_set for rid in retrieved_at_k))
-
-    # Precision@K
+    hit_at_k       = int(any(rid in relevant_set for rid in retrieved_at_k))
     n_correct      = sum(1 for rid in retrieved_at_k if rid in relevant_set)
     precision_at_k = n_correct / k
+    recall_at_k    = n_correct / n_relevant if n_relevant > 0 else 0.0
 
-    # Recall@K
-    recall_at_k = n_correct / n_relevant if n_relevant > 0 else 0.0
-
-    # MRR — reciprocal rank of first correct result
     mrr = 0.0
     for rank, rid in enumerate(retrieved_ids, start=1):
         if rid in relevant_set:
             mrr = 1.0 / rank
             break
 
-    # NDCG@K
     dcg = sum(
         1.0 / math.log2(rank + 1)
         for rank, rid in enumerate(retrieved_at_k, start=1)
         if rid in relevant_set
     )
-    # Ideal DCG = all correct results at the top positions
     idcg = sum(
         1.0 / math.log2(rank + 1)
         for rank in range(1, min(n_relevant, k) + 1)
@@ -182,10 +139,6 @@ def compute_metrics(retrieved_ids: list, relevant_ids: list, k: int = TOP_K) -> 
     }
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Evaluation loop
-# ──────────────────────────────────────────────────────────────────────────────
-
 def run_evaluation(dataset: list, run_name: str = None) -> dict:
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(EXPERIMENT_NAME)
@@ -194,23 +147,21 @@ def run_evaluation(dataset: list, run_name: str = None) -> dict:
         print(f"\n  MLFlow run ID  : {run.info.run_id}")
         print(f"  Experiment     : {EXPERIMENT_NAME}\n")
 
-        # Log run-level parameters
         mlflow.log_param("num_queries",    len(dataset))
         mlflow.log_param("top_k",          TOP_K)
         mlflow.log_param("gateway_url",    GATEWAY_URL)
         mlflow.log_param("golden_dataset", GOLDEN_DATASET_PATH)
 
-        # Log crop quality breakdown — stale vectors can skew metrics
-        stale_sources = {"full_image", "unknown", None, ""}
-        n_stale = sum(1 for e in dataset if e.get("query_box_source") in stale_sources)
-        n_clean = len(dataset) - n_stale
-        mlflow.log_param("queries_with_clean_crop", n_clean)
+        n_stale    = sum(1 for e in dataset if e.get("query_box_source") in STALE_SOURCES)
+        n_data_uri = sum(1 for e in dataset if e.get("query_image_url", "").startswith("data:"))
+        mlflow.log_param("queries_with_clean_crop", len(dataset) - n_stale)
         mlflow.log_param("queries_with_stale_crop", n_stale)
-        if n_stale > 0:
-            print(f"  ⚠️  {n_stale}/{len(dataset)} queries have stale vectors (box_source=full_image/unknown).")
-            print(f"     Consider running reindex_stale.py before evaluating for best results.\n")
+        mlflow.log_param("queries_with_data_uri",   n_data_uri)
 
-        # Save the golden dataset file as a reproducibility artifact
+        if n_data_uri > 0:
+            print(f"  ℹ️  {n_data_uri}/{len(dataset)} queries use embedded data: images")
+            print(f"     (decoding base64 directly — no HTTP download needed).\n")
+
         mlflow.log_artifact(GOLDEN_DATASET_PATH, artifact_path="golden_dataset")
 
         per_query_results = []
@@ -223,19 +174,17 @@ def run_evaluation(dataset: list, run_name: str = None) -> dict:
         }
 
         for step, entry in enumerate(dataset):
-            # Support both entry formats:
-            #   - Qdrant-based (annotate_golden.py):  has query_product_id
-            #   - Google Lens  (build_golden_from_lens.py): has only query_image_url
             query_product_id = entry.get("query_product_id") or entry.get("query_name", f"query_{step}")
             image_url        = entry["query_image_url"]
             relevant_ids     = entry["relevant_product_ids"]
             label            = entry.get("query_name") or query_product_id
+            is_data          = image_url.startswith("data:")
 
-            print(f"  [{step + 1:3d}/{len(dataset)}]  {label[:55]}")
+            print(f"  [{step + 1:3d}/{len(dataset)}]  {label[:50]}" + (" [embedded]" if is_data else ""))
 
             try:
                 t0          = time.time()
-                image_bytes = download_image(image_url)
+                image_bytes = get_image_bytes(image_url)
                 raw_matches = run_search(image_bytes)
                 latency_ms  = (time.time() - t0) * 1000
 
@@ -256,17 +205,14 @@ def run_evaluation(dataset: list, run_name: str = None) -> dict:
                     f"latency={latency_ms:.0f}ms"
                 )
 
-                # Log per-query metrics as a time-series in MLFlow (step = query index)
-                mlflow.log_metrics(
-                    {f"q/{k}": v for k, v in metrics.items()},
-                    step=step,
-                )
+                mlflow.log_metrics({f"q/{k}": v for k, v in metrics.items()}, step=step)
 
                 per_query_results.append({
                     "query_product_id": query_product_id,
                     "query_name"      : label,
                     "relevant_ids"    : relevant_ids,
                     "retrieved_ids"   : retrieved_ids[:TOP_K],
+                    "query_src"       : "data_uri" if is_data else "url",
                     **metrics,
                 })
 
@@ -276,16 +222,14 @@ def run_evaluation(dataset: list, run_name: str = None) -> dict:
             except urllib.error.URLError as e:
                 print(f"            ❌  Image download failed: {e}")
                 per_query_results.append({"query_product_id": query_product_id, "error": f"download: {e}"})
-
             except requests.HTTPError as e:
                 print(f"            ❌  Search request failed: {e}")
                 per_query_results.append({"query_product_id": query_product_id, "error": f"search: {e}"})
-
             except Exception as e:
                 print(f"            ❌  Unexpected error: {e}")
                 per_query_results.append({"query_product_id": query_product_id, "error": str(e)})
 
-        # ── Aggregate metrics ──────────────────────────────────────────────────
+        # Aggregate
         avg_metrics = {}
         for key, values in accumulator.items():
             if values:
@@ -297,13 +241,11 @@ def run_evaluation(dataset: list, run_name: str = None) -> dict:
 
         mlflow.log_metrics(avg_metrics)
 
-        # Save per-query breakdown as artifact
         results_path = "evaluation_results.json"
         with open(results_path, "w") as f:
             json.dump(per_query_results, f, indent=2)
         mlflow.log_artifact(results_path)
 
-        # ── Print summary ──────────────────────────────────────────────────────
         print()
         print("  " + "═" * 54)
         print("  📊  EVALUATION SUMMARY")
@@ -319,10 +261,6 @@ def run_evaluation(dataset: list, run_name: str = None) -> dict:
 
         return avg_metrics
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Entry point
-# ──────────────────────────────────────────────────────────────────────────────
 
 def main():
     print()
@@ -340,8 +278,7 @@ def main():
     print(f"  Loaded {len(dataset)} annotated queries.\n")
 
     run_name = input("  Run name (press Enter for auto-timestamp): ").strip() or None
-
-    avg_metrics = run_evaluation(dataset, run_name)
+    run_evaluation(dataset, run_name)
 
     print()
     print(f"  ✅  Done. Open http://localhost:5000 to see results in MLFlow.")

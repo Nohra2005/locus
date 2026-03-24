@@ -1,0 +1,122 @@
+[
+  {
+    "query_product_id": "wide leg beige linen trousers",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "black high waist straight jeans",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "brown corduroy wide leg pants",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "white ribbed halterneck crop top",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "black sleeveless fitted tank top",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "blue striped oversized shirt",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "cream chunky knit cardigan",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "Grey oversized hoodie",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "Camel longline wool coat",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "black leather biker jacket",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "beige padded puffer jacket",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "floral midi wrap dress",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "black satin slip dress",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "white lace mini dress",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "black high waisted leggings",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "brown suede ankle boots",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "white leather chunky sneakers",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "black strappy heel sandals",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "tan lather shoulder bag",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "black quilted crossbody bag",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "denim mini skirt",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "brown pleated midi skirt",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "khaki cargo shorts",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "light blue denim shorts",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "black sports bra with straps",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "beige wide brim straw hat",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "black baseball cap",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "olive green utility jumpsuit",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "red ribbed knit dress",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  },
+  {
+    "query_product_id": "navy blue blazer",
+    "error": "INVALID_PARAMETER_VALUE: Invalid metric name: 'q/hit@5'. Names may only contain alphanumerics, underscores (_), dashes (-), periods (.), spaces ( ), and slashes (/)."
+  }
+]
