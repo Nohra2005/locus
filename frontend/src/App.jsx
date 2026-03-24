@@ -189,21 +189,20 @@ const GLOBAL_CSS = `
     background: ${T.accentBg};
   }
 
-  .fb-btn {
+  .star-btn {
     background: none;
-    border: 1px solid ${T.border};
-    border-radius: 6px;
-    color: ${T.textMuted};
+    border: none;
+    padding: 2px 1px;
     cursor: pointer;
-    font-size: 0.75rem;
-    padding: 4px 10px;
-    transition: all 0.15s;
-    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    line-height: 1;
+    transition: transform 0.1s, color 0.15s;
+    color: ${T.textFaint};
   }
-  .fb-btn:hover           { border-color: ${T.accent}; color: ${T.accent}; }
-  .fb-btn.voted-up        { background: rgba(122,171,138,0.12); border-color: ${T.green}; color: ${T.green}; }
-  .fb-btn.voted-down      { background: rgba(201,112,112,0.12); border-color: ${T.red};   color: ${T.red};   }
-  .fb-btn:disabled        { cursor: default; }
+  .star-btn:hover:not(:disabled) { transform: scale(1.2); }
+  .star-btn:disabled { cursor: default; }
+  .star-btn.filled { color: ${T.accent}; }
+  .star-btn.dimmed { color: ${T.borderFaint}; }
 
   input[type=range] {
     -webkit-appearance: none;
@@ -480,38 +479,80 @@ function SelectView({ imageURL, detections, onSelect, onBack }) {
 // ══════════════════════════════════════════════════════════════════
 // RESULT CARD
 // ══════════════════════════════════════════════════════════════════
-function ResultCard({ result, onFeedback, highlighted }) {
-  const [vote, setVote] = useState(null);
-  const score   = result.score ?? 0;
-  const payload = result.payload ?? {};
-  const raw     = payload.image_url ?? "";
+function ResultCard({ result, category, onFeedback, highlighted }) {
+  const [vote, setVote]       = useState(null);
+  const [hoverStar, setHover] = useState(null);
+
+  const score    = result.score ?? 0;
+  const payload  = result.payload ?? {};
+  const raw      = payload.image_url ?? "";
   const imageURL = raw ? (raw.startsWith("http") ? raw : `${API}${raw}`) : null;
 
   const scoreColor = score >= 0.80 ? T.green : score >= 0.60 ? T.yellow : T.red;
 
-  const handleVote = async (rating) => {
+  const handleVote = async (stars) => {
     if (vote !== null) return;
-    setVote(rating);
-    if (payload.item_id) await onFeedback(payload.item_id, rating);
+    setVote(stars);
+    setHover(null);
+    await onFeedback(
+      payload.product_id || payload.item_id || payload.image_url,
+      stars,
+      payload.item_name || "",
+      payload.store     || "",
+      category          || "",
+      payload.image_url || "",
+    );
   };
 
+  const fillUpTo = vote !== null ? vote : (hoverStar ?? 0);
+
   return (
-    <div style={{ background: T.surface, border: `1px solid ${highlighted ? T.accent : T.border}`, borderRadius: "12px", overflow: "hidden", display: "flex", flexDirection: "column", transition: "border-color 0.2s" }}>
+    <div style={{
+      background: T.surface,
+      border: `1px solid ${highlighted ? T.accent : T.border}`,
+      borderRadius: "12px",
+      overflow: "hidden",
+      display: "flex",
+      flexDirection: "column",
+      transition: "border-color 0.2s",
+    }}>
       <div style={{ aspectRatio: "3/4", background: T.bgDeep, overflow: "hidden" }}>
         {imageURL
           ? <img src={imageURL} alt={payload.item_name || "product"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.5rem" }}>✦</div>
         }
       </div>
+
       <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
-        <div style={{ fontSize: "0.78rem", fontWeight: 500, color: T.text, lineHeight: 1.4 }}>{payload.item_name || "Product"}</div>
+        <div style={{ fontSize: "0.78rem", fontWeight: 500, color: T.text, lineHeight: 1.4 }}>
+          {payload.item_name || "Product"}
+        </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: "0.68rem", color: T.textMuted }}>{payload.store || ""}</span>
           <span style={{ fontSize: "0.72rem", fontWeight: 600, color: scoreColor }}>{Math.round(score * 100)}%</span>
         </div>
-        <div style={{ display: "flex", gap: "6px", marginTop: "auto", paddingTop: "4px" }}>
-          <button className={`fb-btn ${vote === 1 ? "voted-up" : ""}`} onClick={() => handleVote(1)} disabled={vote !== null}>👍</button>
-          <button className={`fb-btn ${vote === -1 ? "voted-down" : ""}`} onClick={() => handleVote(-1)} disabled={vote !== null}>👎</button>
+
+        <div
+          style={{ display: "flex", gap: "1px", marginTop: "auto", paddingTop: "4px" }}
+          onMouseLeave={() => vote === null && setHover(null)}
+        >
+          {[1, 2, 3, 4, 5].map(star => (
+            <button
+              key={star}
+              className={`star-btn ${star <= fillUpTo ? "filled" : vote !== null ? "dimmed" : ""}`}
+              disabled={vote !== null}
+              onMouseEnter={() => vote === null && setHover(star)}
+              onClick={() => handleVote(star)}
+              title={`Rate ${star} star${star > 1 ? "s" : ""}`}
+            >
+              ★
+            </button>
+          ))}
+          {vote !== null && (
+            <span style={{ fontSize: "0.6rem", color: T.textMuted, marginLeft: "4px", alignSelf: "center" }}>
+              {vote >= 4 ? "great" : vote === 3 ? "ok" : "poor"}
+            </span>
+          )}
         </div>
       </div>
     </div>
@@ -521,9 +562,10 @@ function ResultCard({ result, onFeedback, highlighted }) {
 // ══════════════════════════════════════════════════════════════════
 // RESULTS VIEW
 // ══════════════════════════════════════════════════════════════════
-function ResultsView({ results, categoryInfo, selectedItem, radius, setRadius, userLocation, onFeedback, onReset }) {
+function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, radius, setRadius, userLocation, onFeedback, onReset }) {
   const [highlightedStore, setHighlightedStore] = useState(null);
-  const userLL = userLocation || [33.8869, 35.5131];
+  const userLL   = userLocation || [33.8869, 35.5131];
+  const category = categoryInfo?.category || selectedItem?.search_label || "";
 
   const storeResults = {};
   results.forEach(r => {
@@ -540,16 +582,26 @@ function ResultsView({ results, categoryInfo, selectedItem, radius, setRadius, u
   });
 
   const visibleResults = results.filter(r => !r.payload?.store || storesInRadius.includes(r.payload.store));
-  const displayResults = highlightedStore ? visibleResults.filter(r => r.payload?.store === highlightedStore) : visibleResults;
+  const displayResults = highlightedStore
+    ? visibleResults.filter(r => r.payload?.store === highlightedStore)
+    : visibleResults;
 
   return (
     <div className="fade-in" style={{ minHeight: "calc(100dvh - 61px)", paddingBottom: "48px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 28px", borderBottom: `1px solid ${T.borderFaint}`, position: "sticky", top: "61px", zIndex: 100, background: `${T.bg}f0`, backdropFilter: "blur(10px)" }}>
+
+      {/* ── Sticky header bar ── */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "14px 28px",
+        borderBottom: `1px solid ${T.borderFaint}`,
+        position: "sticky", top: "61px", zIndex: 100,
+        background: `${T.bg}f0`, backdropFilter: "blur(10px)",
+      }}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
           <button className="btn-ghost" onClick={onReset} style={{ fontSize: "1rem" }}>←</button>
           <div>
             <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1rem", fontWeight: 600, color: T.text, textTransform: "capitalize" }}>
-              {selectedItem?.label || categoryInfo?.category || "Results"}
+              {selectedItem?.label || category || "Results"}
             </div>
             <div style={{ fontSize: "0.68rem", color: T.textMuted }}>
               {displayResults.length} match{displayResults.length !== 1 ? "es" : ""}
@@ -563,6 +615,41 @@ function ResultsView({ results, categoryInfo, selectedItem, radius, setRadius, u
           <span style={{ fontSize: "0.72rem", color: T.accent, minWidth: 36 }}>{radius} km</span>
         </div>
       </div>
+
+      {/* ── Query image strip ── */}
+      {queryImageURL && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: "16px",
+          padding: "10px 28px",
+          borderBottom: `1px solid ${T.borderFaint}`,
+          background: T.bgDeep,
+        }}>
+          <span style={{ fontSize: "0.62rem", color: T.textMuted, letterSpacing: "0.1em", textTransform: "uppercase", flexShrink: 0 }}>
+            You searched
+          </span>
+          <img
+            src={queryImageURL}
+            alt="your search crop"
+            style={{
+              height: 68,
+              width: "auto",
+              maxWidth: 100,
+              objectFit: "cover",
+              borderRadius: 8,
+              border: `1.5px solid ${T.accent}`,
+              flexShrink: 0,
+            }}
+          />
+          <div style={{ fontSize: "0.72rem", color: T.textMuted, lineHeight: 1.6 }}>
+            <div style={{ color: T.text, fontWeight: 500, textTransform: "capitalize", marginBottom: 2 }}>
+              {selectedItem?.search_label || selectedItem?.label || "item"}
+            </div>
+            {categoryInfo?.confidence != null && (
+              <div>{Math.round(categoryInfo.confidence * 100)}% confidence</div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ padding: "24px 28px" }}>
         {/* Map */}
@@ -612,7 +699,13 @@ function ResultsView({ results, categoryInfo, selectedItem, radius, setRadius, u
         ) : (
           <div className="results-grid">
             {displayResults.map((result, i) => (
-              <ResultCard key={i} result={result} onFeedback={onFeedback} highlighted={result.payload?.store === highlightedStore} />
+              <ResultCard
+                key={i}
+                result={result}
+                category={category}
+                onFeedback={onFeedback}
+                highlighted={result.payload?.store === highlightedStore}
+              />
             ))}
           </div>
         )}
@@ -625,17 +718,18 @@ function ResultsView({ results, categoryInfo, selectedItem, radius, setRadius, u
 // ROOT
 // ══════════════════════════════════════════════════════════════════
 export default function App() {
-  const [view,         setView]         = useState("landing");
-  const [activeTab,    setActiveTab]    = useState("Discover");
-  const [imageFile,    setImageFile]    = useState(null);
-  const [imageURL,     setImageURL]     = useState(null);
-  const [detections,   setDetections]   = useState([]);
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [results,      setResults]      = useState([]);
-  const [categoryInfo, setCategoryInfo] = useState(null);
-  const [radius,       setRadius]       = useState(5);
-  const [userLocation, setUserLocation] = useState(null);
-  const [error,        setError]        = useState(null);
+  const [view,          setView]          = useState("landing");
+  const [activeTab,     setActiveTab]     = useState("Discover");
+  const [imageFile,     setImageFile]     = useState(null);
+  const [imageURL,      setImageURL]      = useState(null);
+  const [detections,    setDetections]    = useState([]);
+  const [selectedItem,  setSelectedItem]  = useState(null);
+  const [results,       setResults]       = useState([]);
+  const [categoryInfo,  setCategoryInfo]  = useState(null);
+  const [queryImageURL, setQueryImageURL] = useState(null);  // cropped bbox shown in results
+  const [radius,        setRadius]        = useState(5);
+  const [userLocation,  setUserLocation]  = useState(null);
+  const [error,         setError]         = useState(null);
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
@@ -692,6 +786,27 @@ export default function App() {
     setSelectedItem(detection);
     setView("searching");
     const [x1, y1, x2, y2] = detection.bbox;
+
+    // ── Crop query image for display in results ───────────────────────────
+    try {
+      const bitmap = await createImageBitmap(imageFile);
+      const cw = Math.max(1, Math.round(x2 - x1));
+      const ch = Math.max(1, Math.round(y2 - y1));
+      const canvas = document.createElement("canvas");
+      canvas.width  = cw;
+      canvas.height = ch;
+      canvas.getContext("2d").drawImage(bitmap, x1, y1, cw, ch, 0, 0, cw, ch);
+      canvas.toBlob(blob => {
+        if (blob) {
+          setQueryImageURL(prev => {
+            if (prev) URL.revokeObjectURL(prev);
+            return URL.createObjectURL(blob);
+          });
+        }
+      }, "image/jpeg", 0.9);
+    } catch { /* non-critical */ }
+    // ─────────────────────────────────────────────────────────────────────
+
     const form = new FormData();
     form.append("file", imageFile);
     form.append("x1", x1); form.append("y1", y1);
@@ -705,11 +820,17 @@ export default function App() {
       const data = await res.json();
       const reshaped = (data.matches || data.results || []).map(m => ({
         score: m.score,
-        payload: { store: m.store || m.store_name, image_url: m.image_url || m.image_filename, item_name: m.name, item_id: m.item_id }
+        payload: {
+          store:      m.store      || m.store_name,
+          image_url:  m.image_url  || m.image_filename,
+          item_name:  m.name,
+          product_id: m.product_id,
+          item_id:    m.item_id,
+        }
       }));
       const seen = new Map();
       for (const r of reshaped) {
-        const id = r.payload.item_id || r.payload.image_url;
+        const id = r.payload.product_id || r.payload.item_id || r.payload.image_url;
         if (!seen.has(id) || r.score > seen.get(id).score) seen.set(id, r);
       }
       const deduped = Array.from(seen.values()).sort((a, b) => b.score - a.score);
@@ -722,30 +843,42 @@ export default function App() {
     }
   }, [imageFile]);
 
-  const handleFeedback = useCallback(async (itemId, rating) => {
+  const handleFeedback = useCallback(async (productId, rating, name, store, category, imageUrl) => {
     try {
-      await fetch(`${API}/feedback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ item_id: itemId, rating }) });
+      await fetch(`${API}/feedback`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          result_product_id: productId || "",
+          result_image_url:  imageUrl  || "",
+          result_name:       name      || "",
+          store_name:        store     || "",
+          category:          category  || "",
+          rating,
+        }),
+      });
     } catch { /* non-critical */ }
   }, []);
 
   const reset = useCallback(() => {
     setView("landing");
     setImageFile(null);
-    if (imageURL) URL.revokeObjectURL(imageURL);
+    if (imageURL)      URL.revokeObjectURL(imageURL);
+    if (queryImageURL) URL.revokeObjectURL(queryImageURL);
     setImageURL(null);
+    setQueryImageURL(null);
     setDetections([]);
     setResults([]);
     setSelectedItem(null);
     setCategoryInfo(null);
     setError(null);
-  }, [imageURL]);
+  }, [imageURL, queryImageURL]);
 
   return (
     <>
       <StyleInjector />
       <Navbar activeTab={activeTab} onTab={setActiveTab} onLogoClick={reset} />
 
-      {/* ── Store tab takes full priority ── */}
       {activeTab === "Store" ? (
         <StoreDashboardView />
       ) : (
@@ -761,6 +894,7 @@ export default function App() {
               results={results}
               categoryInfo={categoryInfo}
               selectedItem={selectedItem}
+              queryImageURL={queryImageURL}
               radius={radius}
               setRadius={setRadius}
               userLocation={userLocation}

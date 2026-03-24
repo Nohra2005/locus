@@ -88,7 +88,7 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "gilet":        "jacket",
     "waistcoat":    "jacket",
     "waiscoat":     "jacket",   # common product title typo
-    "vest":         "jacket",
+    "vest":         "jacket",   # title token only — YOLO "vest" label is handled by CLIP relabel
     "bomber":       "jacket",
     "windbreaker":  "jacket",
     "anorak":       "jacket",
@@ -105,7 +105,7 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "parka":        "jacket",
     "raincoat":     "jacket",
     "mackintosh":   "jacket",
-    "cape":         "jacket",   # "DANDY WOOL CAPE", "AGNES WOOL CAPE"
+    "cape":         "jacket",
     "veste":        "jacket",
     "blouson":      "jacket",
     "doudoune":     "jacket",
@@ -130,7 +130,7 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "dungarees":    "jumpsuit",
     "catsuit":      "jumpsuit",
     "boilersuit":   "jumpsuit",
-    "tracksuit":    "jumpsuit",  # "LOTTO TRACKSUIT" — one garment unit
+    "tracksuit":    "jumpsuit",
     "combinaison":  "jumpsuit",
     "salopette":    "jumpsuit",
 
@@ -143,7 +143,7 @@ UNAMBIGUOUS_TOKEN_MAP = {
     # ── pants ──────────────────────────────────────────────────────────────
     "pants":        "pants",
     "trousers":     "pants",
-    "trouser":      "pants",    # singular — "FELIX BLUSH TROUSER"
+    "trouser":      "pants",
     "jeans":        "pants",
     "joggers":      "pants",
     "sweatpants":   "pants",
@@ -189,8 +189,8 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "espadrilles":  "shoes",
     "wedges":       "shoes",
     "ballerinas":   "shoes",
-    "flats":        "shoes",    # "SARAH SUEDE BALLET FLATS"
-    "flat":         "shoes",    # singular
+    "flats":        "shoes",
+    "flat":         "shoes",
     "clogs":        "shoes",
     "clog":         "shoes",
     "chaussures":   "shoes",
@@ -228,13 +228,11 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "chapeau":      "hat",
 
     # ── not_fashion ────────────────────────────────────────────────────────
-    # Only words that are NEVER a fashion item in any context.
-    # Belt, scarf, tie, sarong, kimono explicitly added after reindex audit.
-    "belt":         "not_fashion",   # all belt products (LEONARD, JASMINE, etc.)
-    "scarf":        "not_fashion",   # all scarf products (THEA, TESSA, TAMINE, etc.)
-    "tie":          "not_fashion",   # ties (THEOPHILE TIE)
-    "sarong":       "not_fashion",   # beach sarong
-    "kimono":       "not_fashion",   # beach kimono
+    "belt":         "not_fashion",
+    "scarf":        "not_fashion",
+    "tie":          "not_fashion",
+    "sarong":       "not_fashion",
+    "kimono":       "not_fashion",
     "jibbitz":      "not_fashion",
     "shinguard":    "not_fashion",
     "shinguards":   "not_fashion",
@@ -399,6 +397,12 @@ LABEL_DESCRIPTIONS = {
 
 # =============================================================================
 # YOLO_TO_CANONICAL
+#
+# "vest" removed — DeepFashion2 uses "vest" for ALL sleeveless garments,
+# including tank tops, halternecks, and crop tops. Mapping it to "jacket"
+# caused every sleeveless top to be labelled jacket at search time.
+# The CLIP relabel block in detect_objects() handles these correctly
+# by looking at the actual crop instead of relying on the YOLO label.
 # =============================================================================
 
 YOLO_TO_CANONICAL = {
@@ -406,7 +410,7 @@ YOLO_TO_CANONICAL = {
     "long sleeved shirt":    "top",
     "short sleeved outwear": "jacket",
     "long sleeved outwear":  "jacket",
-    "vest":                  "jacket",
+    # "vest" intentionally omitted — CLIP relabel decides top vs jacket per crop
     "sling":                 "top",
     "shorts":                "shorts",
     "trousers":              "pants",
@@ -420,6 +424,8 @@ YOLO_TO_CANONICAL = {
 
 # =============================================================================
 # FASHIONPEDIA_TO_CANONICAL
+#
+# "vest" removed for the same reason as YOLO_TO_CANONICAL above.
 # =============================================================================
 
 FASHIONPEDIA_TO_CANONICAL = {
@@ -428,7 +434,7 @@ FASHIONPEDIA_TO_CANONICAL = {
     "sweater":                                 "sweater",
     "cardigan":                                "sweater",
     "jacket":                                  "jacket",
-    "vest":                                    "jacket",
+    # "vest" intentionally omitted — CLIP relabel decides top vs jacket per crop
     "coat":                                    "jacket",
     "cape":                                    "jacket",
     "pants":                                   "pants",
@@ -445,6 +451,8 @@ FASHIONPEDIA_TO_CANONICAL = {
 
 # =============================================================================
 # SEARCHABLE_IDS
+# ID 5 (vest) kept in SEARCHABLE_IDS so the box is still returned to the UI —
+# we just don't pre-label it. CLIP relabel in detect_objects() labels it.
 # =============================================================================
 
 SEARCHABLE_IDS = {
@@ -453,7 +461,7 @@ SEARCHABLE_IDS = {
     2,   # sweater             → sweater
     3,   # cardigan            → sweater
     4,   # jacket              → jacket
-    5,   # vest                → jacket
+    5,   # vest                → CLIP relabel (top or jacket depending on crop)
     6,   # pants               → pants
     7,   # shorts              → shorts
     8,   # skirt               → skirt
