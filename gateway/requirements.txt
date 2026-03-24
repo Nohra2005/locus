@@ -7,3 +7,5 @@ Pillow
 beautifulsoup4
 lxml
 pydantic
+requests
+mlflow

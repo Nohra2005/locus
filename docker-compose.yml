@@ -94,3 +94,4 @@ services:
 
 volumes:
   qdrant_data:  # uncomment qdrant service block above to use local mode
+  mlflow_data:
