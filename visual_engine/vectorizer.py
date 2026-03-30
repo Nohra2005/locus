@@ -129,8 +129,8 @@ class LocusVisualizer:
         self.accessory_detector = AccessoryDetector()
 
         print("Loading CLIP ViT-B/16...")
-        self.clip_model     = CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
-        self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
+        self.clip_model     = CLIPModel.from_pretrained("patrickjohncyh/fashion-clip")
+        self.clip_processor = CLIPProcessor.from_pretrained("patrickjohncyh/fashion-clip")
         self.clip_labels    = CANONICAL_LABELS
 
         # Pre-compute CLIP text embeddings for canonical labels

@@ -205,7 +205,7 @@ def run_evaluation(dataset: list, run_name: str = None) -> dict:
                     f"latency={latency_ms:.0f}ms"
                 )
 
-                mlflow.log_metrics({f"q/{k}": v for k, v in metrics.items()}, step=step)
+                mlflow.log_metrics({f"q/{k}".replace("@", "_at_"): v for k, v in metrics.items()},step=step,)
 
                 per_query_results.append({
                     "query_product_id": query_product_id,
@@ -239,7 +239,7 @@ def run_evaluation(dataset: list, run_name: str = None) -> dict:
         avg_metrics["n_successful"] = len(dataset) - n_failed
         avg_metrics["n_failed"]     = n_failed
 
-        mlflow.log_metrics(avg_metrics)
+        mlflow.log_metrics({k.replace("@", "_at_"): v for k, v in avg_metrics.items()})
 
         results_path = "evaluation_results.json"
         with open(results_path, "w") as f:
