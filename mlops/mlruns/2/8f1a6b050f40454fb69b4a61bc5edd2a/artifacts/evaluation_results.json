@@ -23,7 +23,7 @@
     "mrr": 1.0,
     "ndcg@5": 0.8687949224876582,
     "n_correct_in_top_k": 4,
-    "latency_ms": 1290.7721996307373
+    "latency_ms": 1062.5438690185547
   },
   {
     "query_product_id": "black high waist straight jeans",
@@ -49,7 +49,7 @@
     "mrr": 1.0,
     "ndcg@5": 0.8687949224876582,
     "n_correct_in_top_k": 4,
-    "latency_ms": 690.420389175415
+    "latency_ms": 678.5547733306885
   },
   {
     "query_product_id": "brown corduroy wide leg pants",
@@ -75,7 +75,7 @@
     "mrr": 1.0,
     "ndcg@5": 0.7227265726449519,
     "n_correct_in_top_k": 3,
-    "latency_ms": 688.9033317565918
+    "latency_ms": 579.0388584136963
   },
   {
     "query_product_id": "white ribbed halterneck crop top",
@@ -101,7 +101,7 @@
     "mrr": 0.5,
     "ndcg@5": 0.5147714448836774,
     "n_correct_in_top_k": 3,
-    "latency_ms": 451.9507884979248
+    "latency_ms": 520.1365947723389
   },
   {
     "query_product_id": "black sleeveless fitted tank top",
@@ -127,7 +127,7 @@
     "mrr": 1.0,
     "ndcg@5": 0.6992148198508501,
     "n_correct_in_top_k": 3,
-    "latency_ms": 545.3143119812012
+    "latency_ms": 737.6937866210938
   },
   {
     "query_product_id": "blue striped oversized shirt",
@@ -140,20 +140,20 @@
       "3a4e0ad5-e7b4-50ab-9a2e-59558b5d3306"
     ],
     "retrieved_ids": [
-      "3a4e0ad5-e7b4-50ab-9a2e-59558b5d3306",
-      "7e07dd74-59ae-56e9-b39f-8c589201bc4c",
-      "db460add-120f-505c-b806-bbde4b001b29",
-      "8a3d1fb2-0024-5eef-af28-42ce20cdd0e3",
-      "5ebae0e4-1411-595f-bcaf-ee2ae2ea9d78"
+      "007ffd14-334f-5ece-83ae-3f91b278b83d",
+      "e7305505-624e-5df7-ae80-d1ae5863f9af",
+      "fa6f6ed6-3f96-5b5b-8e7c-eab55c3b43ab",
+      "064ce5bf-f582-5d79-aeef-ad05511c7a02",
+      "e1696186-dad1-5b80-b56a-a636a437d0db"
     ],
     "query_src": "url",
-    "hit@5": 1,
-    "precision@5": 1.0,
-    "recall@5": 1.0,
-    "mrr": 1.0,
-    "ndcg@5": 1.0,
-    "n_correct_in_top_k": 5,
-    "latency_ms": 594.3653583526611
+    "hit@5": 0,
+    "precision@5": 0.0,
+    "recall@5": 0.0,
+    "mrr": 0.0,
+    "ndcg@5": 0.0,
+    "n_correct_in_top_k": 0,
+    "latency_ms": 809.1034889221191
   },
   {
     "query_product_id": "cream chunky knit cardigan",
@@ -179,7 +179,7 @@
     "mrr": 1.0,
     "ndcg@5": 0.8687949224876582,
     "n_correct_in_top_k": 4,
-    "latency_ms": 1708.0678939819336
+    "latency_ms": 736.9356155395508
   },
   {
     "query_product_id": "Grey oversized hoodie",
@@ -205,7 +205,7 @@
     "mrr": 1.0,
     "ndcg@5": 1.0,
     "n_correct_in_top_k": 5,
-    "latency_ms": 525.5775451660156
+    "latency_ms": 1100.0289916992188
   },
   {
     "query_product_id": "Camel longline wool coat",
@@ -231,7 +231,7 @@
     "mrr": 1.0,
     "ndcg@5": 0.5531464700081437,
     "n_correct_in_top_k": 2,
-    "latency_ms": 505.2516460418701
+    "latency_ms": 732.1047782897949
   },
   {
     "query_product_id": "black leather biker jacket",
@@ -257,7 +257,7 @@
     "mrr": 1.0,
     "ndcg@5": 0.6992148198508501,
     "n_correct_in_top_k": 3,
-    "latency_ms": 590.022087097168
+    "latency_ms": 1078.8850784301758
   },
   {
     "query_product_id": "beige padded puffer jacket",
@@ -270,20 +270,20 @@
       "e502ec2f-49e0-56d5-a6f5-c84259a6fe81"
     ],
     "retrieved_ids": [
-      "4c94a7c5-5fbf-52c4-a944-753b713be41f",
-      "e502ec2f-49e0-56d5-a6f5-c84259a6fe81",
-      "430ad8ca-d3d0-5805-9cf4-c879fc2a7503",
-      "1a4ab6c3-ec48-5bc5-8e4c-f732a5cd5f3d",
-      "a12477ae-959f-5f9d-a7d3-7bda215c2c90"
+      "e4d39a1d-6d90-5f38-958d-cf01c9d514f4",
+      "db0859b4-4d25-5573-9ea0-43e7ae90e44c",
+      "db1c9e43-14e2-525d-914b-3a4db5adbd9f",
+      "9ceb8856-4ba1-52c8-98b3-2674f8cd0d8a",
+      "8571e58c-dccc-5775-a924-a306c4c38420"
     ],
     "query_src": "url",
-    "hit@5": 1,
-    "precision@5": 0.4,
-    "recall@5": 0.4,
-    "mrr": 1.0,
-    "ndcg@5": 0.5531464700081437,
-    "n_correct_in_top_k": 2,
-    "latency_ms": 514.1735076904297
+    "hit@5": 0,
+    "precision@5": 0.0,
+    "recall@5": 0.0,
+    "mrr": 0.0,
+    "ndcg@5": 0.0,
+    "n_correct_in_top_k": 0,
+    "latency_ms": 1023.5500335693359
   },
   {
     "query_product_id": "floral midi wrap dress",
@@ -309,7 +309,7 @@
     "mrr": 1.0,
     "ndcg@5": 1.0,
     "n_correct_in_top_k": 5,
-    "latency_ms": 526.4978408813477
+    "latency_ms": 824.8040676116943
   },
   {
     "query_product_id": "black satin slip dress",
@@ -335,7 +335,7 @@
     "mrr": 1.0,
     "ndcg@5": 0.7227265726449519,
     "n_correct_in_top_k": 3,
-    "latency_ms": 583.3172798156738
+    "latency_ms": 639.0204429626465
   },
   {
     "query_product_id": "white lace mini dress",
@@ -348,20 +348,20 @@
       "a571cb3a-dc32-50eb-9364-5f8ae49a553a"
     ],
     "retrieved_ids": [
-      "2f766687-44c6-525e-b5f2-164f6bce3035",
-      "33ecc48b-03c3-5076-878a-5fa892c21be0",
-      "02dd9a84-fa17-59ae-810d-a1f20fa1e0f9",
-      "a571cb3a-dc32-50eb-9364-5f8ae49a553a",
-      "bf8c47b4-315e-5580-976b-f78f13e66aeb"
+      "a7b52b82-a58a-56a0-9463-8799a161a860",
+      "dd4f4854-c48d-5931-856a-231037e92c30",
+      "b10166e6-ddbb-5304-826f-92581bc8fdea",
+      "3a4e0ad5-e7b4-50ab-9a2e-59558b5d3306",
+      "838049d4-ed5f-52fe-973d-a1f3c8a57d7f"
     ],
     "query_src": "url",
-    "hit@5": 1,
-    "precision@5": 0.6,
-    "recall@5": 0.6,
-    "mrr": 1.0,
-    "ndcg@5": 0.6992148198508501,
-    "n_correct_in_top_k": 3,
-    "latency_ms": 509.2735290527344
+    "hit@5": 0,
+    "precision@5": 0.0,
+    "recall@5": 0.0,
+    "mrr": 0.0,
+    "ndcg@5": 0.0,
+    "n_correct_in_top_k": 0,
+    "latency_ms": 1211.7919921875
   },
   {
     "query_product_id": "black high waisted leggings",
@@ -387,7 +387,7 @@
     "mrr": 1.0,
     "ndcg@5": 1.0,
     "n_correct_in_top_k": 5,
-    "latency_ms": 438.10224533081055
+    "latency_ms": 785.3331565856934
   },
   {
     "query_product_id": "brown suede ankle boots",
@@ -413,7 +413,7 @@
     "mrr": 1.0,
     "ndcg@5": 1.0,
     "n_correct_in_top_k": 5,
-    "latency_ms": 635.5495452880859
+    "latency_ms": 1849.0164279937744
   },
   {
     "query_product_id": "white leather chunky sneakers",
@@ -439,7 +439,7 @@
     "mrr": 1.0,
     "ndcg@5": 1.0,
     "n_correct_in_top_k": 5,
-    "latency_ms": 724.7509956359863
+    "latency_ms": 1699.8374462127686
   },
   {
     "query_product_id": "black strappy heel sandals",
@@ -452,20 +452,20 @@
       "57601e74-c431-5b82-a12b-197041077735"
     ],
     "retrieved_ids": [
-      "200bbc38-520e-59e7-b7f9-d9b1372cccff",
-      "b302851e-142e-5b43-a133-e926a38a3bf3",
-      "57601e74-c431-5b82-a12b-197041077735",
-      "f152c286-1f63-59b9-bb00-1f18aadc3e8c",
-      "01ba3510-1232-57a2-868c-fcff52075879"
+      "a7da4057-8f11-5f8a-986c-f7b407338a82",
+      "8b781df8-7a9a-5ab1-ab6b-6d0874f2cf9f",
+      "37546c7e-9a77-50eb-9650-e6b96e9cd685",
+      "9ef5180e-897a-5c5a-a3c7-8b9c4ab07ece",
+      "53be82d7-e746-5d00-8568-134d6c9c7aba"
     ],
     "query_src": "url",
-    "hit@5": 1,
-    "precision@5": 0.6,
-    "recall@5": 0.6,
-    "mrr": 1.0,
-    "ndcg@5": 0.6548086577531307,
-    "n_correct_in_top_k": 3,
-    "latency_ms": 581.39967918396
+    "hit@5": 0,
+    "precision@5": 0.0,
+    "recall@5": 0.0,
+    "mrr": 0.0,
+    "ndcg@5": 0.0,
+    "n_correct_in_top_k": 0,
+    "latency_ms": 715.1789665222168
   },
   {
     "query_product_id": "tan lather shoulder bag",
@@ -491,7 +491,7 @@
     "mrr": 1.0,
     "ndcg@5": 0.3391602052736161,
     "n_correct_in_top_k": 1,
-    "latency_ms": 581.5179347991943
+    "latency_ms": 704.1037082672119
   },
   {
     "query_product_id": "black quilted crossbody bag",
@@ -504,20 +504,20 @@
       "9373d708-7c22-50fa-9a90-271175e8b60e"
     ],
     "retrieved_ids": [
-      "54fd7e33-989d-54b2-b246-29cc6d0a0b9c",
       "e1696186-dad1-5b80-b56a-a636a437d0db",
       "da866b33-7dbb-57c8-95ec-3ae1ef15667f",
-      "9373d708-7c22-50fa-9a90-271175e8b60e",
-      "712d9011-0139-5f24-ac2d-8cec6131deaf"
+      "4ccd3d96-239f-562b-b9e6-d469651af8b9",
+      "aed081d7-ad48-59a6-9d7c-3283bd633fb8",
+      "66f6705f-7912-5b6c-ab89-f0024a55f759"
     ],
     "query_src": "url",
-    "hit@5": 1,
-    "precision@5": 0.6,
-    "recall@5": 0.6,
-    "mrr": 1.0,
-    "ndcg@5": 0.6164336326286644,
-    "n_correct_in_top_k": 3,
-    "latency_ms": 627.8517246246338
+    "hit@5": 0,
+    "precision@5": 0.0,
+    "recall@5": 0.0,
+    "mrr": 0.0,
+    "ndcg@5": 0.0,
+    "n_correct_in_top_k": 0,
+    "latency_ms": 623.6631870269775
   },
   {
     "query_product_id": "denim mini skirt",
@@ -543,7 +543,7 @@
     "mrr": 1.0,
     "ndcg@5": 1.0,
     "n_correct_in_top_k": 5,
-    "latency_ms": 584.6946239471436
+    "latency_ms": 608.1259250640869
   },
   {
     "query_product_id": "brown pleated midi skirt",
@@ -569,7 +569,7 @@
     "mrr": 1.0,
     "ndcg@5": 1.0,
     "n_correct_in_top_k": 5,
-    "latency_ms": 592.127799987793
+    "latency_ms": 830.3442001342773
   },
   {
     "query_product_id": "khaki cargo shorts",
@@ -595,7 +595,7 @@
     "mrr": 1.0,
     "ndcg@5": 1.0,
     "n_correct_in_top_k": 5,
-    "latency_ms": 565.5553340911865
+    "latency_ms": 638.5824680328369
   },
   {
     "query_product_id": "light blue denim shorts",
@@ -621,7 +621,7 @@
     "mrr": 1.0,
     "ndcg@5": 1.0,
     "n_correct_in_top_k": 5,
-    "latency_ms": 504.1170120239258
+    "latency_ms": 861.9847297668457
   },
   {
     "query_product_id": "black sports bra with straps",
@@ -647,7 +647,7 @@
     "mrr": 1.0,
     "ndcg@5": 1.0,
     "n_correct_in_top_k": 5,
-    "latency_ms": 505.5558681488037
+    "latency_ms": 480.9577465057373
   },
   {
     "query_product_id": "beige wide brim straw hat",
@@ -660,20 +660,20 @@
       "6afccc74-af3c-5c4b-aa81-ef6627c139bc"
     ],
     "retrieved_ids": [
-      "3a4e0ad5-e7b4-50ab-9a2e-59558b5d3306",
-      "7e07dd74-59ae-56e9-b39f-8c589201bc4c",
-      "8a3d1fb2-0024-5eef-af28-42ce20cdd0e3",
-      "db460add-120f-505c-b806-bbde4b001b29",
-      "5ebae0e4-1411-595f-bcaf-ee2ae2ea9d78"
+      "007ffd14-334f-5ece-83ae-3f91b278b83d",
+      "064ce5bf-f582-5d79-aeef-ad05511c7a02",
+      "30bd18f5-7572-548f-8cb0-906860342515",
+      "fa6f6ed6-3f96-5b5b-8e7c-eab55c3b43ab",
+      "e7305505-624e-5df7-ae80-d1ae5863f9af"
     ],
     "query_src": "url",
     "hit@5": 0,
     "precision@5": 0.0,
     "recall@5": 0.0,
-    "mrr": 0.16666666666666666,
+    "mrr": 0.0,
     "ndcg@5": 0.0,
     "n_correct_in_top_k": 0,
-    "latency_ms": 556.7042827606201
+    "latency_ms": 879.4727325439453
   },
   {
     "query_product_id": "black baseball cap",
@@ -686,20 +686,20 @@
       "5537ec9c-d62e-5847-9bc5-09e2751b55ed"
     ],
     "retrieved_ids": [
-      "dd4f4854-c48d-5931-856a-231037e92c30",
-      "54fd7e33-989d-54b2-b246-29cc6d0a0b9c",
       "da866b33-7dbb-57c8-95ec-3ae1ef15667f",
-      "a7da4057-8f11-5f8a-986c-f7b407338a82",
-      "e903ffdf-bf46-573b-9c75-c50cd8a0005f"
+      "aed081d7-ad48-59a6-9d7c-3283bd633fb8",
+      "007ffd14-334f-5ece-83ae-3f91b278b83d",
+      "e1696186-dad1-5b80-b56a-a636a437d0db",
+      "064ce5bf-f582-5d79-aeef-ad05511c7a02"
     ],
     "query_src": "url",
-    "hit@5": 1,
-    "precision@5": 0.2,
-    "recall@5": 0.2,
-    "mrr": 0.2,
-    "ndcg@5": 0.13120507751234178,
-    "n_correct_in_top_k": 1,
-    "latency_ms": 712.9130363464355
+    "hit@5": 0,
+    "precision@5": 0.0,
+    "recall@5": 0.0,
+    "mrr": 0.0,
+    "ndcg@5": 0.0,
+    "n_correct_in_top_k": 0,
+    "latency_ms": 1544.543743133545
   },
   {
     "query_product_id": "olive green utility jumpsuit",
@@ -725,7 +725,7 @@
     "mrr": 1.0,
     "ndcg@5": 1.0,
     "n_correct_in_top_k": 5,
-    "latency_ms": 453.63521575927734
+    "latency_ms": 660.524845123291
   },
   {
     "query_product_id": "red ribbed knit dress",
@@ -751,7 +751,7 @@
     "mrr": 1.0,
     "ndcg@5": 0.8687949224876582,
     "n_correct_in_top_k": 4,
-    "latency_ms": 501.37948989868164
+    "latency_ms": 575.9115219116211
   },
   {
     "query_product_id": "navy blue blazer",
@@ -764,19 +764,19 @@
       "bd941116-6ea9-5351-8786-b503c447c6e3"
     ],
     "retrieved_ids": [
-      "b6962c2d-c267-5440-8fcb-7d8c9df8b6ac",
-      "bd941116-6ea9-5351-8786-b503c447c6e3",
-      "71bcf964-9392-58f5-ac49-6e87ed09e8fa",
-      "620c0432-01ed-5fe6-bd4b-658cb36c2a45",
-      "430ad8ca-d3d0-5805-9cf4-c879fc2a7503"
+      "6ebde176-7469-50d4-a5f5-5d2dd7c0f5b8",
+      "d0a5b6d3-91ef-5a12-a785-b9c003d65d73",
+      "db0859b4-4d25-5573-9ea0-43e7ae90e44c",
+      "e4d39a1d-6d90-5f38-958d-cf01c9d514f4",
+      "db1c9e43-14e2-525d-914b-3a4db5adbd9f"
     ],
     "query_src": "url",
-    "hit@5": 1,
-    "precision@5": 0.8,
-    "recall@5": 0.8,
-    "mrr": 1.0,
-    "ndcg@5": 0.8687949224876582,
-    "n_correct_in_top_k": 4,
-    "latency_ms": 613.4555339813232
+    "hit@5": 0,
+    "precision@5": 0.0,
+    "recall@5": 0.0,
+    "mrr": 0.0,
+    "ndcg@5": 0.0,
+    "n_correct_in_top_k": 0,
+    "latency_ms": 670.769214630127
   }
 ]

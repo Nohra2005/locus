@@ -29,6 +29,52 @@ CANONICAL_LABELS = [
 ]
 
 # =============================================================================
+# CLIP_PROMPTS
+# Richer text prompts fed to CLIPProcessor at startup — same order as
+# CANONICAL_LABELS.  The output category names (keys in category_scores,
+# stored in Qdrant) still come from CANONICAL_LABELS; only the text
+# embedding used for image→category matching changes.
+#
+# Guidelines per entry:
+#   • Lead with the canonical token so the embedding stays anchored.
+#   • Add the 3-5 most visually distinctive synonyms / sub-types.
+#   • Keep each string short enough for CLIP (<77 tokens).
+# =============================================================================
+
+CLIP_PROMPTS = [
+    # top — "shirt halterneck" targets case 1 (halterneck→dress) while keeping shirt
+    "top shirt halterneck",
+    # sports_bra
+    "sports bra",
+    # pants — keep short; avoid leaking into leggings/shirt territory
+    "pants trousers",
+    # leggings — "tights" widens the gap over "pants trousers" (case 3)
+    "leggings tights",
+    # shorts
+    "shorts",
+    # skirt — keep single token; long prompt caused sandals regression
+    "skirt",
+    # dress — keep single token; long prompt caused mini-dress→top regression
+    "dress",
+    # sweater — keep single token; long prompt caused blazer/puffer→sweater regression
+    "sweater",
+    # jacket — "coat" alone fixes case 2 (longline wool coat→top)
+    "jacket coat",
+    # shoes — add "sandals heels" to fix strappy-sandal→skirt regression
+    "shoes sandals heels",
+    # hat — "cap" targets cases 5 & 6; also activates gateway accessory fallback
+    "hat cap",
+    # bag — "handbag" targets case 4; also activates gateway accessory fallback
+    "bag handbag",
+    # jumpsuit
+    "jumpsuit",
+]
+
+assert len(CLIP_PROMPTS) == len(CANONICAL_LABELS), (
+    "CLIP_PROMPTS and CANONICAL_LABELS must have the same length and order"
+)
+
+# =============================================================================
 # UNAMBIGUOUS_TOKEN_MAP
 # =============================================================================
 

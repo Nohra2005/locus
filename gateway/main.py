@@ -498,20 +498,44 @@ async def search_items(
 
     vector              = vis_data.get("vector")
     detected_category   = vis_data.get("category")
-    category_confidence = vis_data.get("category_confidence", 0.0)
+    category_confidence = vis_data.get("category_confidence", {})
     processed_image     = vis_data.get("debug_image")
 
     mismatch_warning = None
     if search_label and detected_category and search_label != detected_category:
+        top_conf = max(category_confidence.values()) if isinstance(category_confidence, dict) else 0.0
         mismatch_warning = (
             f"Selected box category '{search_label}' differs from CLIP detection "
-            f"'{detected_category}' (conf={category_confidence:.2f}). "
+            f"'{detected_category}' (conf={top_conf:.2f}). "
             f"Searching in '{search_label}' category as selected."
         )
         print(f"[SEARCH] WARNING: {mismatch_warning}")
 
+    # ── Accessory uncertainty fallback ────────────────────────────────────────
+    # fashion-CLIP is biased toward clothing and frequently scores accessories
+    # (hat, bag, shoes) near zero even when the query image is clearly an
+    # accessory.  When the sum of accessory scores exceeds a low threshold,
+    # drop the category filter so accessory items are reachable in results.
+    _ACCESSORY_LABELS = {"hat", "bag", "shoes"}
+    _CLOTHING_LABELS  = {
+        "top", "sports_bra", "pants", "leggings", "shorts",
+        "skirt", "dress", "sweater", "jacket", "jumpsuit",
+    }
+    _scores           = category_confidence if isinstance(category_confidence, dict) else {}
+    _accessory_signal = sum(_scores.get(k, 0.0) for k in _ACCESSORY_LABELS)
+
+    skip_filter_for_accessory = (
+        not search_label                          # user has not selected a box
+        and detected_category in _CLOTHING_LABELS # CLIP said clothing
+        and _accessory_signal > 0.005             # but accessory signal is non-trivial
+    )
+    if skip_filter_for_accessory:
+        print(f"[SEARCH] Accessory uncertainty (accessory_signal={_accessory_signal:.4f}) "
+              f"— dropping category filter, returning unfiltered results")
+    # ─────────────────────────────────────────────────────────────────────────
+
     query_filter    = None
-    effective_label = search_label or detected_category
+    effective_label = None if skip_filter_for_accessory else (search_label or detected_category)
     if effective_label:
         query_filter = models.Filter(
             must=[models.FieldCondition(
