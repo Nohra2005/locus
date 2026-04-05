@@ -8,5 +8,4 @@ beautifulsoup4
 lxml
 pydantic
 requests
-mlflow
 prometheus-fastapi-instrumentator

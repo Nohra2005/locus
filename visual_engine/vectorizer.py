@@ -55,6 +55,7 @@ from detector_clothing import ClothingDetector
 from detector_accessories import AccessoryDetector
 from clip_labels import (
     CANONICAL_LABELS,
+    CLIP_PROMPTS,
     LABEL_DESCRIPTIONS,
     UNAMBIGUOUS_TOKEN_MAP,
 )
@@ -135,7 +136,7 @@ class LocusVisualizer:
 
         # Pre-compute CLIP text embeddings for canonical labels
         text_inputs = self.clip_processor(
-            text=self.clip_labels, return_tensors="pt", padding=True
+            text=CLIP_PROMPTS, return_tensors="pt", padding=True
         )
         with torch.no_grad():
             self.text_features = self.clip_model.get_text_features(**text_inputs)
