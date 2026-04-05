@@ -6,9 +6,11 @@ import os
 from fastapi import FastAPI, UploadFile, File, Form
 from PIL import Image, ImageDraw
 from pydantic import BaseModel
+from prometheus_fastapi_instrumentator import Instrumentator
 from vectorizer import LocusVisualizer
 
 app = FastAPI()
+Instrumentator().instrument(app).expose(app)
 visualizer = LocusVisualizer()
 
 OVERRIDES_PATH = "/app/whitelist_overrides.json"

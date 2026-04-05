@@ -9,3 +9,4 @@ lxml
 pydantic
 requests
 mlflow
+prometheus-fastapi-instrumentator

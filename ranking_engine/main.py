@@ -2,9 +2,11 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
+from prometheus_fastapi_instrumentator import Instrumentator
 from ranker import LocusRanker
 
 app = FastAPI()
+Instrumentator().instrument(app).expose(app)
 ranker = LocusRanker()
 
 # Define the data format we expect to receive

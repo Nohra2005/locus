@@ -1,0 +1,128 @@
+{
+  "uid": "locus-api-monitoring",
+  "title": "Locus API Monitoring",
+  "tags": ["locus"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{job=\"gateway\"}[1m])",
+          "legendFormat": "gateway",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(http_requests_total{job=\"visual_engine\"}[1m])",
+          "legendFormat": "visual_engine",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(http_requests_total{job=\"ranking_engine\"}[1m])",
+          "legendFormat": "ranking_engine",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Response Time P95 (seconds)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"gateway\"}[1m]))",
+          "legendFormat": "gateway p95",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"visual_engine\"}[1m]))",
+          "legendFormat": "visual_engine p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"ranking_engine\"}[1m]))",
+          "legendFormat": "ranking_engine p95",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Error Rate (4xx + 5xx req/s)",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{job=\"gateway\", status=~\"4..|5..\"}[1m])",
+          "legendFormat": "gateway errors",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(http_requests_total{job=\"visual_engine\", status=~\"4..|5..\"}[1m])",
+          "legendFormat": "visual_engine errors",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(http_requests_total{job=\"ranking_engine\", status=~\"4..|5..\"}[1m])",
+          "legendFormat": "ranking_engine errors",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Average Response Time (seconds)",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(http_request_duration_seconds_sum{job=\"gateway\"}[1m]) / rate(http_request_duration_seconds_count{job=\"gateway\"}[1m])",
+          "legendFormat": "gateway avg",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(http_request_duration_seconds_sum{job=\"visual_engine\"}[1m]) / rate(http_request_duration_seconds_count{job=\"visual_engine\"}[1m])",
+          "legendFormat": "visual_engine avg",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(http_request_duration_seconds_sum{job=\"ranking_engine\"}[1m]) / rate(http_request_duration_seconds_count{job=\"ranking_engine\"}[1m])",
+          "legendFormat": "ranking_engine avg",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    }
+  ]
+}

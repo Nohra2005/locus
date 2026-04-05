@@ -12,11 +12,13 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 from pydantic import BaseModel
+from prometheus_fastapi_instrumentator import Instrumentator
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.models import Distance, PointStruct, VectorParams
 
 app = FastAPI()
+Instrumentator().instrument(app).expose(app)
 
 app.add_middleware(
     CORSMiddleware,

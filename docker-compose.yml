@@ -92,6 +92,33 @@ services:
     volumes:
       - mlflow_data:/mlflow
 
+  # ── 5. Prometheus ─────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - gateway
+      - visual_engine
+      - ranking_engine
+
+  # ── 6. Grafana ────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+
 volumes:
   qdrant_data:  # uncomment qdrant service block above to use local mode
   mlflow_data:
+  grafana_data:
