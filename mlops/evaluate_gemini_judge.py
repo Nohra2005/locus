@@ -70,8 +70,9 @@ MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
 GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY",      "")
 EXPERIMENT_NAME     = "locus_gemini_judge"
 TOP_K               = 5
-GEMINI_MODEL        = "gemini-2.0-flash"    # free tier: 15 req/min
-SLEEP_BETWEEN_CALLS = 4.5                  # seconds — stay under rate limit
+GEMINI_MODEL        = "gemini-2.0-flash-lite"  # free tier: 30 req/min (2x flash)
+SLEEP_BETWEEN_CALLS = 2.5                     # seconds — stay under rate limit
+MAX_RETRIES         = 3                        # retries on 429 rate-limit errors
 # ──────────────────────────────────────────────────────────────────────────────
 
 JUDGE_PROMPT = (
@@ -174,26 +175,37 @@ def judge_pair(model, query_pil, result_pil) -> float | None:
     """
     Ask Gemini to rate the visual similarity between a query and a result image.
     Returns a float in [0.0, 1.0], or None if the call fails.
+    Retries on 429 rate-limit errors with exponential backoff.
     """
-    try:
-        response = model.generate_content(
-            [query_pil, result_pil, JUDGE_PROMPT],
-            generation_config={"temperature": 0, "max_output_tokens": 8},
-        )
-        raw = response.text.strip()
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = model.generate_content(
+                [query_pil, result_pil, JUDGE_PROMPT],
+                generation_config={"temperature": 0, "max_output_tokens": 8},
+            )
+            raw = response.text.strip()
 
-        # Parse the integer out of the response (handles "8", "8/10", "Score: 8", etc.)
-        match = re.search(r"\b(\d+)\b", raw)
-        if match:
-            score_10 = int(match.group(1))
-            score_10 = max(0, min(10, score_10))   # clamp to [0, 10]
-            return round(score_10 / 10.0, 4)
-        p(f"            [warn] Could not parse Gemini response: '{raw}'")
-        return None
+            # Parse the integer out of the response (handles "8", "8/10", "Score: 8", etc.)
+            match = re.search(r"\b(\d+)\b", raw)
+            if match:
+                score_10 = int(match.group(1))
+                score_10 = max(0, min(10, score_10))   # clamp to [0, 10]
+                return round(score_10 / 10.0, 4)
+            p(f"            [warn] Could not parse Gemini response: '{raw}'")
+            return None
 
-    except Exception as e:
-        p(f"            [error] Gemini call failed: {e}")
-        return None
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "quota" in err_str.lower() or "rate" in err_str.lower():
+                wait = SLEEP_BETWEEN_CALLS * (2 ** attempt)  # exponential backoff
+                p(f"            [rate-limit] 429 received — waiting {wait:.0f}s (attempt {attempt + 1}/{MAX_RETRIES})")
+                time.sleep(wait)
+                continue
+            p(f"            [error] Gemini call failed: {e}")
+            return None
+
+    p(f"            [error] Gemini call failed after {MAX_RETRIES} retries (rate limit)")
+    return None
 
 
 # ── Dataset loader ────────────────────────────────────────────────────────────
@@ -409,7 +421,7 @@ def main():
     p()
     p(f"  Note: Each result image is sent to Gemini separately.")
     p(f"  Expected time: ~{len(dataset) * TOP_K * SLEEP_BETWEEN_CALLS / 60:.1f} minutes")
-    p("  (free tier rate limit: 15 req/min — sleeping {:.1f}s between calls)".format(SLEEP_BETWEEN_CALLS))
+    p("  (free tier rate limit: 30 req/min — sleeping {:.1f}s between calls)".format(SLEEP_BETWEEN_CALLS))
     p()
 
     run_name = input("  Run name (press Enter for auto-timestamp): ").strip() or None
