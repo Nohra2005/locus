@@ -44,15 +44,12 @@ queries_good      = Gauge("locus_gemini_queries_good",       "Queries with VSS@5
 queries_excellent = Gauge("locus_gemini_queries_excellent",  "Queries with VSS@5 >= 0.85")
 top1_avg          = Gauge("locus_gemini_avg_top1",           "Average Top-1 VSS score across all queries")
 
-# Score distribution buckets (0.1 increments)
-score_buckets = {
-    str(b): Gauge(
-        "locus_gemini_score_bucket",
-        "Count of individual result scores in this range",
-        ["le"],
-    )
-    for b in [0.2, 0.4, 0.6, 0.8, 1.0]
-}
+# Score distribution buckets (single Gauge, differentiated by 'le' label)
+score_bucket_gauge = Gauge(
+    "locus_gemini_score_bucket",
+    "Count of individual result scores in this range",
+    ["le"],
+)
 
 
 def refresh():
@@ -100,7 +97,7 @@ def refresh():
     # Score distribution buckets
     for threshold in [0.2, 0.4, 0.6, 0.8, 1.0]:
         count = sum(1 for s in all_scores if s <= threshold)
-        score_buckets[str(threshold)].labels(le=str(threshold)).set(count)
+        score_bucket_gauge.labels(le=str(threshold)).set(count)
 
     print(
         f"[exporter] Refreshed — {len(vss5_list)} queries, "
