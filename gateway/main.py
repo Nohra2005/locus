@@ -13,12 +13,36 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Gauge, Counter, Histogram
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.models import Distance, PointStruct, VectorParams
 
 app = FastAPI()
 Instrumentator().instrument(app).expose(app)
+
+# ── Custom Prometheus metrics ─────────────────────────────────────────────────
+
+# Qdrant collection sizes (refreshed every 60s by background task)
+locus_qdrant_items = Gauge(
+    "locus_qdrant_items_total",
+    "Number of points in each Qdrant collection",
+    ["collection"],
+)
+
+# Search events
+locus_searches = Counter(
+    "locus_searches_total",
+    "Total search requests by detected category",
+    ["category"],
+)
+
+# Feedback star ratings
+locus_feedback_stars = Counter(
+    "locus_feedback_stars_total",
+    "Feedback events by star rating and training signal",
+    ["stars", "signal"],
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,6 +67,23 @@ if QDRANT_URL:
 else:
     print(f"[QDRANT] Connecting to local: {QDRANT_HOST}:{QDRANT_PORT}")
     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+
+
+async def _refresh_qdrant_metrics():
+    """Background task: refresh Qdrant collection counts every 60s."""
+    while True:
+        for col in [COLLECTION_NAME, SKIPPED_COLLECTION, FEEDBACK_COLLECTION]:
+            try:
+                info = client.get_collection(col)
+                locus_qdrant_items.labels(collection=col).set(info.points_count or 0)
+            except Exception as e:
+                print(f"[METRICS] Could not refresh count for {col}: {e}")
+        await asyncio.sleep(60)
+
+
+@app.on_event("startup")
+async def startup_metrics():
+    asyncio.create_task(_refresh_qdrant_metrics())
 
 
 @app.on_event("startup")
@@ -229,6 +270,7 @@ async def receive_feedback(req: FeedbackRequest):
     else:
         training_signal = "negative"
         weight          = 0.4 + (2 - req.rating) * 0.6   # 2→0.4, 1→1.0
+    locus_feedback_stars.labels(stars=str(req.rating), signal=training_signal).inc()
 
     try:
         client.upsert(
@@ -502,6 +544,7 @@ async def search_items(
     detected_category   = vis_data.get("category")
     category_confidence = vis_data.get("category_confidence", {})
     processed_image     = vis_data.get("debug_image")
+    locus_searches.labels(category=detected_category or "unknown").inc()
 
     mismatch_warning = None
     if search_label and detected_category and search_label != detected_category:

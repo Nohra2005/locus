@@ -40,6 +40,7 @@ Requirements:
 """
 
 import base64
+import hashlib
 import io
 import json
 import os
@@ -70,8 +71,10 @@ MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
 GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY",      "")
 EXPERIMENT_NAME     = "locus_gemini_judge"
 TOP_K               = 5
-GEMINI_MODEL        = "gemini-2.0-flash"    # free tier: 15 req/min
-SLEEP_BETWEEN_CALLS = 4.5                  # seconds — stay under rate limit
+GEMINI_MODEL        = "gemini-2.5-flash"        # updated: 2.0-flash-lite deprecated June 2026
+SLEEP_BETWEEN_CALLS = 4.5                      # seconds — safe under 15 RPM free-tier limit
+MAX_RETRIES         = 4                        # retries on 429 rate-limit errors
+VSS_CACHE_PATH      = os.getenv("VSS_CACHE_PATH", "vss_cache.json")
 # ──────────────────────────────────────────────────────────────────────────────
 
 JUDGE_PROMPT = (
@@ -79,21 +82,84 @@ JUDGE_PROMPT = (
     "I will show you two fashion product images.\n"
     "The FIRST image is the QUERY (what the shopper is looking for).\n"
     "The SECOND image is a SEARCH RESULT returned by the system.\n\n"
-    "Rate how visually similar the search result is to the query "
-    "on a scale from 0 to 10:\n"
-    "  10 = identical item (same colour, cut, style, fabric)\n"
-    "   8 = very similar (minor colour or detail differences)\n"
-    "   6 = similar category and style, noticeable differences\n"
-    "   4 = same broad category but clearly different style\n"
-    "   2 = loosely related (e.g. both are tops, but very different)\n"
-    "   0 = completely unrelated\n\n"
-    "Reply with a SINGLE integer from 0 to 10. Nothing else."
+    "Rate how visually similar the search result is to the query.\n"
+    "Give a score from 0.00 to 1.00 using exactly two decimal places.\n\n"
+    "Anchor points for calibration:\n"
+    "  1.00 = identical item (same colour, cut, style, fabric)\n"
+    "  0.80 = very similar — minor colour or detail difference\n"
+    "  0.60 = similar style and category, but noticeable differences\n"
+    "  0.40 = same broad category, clearly different cut or style\n"
+    "  0.20 = loosely related (e.g. both are tops but very different)\n"
+    "  0.00 = completely unrelated\n\n"
+    "You MUST interpolate between these anchors to use the full range.\n"
+    "Examples of precise scores: 0.73, 0.55, 0.91, 0.38, 0.67\n\n"
+    "Reply with ONLY a decimal number between 0.00 and 1.00. Nothing else."
 )
 
 
 def p(msg=""):
     """Print with immediate flush so PowerShell shows output in real time."""
     print(msg, flush=True)
+
+
+# ── VSS Cache ─────────────────────────────────────────────────────────────────
+
+class VSSCache:
+    """
+    Persistent on-disk cache for VSS scores.
+
+    Stores every scored (query, result) pair in a local JSON file so Gemini
+    is NEVER called twice for the same pair — even across separate eval runs.
+
+    Key  : SHA-256( query_image_url + "|" + result_image_url )[:24]
+    Value: { vss, model, ts }
+    """
+
+    def __init__(self, path: str = "vss_cache.json"):
+        self._path   = path
+        self._data   = {}
+        self._hits   = 0
+        self._misses = 0
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    self._data = json.load(f)
+            except Exception as e:
+                p(f"  [warn] Could not load VSS cache ({e}). Starting fresh.")
+
+    def _key(self, query_url: str, result_url: str) -> str:
+        return hashlib.sha256(
+            f"{query_url}|{result_url}".encode("utf-8")
+        ).hexdigest()[:24]
+
+    def lookup(self, query_url: str, result_url: str):
+        """Return cached vss score (float) if pair already scored, else None."""
+        entry = self._data.get(self._key(query_url, result_url))
+        if entry is None:
+            self._misses += 1
+            return None
+        self._hits += 1
+        return entry["vss"]
+
+    def store(self, query_url: str, result_url: str, vss: float, model: str):
+        """Persist a freshly-scored pair to disk immediately."""
+        self._data[self._key(query_url, result_url)] = {
+            "vss":   round(vss, 4),
+            "model": model,
+            "ts":    time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+        try:
+            with open(self._path, "w") as f:
+                json.dump(self._data, f, indent=2)
+        except Exception as e:
+            p(f"  [warn] Could not save VSS cache: {e}")
+
+    @property
+    def size(self)  -> int: return len(self._data)
+    @property
+    def hits(self)  -> int: return self._hits
+    @property
+    def misses(self)-> int: return self._misses
 
 
 # ── Gemini setup ──────────────────────────────────────────────────────────────
@@ -110,14 +176,13 @@ def init_gemini():
         sys.exit(1)
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel(GEMINI_MODEL)
-        return model, genai
+        from google import genai
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        return client
     except ImportError:
         p()
-        p("  [error] google-generativeai is not installed.")
-        p("  Run:  pip install google-generativeai")
+        p("  [error] google-genai is not installed.")
+        p("  Run:  pip install google-genai")
         p()
         sys.exit(1)
 
@@ -142,12 +207,6 @@ def get_image_bytes(url: str) -> bytes:
         return resp.read()
 
 
-def bytes_to_pil(image_bytes: bytes):
-    """Convert raw bytes to a PIL Image (required by google-generativeai)."""
-    from PIL import Image
-    return Image.open(io.BytesIO(image_bytes))
-
-
 # ── Search helper ─────────────────────────────────────────────────────────────
 
 def run_search(image_bytes: bytes) -> list:
@@ -170,30 +229,82 @@ def run_search(image_bytes: bytes) -> list:
 
 # ── Gemini judge ──────────────────────────────────────────────────────────────
 
-def judge_pair(model, query_pil, result_pil) -> float | None:
+def judge_pair(client, query_bytes: bytes, result_bytes: bytes) -> float | None:
     """
     Ask Gemini to rate the visual similarity between a query and a result image.
     Returns a float in [0.0, 1.0], or None if the call fails.
+    Retries automatically on 429 rate-limit errors using the wait time from the error.
     """
-    try:
-        response = model.generate_content(
-            [query_pil, result_pil, JUDGE_PROMPT],
-            generation_config={"temperature": 0, "max_output_tokens": 8},
-        )
-        raw = response.text.strip()
+    from google.genai import types
 
-        # Parse the integer out of the response (handles "8", "8/10", "Score: 8", etc.)
-        match = re.search(r"\b(\d+)\b", raw)
-        if match:
-            score_10 = int(match.group(1))
-            score_10 = max(0, min(10, score_10))   # clamp to [0, 10]
-            return round(score_10 / 10.0, 4)
-        p(f"            [warn] Could not parse Gemini response: '{raw}'")
-        return None
+    contents = [
+        types.Part.from_bytes(data=query_bytes,  mime_type="image/jpeg"),
+        types.Part.from_bytes(data=result_bytes, mime_type="image/jpeg"),
+        JUDGE_PROMPT,
+    ]
 
-    except Exception as e:
-        p(f"            [error] Gemini call failed: {e}")
-        return None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    temperature=0,
+                    max_output_tokens=32,                              # enough for "0.73" or "1.00"
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),  # disable reasoning — we just need a digit
+                ),
+            )
+
+            # response.text is None when safety filters block the output
+            if response.text is None:
+                reason = "unknown"
+                try:
+                    reason = str(response.candidates[0].finish_reason)
+                except Exception:
+                    pass
+                p(f"            [warn] Gemini returned no text (blocked — reason: {reason}). Skipping pair.")
+                return None
+
+            raw = response.text.strip()
+
+            # Parse a float in [0, 1] — handles "0.73", "0.7", "1.0", "1"
+            # Fallback: if Gemini ignores the instruction and returns an integer
+            #   (e.g. "8"), treat it as a 0-10 score and divide by 10.
+            match = re.search(r"\b(\d+(?:\.\d+)?)\b", raw)
+            if match:
+                val = float(match.group(1))
+                if val > 1.0:
+                    # Gemini returned an integer scale — normalise gracefully
+                    val = val / 10.0 if val <= 10.0 else val / 100.0
+                score = max(0.0, min(1.0, val))
+                return round(score, 2)
+            p(f"            [warn] Could not parse Gemini response: '{raw}'")
+            return None
+
+        except Exception as e:
+            err = str(e)
+            is_rate_limit  = "429" in err
+            is_transient   = "503" in err or "500" in err or "UNAVAILABLE" in err.upper()
+
+            if is_rate_limit:
+                # 429: respect the retry-after header if present, else wait 60s
+                wait_match = re.search(r"retry in (\d+(?:\.\d+)?)s", err, re.IGNORECASE)
+                wait = float(wait_match.group(1)) + 2 if wait_match else 60.0
+                p(f"            [rate-limit] Attempt {attempt}/{MAX_RETRIES} — waiting {wait:.0f}s ...")
+                time.sleep(wait)
+            elif is_transient:
+                # 503 / 500: server overloaded — exponential backoff then retry
+                wait = (2 ** attempt) * 5.0   # 10s, 20s, 40s ...
+                p(f"            [transient-error] Attempt {attempt}/{MAX_RETRIES} — {err[:80]} — retrying in {wait:.0f}s ...")
+                time.sleep(wait)
+            else:
+                # Permanent error (bad request, auth failure, etc.) — no point retrying
+                p(f"            [error] Gemini call failed: {e}")
+                return None
+
+            if attempt == MAX_RETRIES:
+                p(f"            [error] Giving up after {MAX_RETRIES} attempts.")
+                return None
 
 
 # ── Dataset loader ────────────────────────────────────────────────────────────
@@ -213,7 +324,11 @@ def load_golden_dataset(path: str) -> list:
 
 # ── Main evaluation loop ──────────────────────────────────────────────────────
 
-def run_evaluation(model, dataset: list, run_name: str = None) -> dict:
+def run_evaluation(client, dataset: list, run_name: str = None) -> dict:
+
+    # -- Initialise VSS cache --------------------------------------------------
+    cache = VSSCache(VSS_CACHE_PATH)
+    p(f"  VSS cache: {cache.size} entries loaded from '{VSS_CACHE_PATH}'")
 
     p("  Connecting to MLflow ...")
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
@@ -224,12 +339,14 @@ def run_evaluation(model, dataset: list, run_name: str = None) -> dict:
         p(f"\n  MLflow run ID : {run.info.run_id}")
         p(f"  Experiment    : {EXPERIMENT_NAME}\n")
 
-        mlflow.log_param("num_queries",    len(dataset))
-        mlflow.log_param("top_k",          TOP_K)
-        mlflow.log_param("gateway_url",    GATEWAY_URL)
-        mlflow.log_param("gemini_model",   GEMINI_MODEL)
-        mlflow.log_param("golden_dataset", GOLDEN_DATASET_PATH)
-        mlflow.log_param("metric",         "gemini_visual_similarity")
+        mlflow.log_param("num_queries",       len(dataset))
+        mlflow.log_param("top_k",             TOP_K)
+        mlflow.log_param("gateway_url",       GATEWAY_URL)
+        mlflow.log_param("gemini_model",      GEMINI_MODEL)
+        mlflow.log_param("golden_dataset",    GOLDEN_DATASET_PATH)
+        mlflow.log_param("metric",            "gemini_visual_similarity")
+        mlflow.log_param("vss_cache_path",    VSS_CACHE_PATH)
+        mlflow.log_param("vss_cache_preloaded", cache.size)
         mlflow.log_artifact(GOLDEN_DATASET_PATH, artifact_path="golden_dataset")
 
         all_vss5      = []
@@ -247,7 +364,6 @@ def run_evaluation(model, dataset: list, run_name: str = None) -> dict:
             try:
                 # ── 1. Fetch query image ───────────────────────────────────
                 query_bytes = get_image_bytes(img_url)
-                query_pil   = bytes_to_pil(query_bytes)
 
                 # ── 2. Run search ──────────────────────────────────────────
                 p("            [search] Running search ...")
@@ -273,19 +389,28 @@ def run_evaluation(model, dataset: list, run_name: str = None) -> dict:
                         p(f"            [{rank}] [warn] No image_url in result — skipping")
                         continue
 
+                    # -- Cache lookup: skip Gemini if pair already scored ------
+                    cached_score = cache.lookup(img_url, result_img_url)
+                    if cached_score is not None:
+                        scores.append(cached_score)
+                        bar = "#" * int(cached_score * 20) + "." * (20 - int(cached_score * 20))
+                        p(f"            [{rank}] VSS={cached_score:.2f}  [{bar}]  [CACHE HIT]")
+                        continue   # no API call, no rate-limit sleep needed
+
+                    # -- Cache miss: fetch image and call Gemini ---------------
                     try:
                         result_bytes = get_image_bytes(result_img_url)
-                        result_pil   = bytes_to_pil(result_bytes)
                     except Exception as e:
                         p(f"            [{rank}] [warn] Could not fetch result image: {e}")
                         continue
 
                     p(f"            [{rank}] Asking Gemini ...")
-                    score = judge_pair(model, query_pil, result_pil)
-                    time.sleep(SLEEP_BETWEEN_CALLS)   # respect free-tier rate limit
+                    score = judge_pair(client, query_bytes, result_bytes)
+                    time.sleep(SLEEP_BETWEEN_CALLS)   # respect free-tier rate limit (real calls only)
 
                     if score is not None:
                         scores.append(score)
+                        cache.store(img_url, result_img_url, score, GEMINI_MODEL)
                         bar = "#" * int(score * 20) + "." * (20 - int(score * 20))
                         result_name = result.get("name", "")[:40]
                         p(f"            [{rank}] VSS={score:.2f}  [{bar}]  {result_name}")
@@ -344,6 +469,11 @@ def run_evaluation(model, dataset: list, run_name: str = None) -> dict:
             "n_failed":       len(dataset) - n_ok,
         }
         mlflow.log_metrics(headline)
+        mlflow.log_metrics({
+            "cache/hits":   cache.hits,
+            "cache/misses": cache.misses,
+            "cache/size":   cache.size,
+        })
 
         results_path = "gemini_judge_results.json"
         with open(results_path, "w") as f:
@@ -372,6 +502,11 @@ def run_evaluation(model, dataset: list, run_name: str = None) -> dict:
         p("     < 0.50  Poor      — results don't match visually")
         p()
         p("  Run this before and after each model change to track improvement.")
+        p()
+        p(f"  VSS cache: {cache.size} total entries")
+        p(f"    Cache hits  (free) : {cache.hits}")
+        p(f"    Cache misses (API) : {cache.misses}")
+        p()
         p("  View results in MLflow UI:")
         p("    mlflow ui --backend-store-uri sqlite:///mlflow.db")
         p("    Then open: http://localhost:5000")
@@ -395,7 +530,7 @@ def main():
     p(f"  Top-K          : {TOP_K}")
     p()
 
-    model, _ = init_gemini()
+    client = init_gemini()
     p("  [ok] Gemini client ready.")
     p()
 
@@ -418,7 +553,7 @@ def main():
         p("  Aborted.")
         return
 
-    headline = run_evaluation(model, dataset, run_name)
+    headline = run_evaluation(client, dataset, run_name)
 
     if headline:
         p()

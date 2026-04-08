@@ -97,7 +97,24 @@ services:
     volumes:
       - mlflow_data:/mlflow
 
-  # ── 6. Prometheus ─────────────────────────────────────────────────
+  # ── 6. MLops Metrics Exporter ────────────────────────────────────
+  mlops_exporter:
+    image: python:3.11-slim
+    working_dir: /mlops
+    command: >
+      sh -c "pip install prometheus_client --quiet && python metrics_exporter.py"
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./mlops:/mlops
+    environment:
+      - GEMINI_RESULTS_PATH=/mlops/gemini_judge_results.json
+      - VSS_CACHE_PATH=/mlops/vss_cache.json
+      - METRICS_PORT=8003
+      - REFRESH_SECS=30
+    restart: unless-stopped
+
+  # ── 7. Prometheus ─────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
     ports:
@@ -107,6 +124,7 @@ services:
     depends_on:
       - gateway
       - visual_engine
+      - mlops_exporter
 
   # ── 7. Grafana ────────────────────────────────────────────────────
   grafana:

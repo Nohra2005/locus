@@ -1,0 +1,391 @@
+[
+  {
+    "label": "wide leg beige linen trousers",
+    "vss5": 0.76,
+    "top1_score": 0.8,
+    "scores": [
+      0.8,
+      0.8,
+      0.8,
+      0.8,
+      0.6
+    ],
+    "latency_ms": 1607.4488162994385
+  },
+  {
+    "label": "black high waist straight jeans",
+    "vss5": 0.8,
+    "top1_score": 1.0,
+    "scores": [
+      1.0,
+      0.8,
+      0.8,
+      0.8,
+      0.6
+    ],
+    "latency_ms": 417.5715446472168
+  },
+  {
+    "label": "brown corduroy wide leg pants",
+    "vss5": 0.6599999999999999,
+    "top1_score": 1.0,
+    "scores": [
+      1.0,
+      0.6,
+      0.8,
+      0.45,
+      0.45
+    ],
+    "latency_ms": 458.55140686035156
+  },
+  {
+    "label": "white ribbed halterneck crop top",
+    "vss5": 0.834,
+    "top1_score": 0.65,
+    "scores": [
+      0.65,
+      1.0,
+      0.95,
+      0.65,
+      0.92
+    ],
+    "latency_ms": 789.5417213439941
+  },
+  {
+    "label": "black sleeveless fitted tank top",
+    "vss5": 0.6900000000000001,
+    "top1_score": 0.92,
+    "scores": [
+      0.92,
+      0.45,
+      0.78,
+      0.65,
+      0.65
+    ],
+    "latency_ms": 739.5317554473877
+  },
+  {
+    "label": "blue striped oversized shirt",
+    "vss5": 0.8099999999999999,
+    "top1_score": 0.92,
+    "scores": [
+      0.92,
+      0.92,
+      0.65,
+      0.78,
+      0.78
+    ],
+    "latency_ms": 766.1216259002686
+  },
+  {
+    "label": "cream chunky knit cardigan",
+    "vss5": 0.646,
+    "top1_score": 1.0,
+    "scores": [
+      1.0,
+      0.68,
+      0.65,
+      0.65,
+      0.25
+    ],
+    "latency_ms": 728.4348011016846
+  },
+  {
+    "label": "Grey oversized hoodie",
+    "vss5": 0.818,
+    "top1_score": 1.0,
+    "scores": [
+      1.0,
+      0.78,
+      0.85,
+      0.78,
+      0.68
+    ],
+    "latency_ms": 743.4585094451904
+  },
+  {
+    "label": "Camel longline wool coat",
+    "vss5": 0.41600000000000004,
+    "top1_score": 0.68,
+    "scores": [
+      0.68,
+      0.65,
+      0.15,
+      0.25,
+      0.35
+    ],
+    "latency_ms": 727.6465892791748
+  },
+  {
+    "label": "black leather biker jacket",
+    "vss5": 0.656,
+    "top1_score": 0.78,
+    "scores": [
+      0.78,
+      0.78,
+      0.45,
+      0.85,
+      0.42
+    ],
+    "latency_ms": 799.7016906738281
+  },
+  {
+    "label": "beige padded puffer jacket",
+    "vss5": 0.5660000000000001,
+    "top1_score": 1.0,
+    "scores": [
+      1.0,
+      0.68,
+      0.45,
+      0.45,
+      0.25
+    ],
+    "latency_ms": 729.297399520874
+  },
+  {
+    "label": "floral midi wrap dress",
+    "vss5": 0.68,
+    "top1_score": 0.68,
+    "scores": [
+      0.68,
+      0.68,
+      0.68,
+      0.68,
+      0.68
+    ],
+    "latency_ms": 710.0300788879395
+  },
+  {
+    "label": "black satin slip dress",
+    "vss5": 0.53,
+    "top1_score": 0.68,
+    "scores": [
+      0.68,
+      0.65,
+      0.32,
+      0.65,
+      0.35
+    ],
+    "latency_ms": 721.9913005828857
+  },
+  {
+    "label": "white lace mini dress",
+    "vss5": 0.542,
+    "top1_score": 0.65,
+    "scores": [
+      0.65,
+      0.68,
+      0.45,
+      0.58,
+      0.35
+    ],
+    "latency_ms": 738.2211685180664
+  },
+  {
+    "label": "black high waisted leggings",
+    "vss5": 0.712,
+    "top1_score": 0.65,
+    "scores": [
+      0.65,
+      0.65,
+      0.68,
+      0.9,
+      0.68
+    ],
+    "latency_ms": 723.4241962432861
+  },
+  {
+    "label": "brown suede ankle boots",
+    "vss5": 0.726,
+    "top1_score": 1.0,
+    "scores": [
+      1.0,
+      0.68,
+      0.68,
+      0.82,
+      0.45
+    ],
+    "latency_ms": 805.4852485656738
+  },
+  {
+    "label": "white leather chunky sneakers",
+    "vss5": 0.406,
+    "top1_score": 0.45,
+    "scores": [
+      0.45,
+      0.45,
+      0.68,
+      0.45,
+      0.0
+    ],
+    "latency_ms": 807.8403472900391
+  },
+  {
+    "label": "black strappy heel sandals",
+    "vss5": 0.382,
+    "top1_score": 0.68,
+    "scores": [
+      0.68,
+      0.05,
+      0.45,
+      0.68,
+      0.05
+    ],
+    "latency_ms": 711.7109298706055
+  },
+  {
+    "label": "tan lather shoulder bag",
+    "vss5": 0.5,
+    "top1_score": 1.0,
+    "scores": [
+      1.0,
+      0.45,
+      0.45,
+      0.15,
+      0.45
+    ],
+    "latency_ms": 679.530143737793
+  },
+  {
+    "label": "black quilted crossbody bag",
+    "vss5": 0.532,
+    "top1_score": 0.68,
+    "scores": [
+      0.68,
+      0.45,
+      0.4,
+      0.45,
+      0.68
+    ],
+    "latency_ms": 743.5770034790039
+  },
+  {
+    "label": "denim mini skirt",
+    "vss5": 0.794,
+    "top1_score": 0.85,
+    "scores": [
+      0.85,
+      0.78,
+      0.78,
+      0.78,
+      0.78
+    ],
+    "latency_ms": 786.4806652069092
+  },
+  {
+    "label": "brown pleated midi skirt",
+    "vss5": 0.45,
+    "top1_score": 0.45,
+    "scores": [
+      0.45,
+      0.45,
+      0.45,
+      0.45,
+      0.45
+    ],
+    "latency_ms": 740.5083179473877
+  },
+  {
+    "label": "khaki cargo shorts",
+    "vss5": 0.76,
+    "top1_score": 1.0,
+    "scores": [
+      1.0,
+      0.68,
+      0.68,
+      0.68
+    ],
+    "latency_ms": 753.1702518463135
+  },
+  {
+    "label": "light blue denim shorts",
+    "vss5": 0.812,
+    "top1_score": 1.0,
+    "scores": [
+      1.0,
+      0.65,
+      0.85,
+      0.78,
+      0.78
+    ],
+    "latency_ms": 745.7022666931152
+  },
+  {
+    "label": "black sports bra with straps",
+    "vss5": 0.742,
+    "top1_score": 0.85,
+    "scores": [
+      0.85,
+      0.78,
+      0.78,
+      0.65,
+      0.65
+    ],
+    "latency_ms": 817.6956176757812
+  },
+  {
+    "label": "beige wide brim straw hat",
+    "vss5": 0.5980000000000001,
+    "top1_score": 0.65,
+    "scores": [
+      0.65,
+      0.62,
+      0.65,
+      0.45,
+      0.62
+    ],
+    "latency_ms": 934.2100620269775
+  },
+  {
+    "label": "black baseball cap",
+    "vss5": 0.41,
+    "top1_score": 0.65,
+    "scores": [
+      0.65,
+      0.45,
+      0.45,
+      0.25,
+      0.25
+    ],
+    "latency_ms": 941.0734176635742
+  },
+  {
+    "label": "olive green utility jumpsuit",
+    "vss5": 0.674,
+    "top1_score": 0.68,
+    "scores": [
+      0.68,
+      0.65,
+      0.68,
+      0.68,
+      0.68
+    ],
+    "latency_ms": 721.8358516693115
+  },
+  {
+    "label": "red ribbed knit dress",
+    "vss5": 0.542,
+    "top1_score": 0.68,
+    "scores": [
+      0.68,
+      0.68,
+      0.65,
+      0.45,
+      0.25
+    ],
+    "latency_ms": 889.3222808837891
+  },
+  {
+    "label": "navy blue blazer",
+    "vss5": 0.6020000000000001,
+    "top1_score": 1.0,
+    "scores": [
+      1.0,
+      0.68,
+      0.68,
+      0.45,
+      0.2
+    ],
+    "latency_ms": 769.9604034423828
+  }
+]

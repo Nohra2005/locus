@@ -1,0 +1,747 @@
+{
+  "5a960420de41d4b0a61c6e9b": {
+    "vss": 0.8,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T17:54:45"
+  },
+  "2b1ffcf809284c00f9b2cba3": {
+    "vss": 0.8,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T17:59:04"
+  },
+  "f81b28b483610cd5c0880b52": {
+    "vss": 0.8,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T18:01:37"
+  },
+  "503467c519fff5bc55c3eb27": {
+    "vss": 0.8,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T18:01:44"
+  },
+  "d6352054fb55ee6bf8a1b1ce": {
+    "vss": 1.0,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T18:01:58"
+  },
+  "1d34ed0be32de7f0bf9c2559": {
+    "vss": 0.8,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T18:02:18"
+  },
+  "86fa9cfd74dd9e6bea3326f4": {
+    "vss": 0.8,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T18:02:25"
+  },
+  "842a88640eb31b378bd0e6c9": {
+    "vss": 0.6,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:45:52"
+  },
+  "253ee9c9ccc8e1404109bac2": {
+    "vss": 0.8,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:46:00"
+  },
+  "5a2cb9d676ece0322f943779": {
+    "vss": 0.6,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:46:08"
+  },
+  "31e11c659aa2e410fbe1b0f3": {
+    "vss": 1.0,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:46:19"
+  },
+  "f73d0d339a4544f2b3da0fd4": {
+    "vss": 0.6,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:46:26"
+  },
+  "44e4fd613494f5ba633aef17": {
+    "vss": 0.8,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:46:32"
+  },
+  "4e5024ad0130f5705afedb05": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:54:30"
+  },
+  "2850b8e4acd4316ace143a4b": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:54:36"
+  },
+  "6f2500943fb95718e5640311": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:54:45"
+  },
+  "b86e0920317dbac913703516": {
+    "vss": 1.0,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:54:56"
+  },
+  "ef185b4a55131f0c36d92247": {
+    "vss": 0.95,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:55:03"
+  },
+  "5f3bf58bd7eced19d4b097d3": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:55:09"
+  },
+  "40c6745488666e584203a149": {
+    "vss": 0.92,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:55:15"
+  },
+  "badce59e074ca54034cacaa5": {
+    "vss": 0.92,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:55:23"
+  },
+  "df528b12804f29dcb3a82d59": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:55:55"
+  },
+  "93d701edb8545cbb16133688": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:56:03"
+  },
+  "8a2e409354a68f3c8f8dc3c2": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:56:10"
+  },
+  "1d3cc73e93faf399535d51ca": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:56:16"
+  },
+  "cedc378e43c324b421728583": {
+    "vss": 0.92,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:56:24"
+  },
+  "8816d5d2e6bf872465ce54c7": {
+    "vss": 0.92,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:56:31"
+  },
+  "36d97fc2259404a96230e4e2": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:56:37"
+  },
+  "69b092f4f49835967b2b1fc9": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:56:44"
+  },
+  "a3ae8a014a0ee666545d5b17": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:56:53"
+  },
+  "b1e8a55735ff7022cab4c9f0": {
+    "vss": 1.0,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:57:01"
+  },
+  "fea08ab6925668d7818d7c02": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:57:08"
+  },
+  "e83de7f700b8ffdcae9e4aae": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:57:14"
+  },
+  "3dc6b88667c8513ac0b33a24": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:57:21"
+  },
+  "7d2cecc7bf4fb3bffa926311": {
+    "vss": 0.25,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:57:27"
+  },
+  "1bb9dfff6d29826d2d7f5adb": {
+    "vss": 1.0,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:57:36"
+  },
+  "5dfd9d311fa98e2b72bff48f": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:57:42"
+  },
+  "0d83b3a1b8af38b1f991634c": {
+    "vss": 0.85,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:57:48"
+  },
+  "8fec4a62f10a67d43d638a9d": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:58:04"
+  },
+  "14fbdd371033202d01799426": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:58:23"
+  },
+  "395d03ab5df1f65326cd5fa2": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:58:31"
+  },
+  "48bf6f84521085911e7f89ae": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:58:37"
+  },
+  "24b8eb9f5579c676ab134c66": {
+    "vss": 0.15,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:58:45"
+  },
+  "3ed55804cf3e37acba44e017": {
+    "vss": 0.25,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:58:52"
+  },
+  "2ee8580d8b91ea1e47b573bf": {
+    "vss": 0.35,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:58:59"
+  },
+  "4ebf5b638a0a3fc18e8aa169": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:59:10"
+  },
+  "0763c243a0d753521fdc04d6": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:59:17"
+  },
+  "dc4a8c91fa4ea8f03c491063": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:59:25"
+  },
+  "a7cdc6719388367e57f48b0e": {
+    "vss": 0.85,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:59:34"
+  },
+  "14dc484369ee4a7c75717e55": {
+    "vss": 0.42,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:59:45"
+  },
+  "ae9b78d9f50ae2bf09f24524": {
+    "vss": 1.0,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:59:52"
+  },
+  "ebc8919eca5a514e78511032": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T21:59:59"
+  },
+  "e34d03c6a54db3d84a75a399": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:00:05"
+  },
+  "1543d4e216a1cd428293ee17": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:00:11"
+  },
+  "d2dd9c2322ca5db01103839f": {
+    "vss": 0.25,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:00:18"
+  },
+  "0cfe271a4a5f0f9230ab1b4a": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:00:26"
+  },
+  "65eba19c68b07d93214313fa": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:00:32"
+  },
+  "0df581467e49f5175caa922f": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:00:39"
+  },
+  "308af1399e9efba92491ecfb": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:00:46"
+  },
+  "4c181831a0c7103420745333": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:00:52"
+  },
+  "05f5d6669f7137e905738e0d": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:01:00"
+  },
+  "de7c2b5c8d00e1641933716a": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:01:07"
+  },
+  "1be25e4ba94039779afd8a33": {
+    "vss": 0.32,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:01:15"
+  },
+  "c363f8b501cc9d370954cb75": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:01:21"
+  },
+  "bc98c49814cded5080bd08c6": {
+    "vss": 0.35,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:01:43"
+  },
+  "c28bbecc7ff24f33354b937e": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:01:51"
+  },
+  "1274d8fd0b2586ee08997803": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:01:57"
+  },
+  "80da4768351bf31575e5f6ec": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:02:03"
+  },
+  "cb678c26127d77a6c1d52111": {
+    "vss": 0.58,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:02:10"
+  },
+  "6229c38e8049161eeb7ac42a": {
+    "vss": 0.35,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:02:17"
+  },
+  "18877ee330767bb0b3b581f2": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:02:25"
+  },
+  "8f39877a0c79701d35410ce8": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:02:31"
+  },
+  "c16edbbd08d265e8b037a165": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:02:39"
+  },
+  "d39195ad83c97b36bef28b1a": {
+    "vss": 0.9,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:02:45"
+  },
+  "98b455b796456d07f311e96d": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:02:52"
+  },
+  "064ca07c7a75d710824cdb67": {
+    "vss": 1.0,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:02:59"
+  },
+  "653b4584ed65aecd91903174": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:03:07"
+  },
+  "a78dee85943b640379c8934d": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:03:13"
+  },
+  "7232fa8ae0af24486e03aa3e": {
+    "vss": 0.82,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:03:19"
+  },
+  "f7b217ff6b22edcd241ead8e": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:03:25"
+  },
+  "fe85fa3c77eb8b5e009e538e": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:03:34"
+  },
+  "1d28f3b90fc55b4e955f0e9c": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:03:43"
+  },
+  "c5eb51a3d52c8ee4b2ce9dd0": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:03:50"
+  },
+  "d567693e55c95c14ad11a960": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:03:57"
+  },
+  "c0b5356ec85bd5aaa32ed501": {
+    "vss": 0.0,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:04:05"
+  },
+  "f3a8edd8905459fe8625e247": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:04:13"
+  },
+  "04529a46bd44e1b9f834f784": {
+    "vss": 0.05,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:04:20"
+  },
+  "cba87e987a2842b8c10941a5": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:04:26"
+  },
+  "ee7f25fec8b4bb093a99a544": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:04:32"
+  },
+  "9019bc92628283f6e20f7606": {
+    "vss": 0.05,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:04:39"
+  },
+  "554f533230e1d1df6f9ed347": {
+    "vss": 1.0,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:04:47"
+  },
+  "ac360f7dae61c08b536e89fa": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:04:53"
+  },
+  "24dde754a22cbe2c3fdf0eda": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:05:00"
+  },
+  "fdae16b48cac004f3b97bac5": {
+    "vss": 0.15,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:05:07"
+  },
+  "803a92ba6e8972000be560cc": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:05:14"
+  },
+  "74a4a582d7cf8ff0ae7cd807": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:05:21"
+  },
+  "3d085fa9f4fbf13a46647e67": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:05:27"
+  },
+  "d72b68aa8b48d1516afb9c75": {
+    "vss": 0.4,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:05:37"
+  },
+  "2ba6b3e7472bdb301b6a3762": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:05:43"
+  },
+  "2ed079841af2411ad291f6f7": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:05:49"
+  },
+  "3af4371ee8ae94f504fc226f": {
+    "vss": 0.85,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:05:57"
+  },
+  "98f8ad9988d7f02c3df1163b": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:06:03"
+  },
+  "49beff9c67bede00c438d9d1": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:06:09"
+  },
+  "836fe28467f2a1b65c2b0244": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:06:16"
+  },
+  "3bae689e6cf34e09d5c00c2d": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:06:22"
+  },
+  "231c0255cdb8024a60cdf187": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:06:30"
+  },
+  "90f77c0289228688c3b722e9": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:06:36"
+  },
+  "f4b5ce1d67d5feb955e5ad59": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:06:42"
+  },
+  "47de00af2c8e62839f5ea2de": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:06:49"
+  },
+  "a6f82cbde12b7d7a4c71ee29": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:06:56"
+  },
+  "d9d26130045dd38e73906ae3": {
+    "vss": 1.0,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:07:03"
+  },
+  "cf67d98857f57f541def54cb": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:07:10"
+  },
+  "4184822c0e7879161001561c": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:07:16"
+  },
+  "dfe2281c1f7650c8c6009d97": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:07:22"
+  },
+  "97f1b0238f4fc59163febb54": {
+    "vss": 1.0,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:08:25"
+  },
+  "c1c31c755ef47fde224e17fb": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:08:32"
+  },
+  "e34f4cbc94c5bb470ecc1e68": {
+    "vss": 0.85,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:08:38"
+  },
+  "29d0e8f39b434d809d476de1": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:08:44"
+  },
+  "26ce140aff74114a038f3dfe": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:08:51"
+  },
+  "df24080d01937d207c05ec56": {
+    "vss": 0.85,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:09:00"
+  },
+  "ce7cc58bcdeb70a2529c3614": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:09:23"
+  },
+  "7f141b0647345e669ceb4f52": {
+    "vss": 0.78,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:09:29"
+  },
+  "e078df7c2caa2124ffaa0c50": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:09:35"
+  },
+  "7fdcc950c6828f6c0217db68": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:09:51"
+  },
+  "c56437e6d7686a9e2779b3bf": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:10:00"
+  },
+  "dea1185646264188f19d8e9b": {
+    "vss": 0.62,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:10:07"
+  },
+  "50e8880fe03fcf740f41d216": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:10:14"
+  },
+  "5d5d9b526457968d640458b0": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:10:21"
+  },
+  "5758f89f0918d15148200c71": {
+    "vss": 0.62,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:10:28"
+  },
+  "ad7fb18fc7f08742a5e557c5": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:10:50"
+  },
+  "89caa25db00d6da5c7852d72": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:11:01"
+  },
+  "e391c94a711f7601ba502fe6": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:11:12"
+  },
+  "d4e7aaeca29d1db77c419a6e": {
+    "vss": 0.25,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:11:34"
+  },
+  "8511dd1983e42ff9ba29c260": {
+    "vss": 0.25,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:11:42"
+  },
+  "f56cd2e0fc5cd4e4be216a17": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:11:50"
+  },
+  "b58274fe8647e38434c91ee3": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:11:56"
+  },
+  "fa0dd0ec1c3fafe42400852e": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:12:03"
+  },
+  "13f44a93608f118585c2bb17": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:12:09"
+  },
+  "250a63883d841d29e6a0ff81": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:12:19"
+  },
+  "ebaa88e4bf37ac94692482fc": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:12:28"
+  },
+  "51732ffa868ee51c0e5289c7": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:12:34"
+  },
+  "39608ee465491c46983a6346": {
+    "vss": 0.65,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:12:40"
+  },
+  "bab5057ebb593e3f5340fcaa": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:12:47"
+  },
+  "e2d979e1709e6dc8d2422faa": {
+    "vss": 0.25,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:12:53"
+  },
+  "e985c4d1924eeb1a0ecb179c": {
+    "vss": 1.0,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:13:01"
+  },
+  "108d705f1528e71e49627a7f": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:13:08"
+  },
+  "3d0024c53b76c0adbc74929d": {
+    "vss": 0.68,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:13:14"
+  },
+  "fe00192a942ed5f19a7699c5": {
+    "vss": 0.45,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:13:21"
+  },
+  "23f53029fa407bc7717fcba6": {
+    "vss": 0.2,
+    "model": "gemini-2.5-flash",
+    "ts": "2026-04-07T22:13:28"
+  }
+}
