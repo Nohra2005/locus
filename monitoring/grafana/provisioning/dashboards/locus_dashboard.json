@@ -18,7 +18,7 @@
       "title": "locus_items",
       "description": "Fashion products indexed and searchable",
       "gridPos": { "x": 0, "y": 1, "w": 8, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{ "expr": "locus_qdrant_items_total{collection=\"locus_items\"}", "legendFormat": "Items" }],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
       "fieldConfig": {
@@ -36,7 +36,7 @@
       "title": "locus_skipped",
       "description": "Products rejected during ingestion (no clothing detected, low confidence)",
       "gridPos": { "x": 8, "y": 1, "w": 8, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{ "expr": "locus_qdrant_items_total{collection=\"locus_skipped\"}", "legendFormat": "Skipped" }],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
       "fieldConfig": {
@@ -51,7 +51,7 @@
       "title": "locus_feedback",
       "description": "User star ratings collected — need 200+ for CLIP fine-tuning",
       "gridPos": { "x": 16, "y": 1, "w": 8, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{ "expr": "locus_qdrant_items_total{collection=\"locus_feedback\"}", "legendFormat": "Feedback" }],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
       "fieldConfig": {
@@ -69,7 +69,7 @@
       "title": "Collection sizes over time",
       "description": "Track catalog growth and feedback accumulation",
       "gridPos": { "x": 0, "y": 6, "w": 24, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         { "expr": "locus_qdrant_items_total{collection=\"locus_items\"}",    "legendFormat": "locus_items" },
         { "expr": "locus_qdrant_items_total{collection=\"locus_skipped\"}",  "legendFormat": "locus_skipped" },
@@ -93,7 +93,7 @@
       "title": "Avg VSS@5 — Latest Eval Run",
       "description": "Average Gemini Visual Similarity Score. Baseline: 0.635. Target: >0.70",
       "gridPos": { "x": 0, "y": 14, "w": 5, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{ "expr": "locus_gemini_avg_vss5", "legendFormat": "VSS@5" }],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "fieldConfig": {
@@ -111,7 +111,7 @@
       "id": 12, "type": "stat",
       "title": "Queries Evaluated",
       "gridPos": { "x": 5, "y": 14, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{ "expr": "locus_gemini_queries_evaluated", "legendFormat": "Queries" }],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none" },
       "fieldConfig": { "defaults": { "unit": "short" } }
@@ -121,7 +121,7 @@
       "title": "Cache Entries",
       "description": "Scored pairs saved to disk — these cost $0 on next eval run",
       "gridPos": { "x": 5, "y": 18, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{ "expr": "locus_gemini_cache_entries", "legendFormat": "Cached pairs" }],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
       "fieldConfig": {
@@ -133,7 +133,7 @@
       "title": "Grade Distribution",
       "description": "Queries by quality tier. Goal: eliminate red, grow green.",
       "gridPos": { "x": 9, "y": 14, "w": 6, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         { "expr": "locus_gemini_queries_excellent", "legendFormat": "Excellent  ≥0.85" },
         { "expr": "locus_gemini_queries_good",      "legendFormat": "Good       ≥0.70" },
@@ -160,7 +160,7 @@
       "title": "VSS@5 Per Query",
       "description": "Score for each golden query. Red = poor (accessories/outerwear), green = good (basic clothing).",
       "gridPos": { "x": 15, "y": 14, "w": 9, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{ "expr": "sort_desc(locus_gemini_query_vss5)", "legendFormat": "{{label}}" }],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true },
       "fieldConfig": {
@@ -179,7 +179,7 @@
       "title": "VSS@5 Trend — Across Eval Runs",
       "description": "This should go up after each CLIP fine-tuning round. Baseline is 0.635.",
       "gridPos": { "x": 0, "y": 22, "w": 14, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         { "expr": "locus_gemini_avg_vss5",  "legendFormat": "Avg VSS@5" },
         { "expr": "locus_gemini_avg_top1",  "legendFormat": "Avg Top-1" }
@@ -197,7 +197,7 @@
       "title": "Score Distribution Over Time",
       "description": "Cumulative count of individual result scores by bucket. Growing ≤1.0 line means more scored pairs in cache.",
       "gridPos": { "x": 14, "y": 22, "w": 10, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         { "expr": "locus_gemini_score_bucket{le=\"0.2\"}", "legendFormat": "≤0.20" },
         { "expr": "locus_gemini_score_bucket{le=\"0.4\"}", "legendFormat": "≤0.40" },
@@ -217,7 +217,7 @@
       "id": 21, "type": "timeseries",
       "title": "Request Rate by Endpoint (req/s)",
       "gridPos": { "x": 0, "y": 30, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         { "expr": "rate(http_requests_total{handler=\"/search\"}[1m])",   "legendFormat": "/search" },
         { "expr": "rate(http_requests_total{handler=\"/detect\"}[1m])",   "legendFormat": "/detect" },
@@ -230,7 +230,7 @@
       "id": 22, "type": "timeseries",
       "title": "P95 Response Latency by Endpoint (s)",
       "gridPos": { "x": 12, "y": 30, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         { "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/search\"}[2m]))",   "legendFormat": "/search p95" },
         { "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/detect\"}[2m]))",   "legendFormat": "/detect p95" },
@@ -243,7 +243,7 @@
       "id": 23, "type": "timeseries",
       "title": "Error Rate (4xx + 5xx per second)",
       "gridPos": { "x": 0, "y": 37, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{ "expr": "rate(http_requests_total{status=~\"4..|5..\"}[1m])", "legendFormat": "Errors/s" }],
       "fieldConfig": {
         "defaults": {
@@ -259,7 +259,7 @@
       "title": "Searches by Detected Category",
       "description": "What types of clothing users are searching for most",
       "gridPos": { "x": 12, "y": 37, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{ "expr": "rate(locus_searches_total[5m])", "legendFormat": "{{category}}" }],
       "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
@@ -269,7 +269,7 @@
       "title": "Feedback — Star Rating Distribution",
       "description": "All-time feedback by star rating. 4-5 = positive training signal, 1-2 = negative.",
       "gridPos": { "x": 0, "y": 44, "w": 12, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         { "expr": "sum(locus_feedback_stars_total{stars=\"5\"})", "legendFormat": "5 stars" },
         { "expr": "sum(locus_feedback_stars_total{stars=\"4\"})", "legendFormat": "4 stars" },
@@ -285,7 +285,7 @@
       "title": "Positive Feedback Ratio",
       "description": "Ratio of 4-5 star ratings vs all non-neutral ratings. >70% = users happy with results.",
       "gridPos": { "x": 12, "y": 44, "w": 12, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "-- Grafana --" },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{
         "expr": "sum(locus_feedback_stars_total{signal=\"positive\"}) / (sum(locus_feedback_stars_total{signal=\"positive\"}) + sum(locus_feedback_stars_total{signal=\"negative\"}))",
         "legendFormat": "Positive ratio"

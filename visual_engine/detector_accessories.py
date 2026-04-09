@@ -1,145 +1,160 @@
 # =============================================================================
 # detector_accessories.py
-# Model 2: YOLOS-Fashionpedia
-# Detects: sweater, coat, jumpsuit (clothing DeepFashion2 misses)
-#          + shoes, bag, glasses, hat, watch, scarf
+# Model: YOLO-World (open-vocabulary, text-prompted)
 #
-# CHANGES vs previous version:
-#   - MIN_CONFIDENCE raised 0.35 → 0.45 to reduce over-detection
+# Replaces YOLOS-Fashionpedia. YOLO-World is prompted with rich text
+# descriptions per category so it can detect shoes, bags, and hats even
+# when they are small in the frame or visually complex.
+#
+# Covers:
+#   Clothing DeepFashion2 misses: sweater, cardigan, coat, jumpsuit
+#   Accessories:                  shoes, bag, hat
+#
+# Architecture:
+#   - One YOLO-World model (yolov8s-worldv2.pt, ~100MB)
+#   - Classes are set once at startup with rich text prompts
+#   - Each detected class maps to a canonical label via PROMPT_TO_CANONICAL
+#   - MIN_CONFIDENCE intentionally lower than DeepFashion2 — YOLO-World
+#     zero-shot scores are inherently lower than trained-label scores
 # =============================================================================
 
-import torch
-from transformers import YolosForObjectDetection, YolosImageProcessor
+from ultralytics import YOLOWorld
+from PIL import Image
 
-from clip_labels import FASHIONPEDIA_TO_CANONICAL, SEARCHABLE_IDS
+MIN_CONFIDENCE = 0.08   # YOLO-World zero-shot scores are lower than supervised
+MIN_AREA       = 800    # px² — smaller than DF2 to catch small accessories
 
-# Full Fashionpedia category list — index = class_id from model output
-# DO NOT reorder — fixed by model weights
-FASHIONPEDIA_CATS = [
-    'shirt, blouse',                           # 0
-    'top, t-shirt, sweatshirt',                # 1
-    'sweater',                                 # 2
-    'cardigan',                                # 3
-    'jacket',                                  # 4
-    'vest',                                    # 5
-    'pants',                                   # 6
-    'shorts',                                  # 7
-    'skirt',                                   # 8
-    'coat',                                    # 9
-    'dress',                                   # 10
-    'jumpsuit',                                # 11
-    'cape',                                    # 12
-    'glasses',                                 # 13
-    'hat',                                     # 14
-    'headband, head covering, hair accessory', # 15
-    'tie',                                     # 16
-    'glove',                                   # 17
-    'watch',                                   # 18
-    'belt',                                    # 19
-    'leg warmer',                              # 20
-    'tights, stockings',                       # 21
-    'sock',                                    # 22
-    'shoe',                                    # 23
-    'bag, wallet',                             # 24
-    'scarf',                                   # 25
-    'umbrella',                                # 26
-    'hood',                                    # 27
-    'collar',                                  # 28
-    'lapel',                                   # 29
-    'epaulette',                               # 30
-    'sleeve',                                  # 31
-    'pocket',                                  # 32
-    'neckline',                                # 33
-    'buckle',                                  # 34
-    'zipper',                                  # 35
-    'applique',                                # 36
-    'bead',                                    # 37
-    'bow',                                     # 38
-    'flower',                                  # 39
-    'fringe',                                  # 40
-    'ribbon',                                  # 41
-    'rivet',                                   # 42
-    'ruffle',                                  # 43
-    'sequin',                                  # 44
-    'tassel',                                  # 45
+# Rich text prompts — order determines class_id in results.
+# Keep each prompt specific enough to avoid false positives from clothing.
+PROMPTS = [
+    # ── clothing DeepFashion2 misses ──────────────────────────────────────
+    "sweater",                                                  # 0  → sweater
+    "cardigan",                                                 # 1  → sweater
+    "hoodie sweatshirt",                                        # 2  → sweater
+    "coat overcoat",                                            # 3  → jacket
+    "jumpsuit romper playsuit",                                 # 4  → jumpsuit
+    # ── shoes ─────────────────────────────────────────────────────────────
+    "sneaker trainer running shoe",                             # 5  → shoes
+    "boot ankle boot chelsea boot combat boot",                 # 6  → shoes
+    "high heel pump stiletto",                                  # 7  → shoes
+    "sandal strappy sandal flat sandal",                        # 8  → shoes
+    "loafer flat shoe ballet flat mule espadrille",             # 9  → shoes
+    "platform shoe wedge clog slip-on",                         # 10 → shoes
+    # ── bag ───────────────────────────────────────────────────────────────
+    "handbag shoulder bag tote bag",                            # 11 → bag
+    "crossbody bag satchel clutch purse",                       # 12 → bag
+    "backpack rucksack",                                        # 13 → bag
+    # ── hat ───────────────────────────────────────────────────────────────
+    "baseball cap snapback trucker cap",                        # 14 → hat
+    "straw hat sun hat wide brim hat",                          # 15 → hat
+    "beanie bobble hat winter hat",                             # 16 → hat
+    "fedora panama bucket hat beret",                           # 17 → hat
 ]
 
-MIN_CONFIDENCE = 0.7  
-MIN_AREA       = 1500   # px²
+# Maps prompt index → canonical label
+PROMPT_TO_CANONICAL = {
+    0:  "sweater",   # sweater
+    1:  "sweater",   # cardigan
+    2:  "sweater",   # hoodie sweatshirt
+    3:  "jacket",    # coat overcoat
+    4:  "jumpsuit",  # jumpsuit romper
+    5:  "shoes",     # sneaker
+    6:  "shoes",     # boot
+    7:  "shoes",     # heel pump
+    8:  "shoes",     # sandal
+    9:  "shoes",     # loafer flat
+    10: "shoes",     # platform wedge
+    11: "bag",       # handbag shoulder
+    12: "bag",       # crossbody clutch
+    13: "bag",       # backpack
+    14: "hat",       # baseball cap
+    15: "hat",       # straw hat
+    16: "hat",       # beanie
+    17: "hat",       # fedora bucket
+}
+
+# Max image size fed to YOLO-World — larger images hurt detection of small items
+MAX_SIDE = 640
 
 
 class AccessoryDetector:
     def __init__(self):
         print("=" * 50)
-        print("Loading Model 2: YOLOS-Fashionpedia")
-        print("Covers: sweater, coat, jumpsuit + accessories")
+        print("Loading YOLO-World (open-vocabulary accessory detector)")
+        print("Covers: sweater, coat, jumpsuit + shoes, bag, hat")
         print("=" * 50)
-        self.processor = YolosImageProcessor.from_pretrained("valentinafeve/yolos-fashionpedia")
-        self.model     = YolosForObjectDetection.from_pretrained("valentinafeve/yolos-fashionpedia")
-        self.model.eval()
-        print("Model 2 ready.")
+        self.model = YOLOWorld("yolov8s-worldv2.pt")
+        self.model.set_classes(PROMPTS)
+        print(f"  Classes set: {len(PROMPTS)} prompts")
+        print("YOLO-World ready.")
 
     def detect(self, pil_image, classify_fn):
         """
-        Runs YOLOS-Fashionpedia on a PIL image.
+        Runs YOLO-World on a PIL image.
+
+        Resizes to MAX_SIDE before inference (improves small-item detection),
+        then scales bbox coords back to original image space.
 
         Args:
             pil_image:   PIL.Image — the full photo to scan
-            classify_fn: kept for interface compatibility, not called here.
+            classify_fn: callable — passed for interface compatibility,
+                         used for CLIP relabel in detect_objects()
 
         Returns:
             list of dicts:
-                bbox         [x1, y1, x2, y2]
-                label        raw Fashionpedia label (shown in UI)
+                bbox         [x1, y1, x2, y2] in original image pixels
+                label        prompt string (shown in UI)
                 search_label canonical label (used for Qdrant filter)
-                score        YOLOS detection confidence
-                source       "yolos_fashionpedia"
+                score        YOLO confidence
+                source       "yolo_world"
         """
         detections = []
         try:
-            inputs       = self.processor(images=pil_image, return_tensors="pt")
-            img_w, img_h = pil_image.size
+            orig_w, orig_h = pil_image.size
 
-            with torch.no_grad():
-                outputs = self.model(**inputs)
+            # Resize for inference if needed
+            if max(orig_w, orig_h) > MAX_SIDE:
+                scale = MAX_SIDE / max(orig_w, orig_h)
+                new_w = int(orig_w * scale)
+                new_h = int(orig_h * scale)
+                infer_image = pil_image.resize((new_w, new_h), Image.LANCZOS)
+            else:
+                scale = 1.0
+                infer_image = pil_image
 
-            target_sizes = torch.tensor([[img_h, img_w]])
-            results = self.processor.post_process_object_detection(
-                outputs, threshold=MIN_CONFIDENCE, target_sizes=target_sizes
-            )[0]
+            results = self.model(infer_image, conf=MIN_CONFIDENCE, verbose=False)[0]
 
-            for score, label_id, box in zip(results["scores"], results["labels"], results["boxes"]):
-                class_id = int(label_id)
-                conf     = float(score)
-
-                if class_id not in SEARCHABLE_IDS:
+            for box in results.boxes:
+                class_id = int(box.cls[0])
+                conf     = float(box.conf[0])
+                canonical = PROMPT_TO_CANONICAL.get(class_id)
+                if canonical is None:
                     continue
 
-                x1, y1, x2, y2 = map(int, box.tolist())
-                x1 = max(0, x1); y1 = max(0, y1)
-                x2 = min(img_w, x2); y2 = min(img_h, y2)
+                # Scale coords back to original image space
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                if scale != 1.0:
+                    x1 /= scale; y1 /= scale
+                    x2 /= scale; y2 /= scale
+
+                x1 = max(0, int(x1)); y1 = max(0, int(y1))
+                x2 = min(orig_w, int(x2)); y2 = min(orig_h, int(y2))
 
                 if (x2 - x1) * (y2 - y1) < MIN_AREA:
                     continue
 
-                fashionpedia_label = FASHIONPEDIA_CATS[class_id]
-                canonical          = FASHIONPEDIA_TO_CANONICAL.get(fashionpedia_label)
-
-                if canonical is None:
-                    print(f"  WARNING: no canonical mapping for '{fashionpedia_label}' (id {class_id}), skipping")
-                    continue
-
+                prompt_label = PROMPTS[class_id]
                 detections.append({
                     "bbox":         [x1, y1, x2, y2],
-                    "label":        fashionpedia_label,
+                    "label":        prompt_label,
                     "search_label": canonical,
                     "score":        round(conf, 3),
-                    "source":       "yolos_fashionpedia"
+                    "source":       "yolo_world"
                 })
 
-            print(f"  YOLOS-Fashionpedia: {len(detections)} items found")
+            print(f"  YOLO-World: {len(detections)} items found")
 
         except Exception as e:
-            print(f"  YOLOS-Fashionpedia error: {e}")
+            print(f"  YOLO-World error: {e}")
 
         return detections

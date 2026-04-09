@@ -209,10 +209,82 @@ def get_image_bytes(url: str) -> bytes:
 
 # ── Search helper ─────────────────────────────────────────────────────────────
 
-def run_search(image_bytes: bytes) -> list:
-    """POST the query image to /search and return a list of result objects."""
+# Mirrors CATEGORY_ALIASES in vectorizer.py — used for bbox tier-2 matching.
+CATEGORY_ALIASES = {
+    "top":        ["top", "shirt"],
+    "sports_bra": ["sports_bra", "top", "shirt"],
+    "sweater":    ["sweater", "top", "shirt"],
+    "jacket":     ["jacket", "coat"],
+    "dress":      ["dress", "jumpsuit"],
+    "jumpsuit":   ["jumpsuit", "dress"],
+    "skirt":      ["skirt", "dress"],
+    "pants":      ["pants", "trousers", "jeans"],
+    "leggings":   ["leggings", "pants", "shorts"],
+    "shorts":     ["shorts", "pants"],
+    "shoes":      ["shoes", "sneakers", "boots", "sandals"],
+    "hat":        ["hat", "cap"],
+    "bag":        ["bag", "handbag", "backpack"],
+}
+
+
+def _select_box(detections: list, category_tag: str):
+    """
+    Pick the best detection for a query using the known category_tag.
+      T1 — exact search_label match
+      T2 — alias match (CATEGORY_ALIASES)
+    No T3: a wrong-category crop is worse than full image + correct filter.
+    When T1+T2 fail, caller falls back to full image + category_tag filter.
+    Returns (detection_dict, tier_str) or (None, None).
+    """
+    if not detections:
+        return None, None
+
+    # T1 — exact match
+    exact = [d for d in detections if d.get("search_label") == category_tag]
+    if exact:
+        return max(exact, key=lambda d: d.get("score", 0)), "T1-exact"
+
+    # T2 — alias match
+    aliases = CATEGORY_ALIASES.get(category_tag, [category_tag])
+    alias_hits = [d for d in detections if d.get("search_label") in aliases]
+    if alias_hits:
+        return max(alias_hits, key=lambda d: d.get("score", 0)), "T2-alias"
+
+    return None, None
+
+
+def run_search(image_bytes: bytes, category_tag: str = "") -> list:
+    """
+    1. POST to /detect — get YOLO bounding boxes + CLIP-relabelled search_labels.
+    2. Select the best bbox using the known category_tag (mirrors indexing tier logic).
+    3. POST to /search with bbox coords + search_label (or full image if no box found).
+    """
+    # Step 1: detect
+    detect_resp = requests.post(
+        f"{GATEWAY_URL}/detect",
+        files={"file": ("query.jpg", io.BytesIO(image_bytes), "image/jpeg")},
+        timeout=30,
+    )
+    detect_resp.raise_for_status()
+    detections = detect_resp.json().get("detections", [])
+
+    # Step 2: select box
+    selected, tier = _select_box(detections, category_tag) if category_tag else (None, None)
+
+    if selected:
+        x1, y1, x2, y2 = selected["bbox"]
+        sl = selected.get("search_label", "")
+        sc = selected.get("score", 0)
+        p(f"            [bbox] {tier}  label={sl}  score={sc:.2f}  box=({x1},{y1},{x2},{y2})")
+        data = {"x1": x1, "y1": y1, "x2": x2, "y2": y2, "search_label": sl}
+    else:
+        reason = "no detections" if not detections else f"no match for '{category_tag}'"
+        p(f"            [bbox] none ({reason}) — using full image")
+        data = {}
+
+    # Step 3: search
     files    = {"file": ("query.jpg", io.BytesIO(image_bytes), "image/jpeg")}
-    response = requests.post(f"{GATEWAY_URL}/search", files=files, timeout=30)
+    response = requests.post(f"{GATEWAY_URL}/search", files=files, data=data, timeout=30)
     response.raise_for_status()
     body = response.json()
 
@@ -366,9 +438,10 @@ def run_evaluation(client, dataset: list, run_name: str = None) -> dict:
                 query_bytes = get_image_bytes(img_url)
 
                 # ── 2. Run search ──────────────────────────────────────────
-                p("            [search] Running search ...")
+                category_tag = entry.get("query_category_tag", "")
+                p(f"            [search] category={category_tag or '(none)'}  — detecting bbox ...")
                 t0         = time.time()
-                results    = run_search(query_bytes)
+                results    = run_search(query_bytes, category_tag)
                 latency_ms = (time.time() - t0) * 1000
                 results_k  = results[:TOP_K]
                 p(f"            [ok] Got {len(results_k)} results in {latency_ms:.0f}ms")

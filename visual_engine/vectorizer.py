@@ -134,13 +134,16 @@ class LocusVisualizer:
         self.clip_processor = CLIPProcessor.from_pretrained("patrickjohncyh/fashion-clip")
         self.clip_labels    = CANONICAL_LABELS
 
-        # Pre-compute CLIP text embeddings for canonical labels
+        # Pre-compute CLIP text embeddings for canonical labels.
+        # Use component layers directly — get_text_features() return type changed
+        # across transformers versions (plain tensor vs BaseModelOutputWithPooling).
         text_inputs = self.clip_processor(
             text=CLIP_PROMPTS, return_tensors="pt", padding=True
         )
         with torch.no_grad():
-            self.text_features = self.clip_model.get_text_features(**text_inputs)
-            self.text_features /= self.text_features.norm(p=2, dim=-1, keepdim=True)
+            text_out           = self.clip_model.text_model(**text_inputs)
+            text_features      = self.clip_model.text_projection(text_out.pooler_output)
+            self.text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
 
         print("Loading sentence-transformers (all-MiniLM-L6-v2)...")
         self.st_model         = SentenceTransformer("all-MiniLM-L6-v2")
@@ -525,7 +528,8 @@ class LocusVisualizer:
     def _clip_embed(self, pil_image: Image.Image, label_hint: str = ""):
         clip_inputs = self.clip_processor(images=pil_image, return_tensors="pt")
         with torch.no_grad():
-            image_features = self.clip_model.get_image_features(**clip_inputs)
+            vision_out     = self.clip_model.vision_model(**clip_inputs)
+            image_features = self.clip_model.visual_projection(vision_out.pooler_output)
         image_features /= image_features.norm(p=2, dim=-1, keepdim=True)
         vector = image_features[0].tolist()
 

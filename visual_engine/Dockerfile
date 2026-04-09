@@ -9,7 +9,16 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install torch first (large ~200MB download — cached in its own layer)
+RUN pip install --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    torch==2.6.0+cpu \
+    torchvision==0.21.0+cpu
+
+# Install ultralytics separately (pulls scipy ~38MB, cache this layer)
+RUN pip install --no-cache-dir ultralytics
+
+# Install remaining dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

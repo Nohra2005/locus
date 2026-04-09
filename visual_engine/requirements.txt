@@ -1,13 +1,9 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.6.0+cpu
-torchvision>=0.21.0+cpu
 transformers>=4.48.0
 sentence-transformers
 Pillow
 fastapi
 uvicorn
 python-multipart
-ultralytics
 huggingface_hub
-onnxruntime
 prometheus-fastapi-instrumentator
+openai-clip

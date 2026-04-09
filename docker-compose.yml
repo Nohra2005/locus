@@ -52,6 +52,7 @@ services:
     volumes:
       - ./visual_engine:/app
       - ${USERPROFILE}/.cache/huggingface:/root/.cache/huggingface
+      - ${USERPROFILE}/.cache/clip:/root/.cache/clip
     environment:
       - TRANSFORMERS_CACHE=/root/.cache/huggingface
     dns:

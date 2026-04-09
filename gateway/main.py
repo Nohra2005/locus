@@ -63,10 +63,10 @@ PENDING_PATH        = "/app/pending_whitelist.json"
 
 if QDRANT_URL:
     print(f"[QDRANT] Connecting to cloud: {QDRANT_URL}")
-    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=30)
 else:
     print(f"[QDRANT] Connecting to local: {QDRANT_HOST}:{QDRANT_PORT}")
-    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
+    client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=30)
 
 
 async def _refresh_qdrant_metrics():
@@ -589,12 +589,21 @@ async def search_items(
             )]
         )
 
-    raw_results = client.search(
-        collection_name=COLLECTION_NAME,
-        query_vector=vector,
-        query_filter=query_filter,
-        limit=100,
-    )
+    for _attempt in range(3):
+        try:
+            raw_results = client.search(
+                collection_name=COLLECTION_NAME,
+                query_vector=vector,
+                query_filter=query_filter,
+                limit=100,
+            )
+            break
+        except Exception as _e:
+            if _attempt == 2:
+                raise
+            import time as _time
+            print(f"[SEARCH] Qdrant error (attempt {_attempt+1}/3): {_e} — retrying in 2s")
+            _time.sleep(2)
 
     best_per_product = {}
     for hit in raw_results:
