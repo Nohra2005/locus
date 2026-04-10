@@ -596,9 +596,26 @@ function renderLog() {
   }).join('');
 }
 
-function deleteEntry(idx) {
-  if(!confirm(`Delete "${dataset[idx].query_name}"?`))return;
-  dataset.splice(idx,1);persist();renderLog();updateProgress();toast('Entry deleted.','warn');
+async function deleteEntry(idx) {
+  const entry = dataset[idx];
+  if(!confirm(`Delete "${entry.query_name}"?\n\nThis will also remove its indexed images from Qdrant.`))return;
+  try {
+    const r = await fetch(`${gw()}/golden-dataset/entry`, {
+      method: 'DELETE',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({query_name: entry.query_name}),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(()=>({}));
+      toast(`Gateway error: ${err.detail||r.status}`, 'error');
+      return;
+    }
+    const res = await r.json();
+    dataset.splice(idx,1); persist(); renderLog(); updateProgress();
+    toast(`Deleted "${entry.query_name}" (${res.points_removed} images removed from index).`, 'warn');
+  } catch(e) {
+    toast(`Failed to delete: ${e.message}`, 'error');
+  }
 }
 
 function resetForm() {

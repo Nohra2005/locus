@@ -11,6 +11,8 @@ from __future__ import annotations
 import base64
 import logging
 import re
+import threading
+import time
 
 import httpx
 
@@ -18,6 +20,28 @@ logger = logging.getLogger(__name__)
 
 GROQ_MODEL   = "meta-llama/llama-4-scout-17b-16e-instruct"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+# ── Global rate limiter ────────────────────────────────────────────────────────
+# Groq free tier: 30 RPM for this model. We target 24 RPM (2.5s gap) for safety.
+# A single lock + timestamp serialises ALL Groq calls across concurrent searches
+# so we never burst above the limit regardless of how many users search at once.
+
+_groq_lock      = threading.Lock()
+_groq_last_call = 0.0
+_GROQ_MIN_GAP   = 2.5   # seconds between calls → 24 RPM, safely under 30 RPM
+
+
+def _acquire_groq_slot() -> None:
+    """Block until we're allowed to make the next Groq call."""
+    global _groq_last_call
+    with _groq_lock:
+        now  = time.monotonic()
+        wait = _groq_last_call + _GROQ_MIN_GAP - now
+        if wait > 0:
+            time.sleep(wait)
+        _groq_last_call = time.monotonic()
+
+
 JUDGE_PROMPT = (
     "You are a fashion visual similarity expert.\n"
     "You will be shown two clothing images: first the QUERY image, then a RESULT image.\n"
@@ -85,13 +109,34 @@ def judge_pair(query_image_b64: str, result_image_url: str, groq_api_key: str) -
         "temperature": 0.0,
     }
 
-    try:
-        with httpx.Client(timeout=30.0) as client:
-            resp = client.post(
-                GROQ_API_URL,
-                json=payload,
-                headers={"Authorization": f"Bearer {groq_api_key}"},
-            )
+    for attempt in range(3):
+        _acquire_groq_slot()
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                resp = client.post(
+                    GROQ_API_URL,
+                    json=payload,
+                    headers={"Authorization": f"Bearer {groq_api_key}"},
+                )
+
+            if resp.status_code == 429:
+                # Respect Retry-After if present, else exponential back-off
+                retry_after = (
+                    resp.headers.get("retry-after")
+                    or resp.headers.get("x-ratelimit-reset-requests")
+                )
+                try:
+                    wait = float(retry_after)
+                except (TypeError, ValueError):
+                    wait = 15.0 * (2 ** attempt)   # 15s, 30s, 60s
+                wait = max(wait, 5.0)
+                logger.warning(
+                    f"judge: 429 rate-limited (attempt {attempt+1}/3) — "
+                    f"backing off {wait:.0f}s"
+                )
+                time.sleep(wait)
+                continue
+
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"].strip()
             match = re.search(r"\d+\.\d+|\d+", content)
@@ -99,16 +144,22 @@ def judge_pair(query_image_b64: str, result_image_url: str, groq_api_key: str) -
                 logger.warning(f"judge: could not parse score from response: {content!r}")
                 return None
             return float(match.group())
-    except httpx.HTTPStatusError as e:
-        try:
-            body = e.response.json()
-        except Exception:
-            body = e.response.text
-        logger.warning(f"judge: Groq API error {e.response.status_code}: {body}")
-        return None
-    except Exception as e:
-        logger.warning(f"judge: Groq API error: {e}")
-        return None
+
+        except httpx.HTTPStatusError as e:
+            if attempt < 2:
+                time.sleep(5.0 * (2 ** attempt))
+                continue
+            try:
+                body = e.response.json()
+            except Exception:
+                body = e.response.text
+            logger.warning(f"judge: Groq API error {e.response.status_code} after 3 attempts: {body}")
+            return None
+        except Exception as e:
+            logger.warning(f"judge: Groq API error: {e}")
+            return None
+
+    return None
 
 
 def run_judge(

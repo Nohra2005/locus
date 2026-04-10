@@ -64,6 +64,7 @@ COLLECTION_NAME     = "locus_items"
 SKIPPED_COLLECTION  = "locus_skipped"
 FEEDBACK_COLLECTION = "locus_feedback"
 PENDING_PATH        = "/app/pending_whitelist.json"
+GOLDEN_DATASET_PATH = os.getenv("GOLDEN_DATASET_PATH", "/mlops/golden_dataset.json")
 
 if QDRANT_URL:
     print(f"[QDRANT] Connecting to cloud: {QDRANT_URL}")
@@ -541,6 +542,7 @@ async def search_items(
     search_label:     str        = Form(""),
     shoe_style:       str        = Form(""),   # optional sub-type for shoes (sneaker|boot|heel|sandal)
     include_golden:   bool       = False,
+    skip_judge:       bool       = Form(False),
 ):
     image_bytes = await file.read()
 
@@ -1278,3 +1280,188 @@ def _scrape_product_cards(soup: BeautifulSoup, base_url: str) -> list:
             continue
         products.append({"name": name, "image_url": src, "image_urls": [src], "price": ""})
     return products
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GOLDEN DATASET  — read/write golden_dataset.json from the gateway
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _load_golden() -> list:
+    if not os.path.exists(GOLDEN_DATASET_PATH):
+        return []
+    with open(GOLDEN_DATASET_PATH, encoding="utf-8") as f:
+        return _json.load(f)
+
+
+def _save_golden(data: list):
+    with open(GOLDEN_DATASET_PATH, "w", encoding="utf-8") as f:
+        _json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+@app.get("/golden-dataset")
+def get_golden_dataset():
+    """Return the full golden_dataset.json content."""
+    return {"entries": _load_golden()}
+
+
+class GoldenEntryRequest(BaseModel):
+    query_image_url: str          # URL or base64 data URI for the query image
+    query_name:      str
+    query_category:  str = ""
+    relevant: list[dict]          # [{url, name}] — exactly 5 items expected
+    replace: bool = False         # if True, remove existing entry with same query_name first
+
+
+@app.post("/golden-dataset/entry")
+async def add_golden_entry(req: GoldenEntryRequest):
+    """
+    Index the relevant images into locus_items and append the entry
+    to golden_dataset.json.
+    """
+    if not req.query_name:
+        raise HTTPException(status_code=400, detail="query_name is required")
+    if not req.relevant:
+        raise HTTPException(status_code=400, detail="relevant list cannot be empty")
+
+    # Index relevant images via /add-bulk-batch logic
+    batch_items = []
+    for item in req.relevant:
+        url  = item.get("url", "").strip()
+        name = item.get("name", "").strip() or req.query_name
+        if not url:
+            continue
+        pid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"golden::{url}"))
+        batch_items.append({
+            "name":       name,
+            "image_url":  url,
+            "store":      "golden_dataset",
+            "mall":       "golden_dataset",
+            "price":      "",
+            "product_id": pid,
+            "is_golden":  True,
+        })
+
+    if not batch_items:
+        raise HTTPException(status_code=400, detail="No valid relevant image URLs")
+
+    # Reuse the add_bulk_batch handler
+    from fastapi import Request as _Req
+    class _FakeBatch:
+        items = batch_items
+    bulk_result = await add_bulk_batch(_FakeBatch())
+
+    indexed_pids = []
+    for item in batch_items:
+        # Only include items that were successfully indexed (not failed)
+        failed_names = {f["item"] for f in bulk_result.get("failed", [])}
+        if item["name"] not in failed_names:
+            indexed_pids.append(item["product_id"])
+
+    relevant_info = [
+        {
+            "product_id": item["product_id"],
+            "name":       item["name"],
+            "image_url":  item["image_url"],
+            "store_name": "golden_dataset",
+        }
+        for item in batch_items
+        if item["product_id"] in indexed_pids
+    ]
+
+    entry = {
+        "query_image_url":      req.query_image_url,
+        "query_name":           req.query_name,
+        "query_category_tag":   req.query_category,
+        "relevant_product_ids": indexed_pids,
+        "relevant_info":        relevant_info,
+        "source":               "manual_frontend",
+        "n_relevant":           len(indexed_pids),
+        "annotated_by":         "frontend",
+        "created_at":           datetime.utcnow().isoformat() + "Z",
+    }
+
+    dataset = _load_golden()
+    if req.replace:
+        old_entry = next((e for e in dataset if e.get("query_name") == req.query_name), None)
+        if old_entry:
+            old_point_ids = [
+                str(uuid.uuid5(uuid.NAMESPACE_URL, info["image_url"]))
+                for info in old_entry.get("relevant_info", [])
+                if info.get("image_url")
+            ]
+            if old_point_ids:
+                try:
+                    client.delete(
+                        collection_name=COLLECTION_NAME,
+                        points_selector=models.PointIdsList(points=old_point_ids),
+                    )
+                    print(f"[REPLACE] Deleted {len(old_point_ids)} old locus_items for '{req.query_name}'")
+                except Exception as e:
+                    print(f"[REPLACE] Warning: failed to delete old locus_items: {e}")
+        dataset = [e for e in dataset if e.get("query_name") != req.query_name]
+    dataset.append(entry)
+    _save_golden(dataset)
+
+    # Regenerate the report for just this entry — server-side, so it works
+    # regardless of which HTML version the browser has open.
+    import asyncio as _asyncio, sys as _sys, pathlib as _pl
+    _script = _pl.Path("/mlops/visualize_golden_dataset.py")
+    report_regenerated = False
+    if _script.exists():
+        _cmd = [
+            _sys.executable, str(_script),
+            "--skip-groq",
+            "--gateway", "http://localhost:8000",
+            "--only", req.query_name,
+        ]
+        _proc = await _asyncio.create_subprocess_exec(
+            *_cmd,
+            stdout=_asyncio.subprocess.PIPE,
+            stderr=_asyncio.subprocess.PIPE,
+        )
+        await _proc.communicate()
+        report_regenerated = True
+
+    return {
+        "status":             "replaced" if req.replace else "added",
+        "entry":              entry,
+        "indexed":            bulk_result.get("success", 0),
+        "skipped":            bulk_result.get("skipped", 0),
+        "failed":             bulk_result.get("failed", []),
+        "report_regenerated": report_regenerated,
+    }
+
+
+class RegenerateRequest(BaseModel):
+    query_names: list[str] = []
+
+
+@app.post("/golden-dataset/regenerate")
+async def regenerate_golden_report(req: RegenerateRequest = RegenerateRequest()):
+    """
+    Re-run visualize_golden_dataset.py (--skip-groq) and overwrite the report HTML.
+    Pass query_names to only recompute specific entries (others loaded from cache).
+    Uses asyncio subprocess so the event loop stays free to serve /search calls
+    made by the visualizer script during regeneration.
+    """
+    import asyncio, sys, pathlib as _pl
+    script = _pl.Path("/mlops/visualize_golden_dataset.py")
+    if not script.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Visualizer script not found at /mlops/visualize_golden_dataset.py",
+        )
+    cmd = [sys.executable, str(script), "--skip-groq", "--gateway", "http://localhost:8000"]
+    if req.query_names:
+        cmd += ["--only", ",".join(req.query_names)]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Regeneration failed: {stderr.decode()[-600:]}",
+        )
+    return {"status": "ok"}
