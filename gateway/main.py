@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 from pydantic import BaseModel
@@ -17,6 +17,8 @@ from prometheus_client import Gauge, Counter, Histogram
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.models import Distance, PointStruct, VectorParams
+
+from judge import run_judge
 
 app = FastAPI()
 Instrumentator().instrument(app).expose(app)
@@ -54,6 +56,8 @@ app.add_middleware(
 VISUAL_URL          = os.getenv("VISUAL_HOST",    "http://visual_engine:8001")
 QDRANT_URL          = os.getenv("QDRANT_URL")
 QDRANT_API_KEY      = os.getenv("QDRANT_API_KEY")
+GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
+GATEWAY_BASE_URL    = os.getenv("GATEWAY_BASE_URL", "http://localhost:8000")
 QDRANT_HOST         = os.getenv("QDRANT_HOST",    "qdrant")
 QDRANT_PORT         = int(os.getenv("QDRANT_PORT", 6333))
 COLLECTION_NAME     = "locus_items"
@@ -94,7 +98,7 @@ def startup_event():
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=512, distance=Distance.COSINE),
         )
-    for field in ("category_tag", "store_name", "product_id", "box_source"):
+    for field in ("category_tag", "store_name", "product_id", "box_source", "shoe_style"):
         try:
             client.create_payload_index(
                 collection_name=COLLECTION_NAME,
@@ -103,6 +107,14 @@ def startup_event():
             )
         except Exception:
             pass
+    try:
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="is_golden",
+            field_schema=models.PayloadSchemaType.BOOL,
+        )
+    except Exception:
+        pass
 
     # ── Skipped collection ────────────────────────────────────────────────────
     if not client.collection_exists(collection_name=SKIPPED_COLLECTION):
@@ -129,7 +141,7 @@ def startup_event():
             collection_name=FEEDBACK_COLLECTION,
             vectors_config=VectorParams(size=1, distance=Distance.COSINE),
         )
-    for field in ("category", "store_name", "training_signal", "result_product_id"):
+    for field in ("category", "store_name", "training_signal", "result_product_id", "source"):
         try:
             client.create_payload_index(
                 collection_name=FEEDBACK_COLLECTION,
@@ -243,6 +255,7 @@ class FeedbackRequest(BaseModel):
     store_name:        str = ""
     category:          str = ""
     rating:            int           # 1–5 stars
+    source:            str = "user"  # "user" | "auto_judge"
 
 
 @app.post("/feedback")
@@ -289,6 +302,7 @@ async def receive_feedback(req: FeedbackRequest):
                         "training_signal":   training_signal,
                         "weight":            round(weight, 2),
                         "timestamp":         datetime.utcnow().isoformat(),
+                        "source":            req.source,
                     }
                 )
             ]
@@ -305,6 +319,7 @@ async def receive_feedback(req: FeedbackRequest):
 async def get_feedback(
     training_signal: str = "",   # filter: positive | negative | neutral
     category:        str = "",
+    source:          str = "",   # filter: user | auto_judge
     min_rating:      int = 1,
     max_rating:      int = 5,
     limit:           int = 500,
@@ -326,6 +341,10 @@ async def get_feedback(
     if category:
         must_conditions.append(models.FieldCondition(
             key="category", match=models.MatchValue(value=category)
+        ))
+    if source:
+        must_conditions.append(models.FieldCondition(
+            key="source", match=models.MatchValue(value=source)
         ))
     if min_rating > 1 or max_rating < 5:
         must_conditions.append(models.FieldCondition(
@@ -513,12 +532,15 @@ async def delete_catalogue_item(item_id: str):
 
 @app.post("/search")
 async def search_items(
-    file:         UploadFile = File(...),
-    x1:           float      = Form(0),
-    y1:           float      = Form(0),
-    x2:           float      = Form(0),
-    y2:           float      = Form(0),
-    search_label: str        = Form(""),
+    background_tasks: BackgroundTasks,
+    file:             UploadFile = File(...),
+    x1:               float      = Form(0),
+    y1:               float      = Form(0),
+    x2:               float      = Form(0),
+    y2:               float      = Form(0),
+    search_label:     str        = Form(""),
+    shoe_style:       str        = Form(""),   # optional sub-type for shoes (sneaker|boot|heel|sandal)
+    include_golden:   bool       = False,
 ):
     image_bytes = await file.read()
 
@@ -581,14 +603,56 @@ async def search_items(
 
     query_filter    = None
     effective_label = None if skip_filter_for_accessory else (search_label or detected_category)
+
+    must_conditions = []
     if effective_label:
+        must_conditions.append(models.FieldCondition(
+            key="category_tag",
+            match=models.MatchValue(value=effective_label)
+        ))
+        # Shoe sub-type filter: when both category=shoes and a shoe_style are
+        # provided, narrow the search to that sub-type (sneaker/boot/heel/sandal).
+        # Falls back gracefully to shoes-only if shoe_style is missing or "other".
+        if effective_label == "shoes" and shoe_style and shoe_style != "other":
+            must_conditions.append(models.FieldCondition(
+                key="shoe_style",
+                match=models.MatchValue(value=shoe_style)
+            ))
+            print(f"[SEARCH] Shoe sub-filter: shoe_style='{shoe_style}'")
+
+    # Exclude golden dataset items in normal searches; include them when toggled
+    must_not_conditions = []
+    if not include_golden:
+        must_not_conditions.append(models.FieldCondition(
+            key="store_name",
+            match=models.MatchValue(value="golden_dataset")
+        ))
+
+    if must_conditions or must_not_conditions:
         query_filter = models.Filter(
-            must=[models.FieldCondition(
-                key="category_tag",
-                match=models.MatchValue(value=effective_label)
-            )]
+            must=must_conditions if must_conditions else None,
+            must_not=must_not_conditions if must_not_conditions else None,
         )
 
+    # Build the fallback filter (shoes-only, no sub-type) for graceful degradation
+    fallback_filter = query_filter
+    shoe_style_active = (
+        effective_label == "shoes"
+        and shoe_style
+        and shoe_style != "other"
+        and query_filter is not None
+    )
+    if shoe_style_active:
+        # Fallback = shoes-only without shoe_style sub-filter
+        fallback_filter = models.Filter(
+            must=[models.FieldCondition(
+                key="category_tag",
+                match=models.MatchValue(value="shoes")
+            )],
+            must_not=must_not_conditions if must_not_conditions else None,
+        )
+
+    raw_results = []
     for _attempt in range(3):
         try:
             raw_results = client.search(
@@ -604,6 +668,17 @@ async def search_items(
             import time as _time
             print(f"[SEARCH] Qdrant error (attempt {_attempt+1}/3): {_e} — retrying in 2s")
             _time.sleep(2)
+
+    # Graceful fallback: if shoe_style sub-filter produced 0 results (catalog not
+    # yet re-indexed with shoe_style), retry with shoes-only filter.
+    if shoe_style_active and len(raw_results) == 0:
+        print(f"[SEARCH] shoe_style='{shoe_style}' returned 0 results — falling back to shoes-only filter")
+        raw_results = client.search(
+            collection_name=COLLECTION_NAME,
+            query_vector=vector,
+            query_filter=fallback_filter,
+            limit=100,
+        )
 
     best_per_product = {}
     for hit in raw_results:
@@ -621,6 +696,15 @@ async def search_items(
             }
 
     matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:25]
+
+    if GROQ_API_KEY:
+        background_tasks.add_task(
+            run_judge,
+            crop_bytes,
+            matches,
+            GATEWAY_BASE_URL,
+            GROQ_API_KEY,
+        )
 
     return {
         "matches":                   matches,
@@ -863,22 +947,27 @@ async def _reindex_matching_skipped(word: str, category: str):
                 vector_normal  = idx_data["vector_normal"]
                 final_category = idx_data.get("category", category)
                 new_box_source = idx_data.get("box_source", "unknown")
+                shoe_style     = idx_data.get("shoe_style")
+
+                payload = {
+                    "name":         name,
+                    "store_name":   store,
+                    "mall_name":    mall,
+                    "image_url":    img_url,
+                    "category_tag": final_category,
+                    "price":        price,
+                    "product_id":   product_id,
+                    "box_source":   new_box_source,
+                }
+                if shoe_style:
+                    payload["shoe_style"] = shoe_style
 
                 client.upsert(
                     collection_name=COLLECTION_NAME,
                     points=[PointStruct(
                         id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
                         vector  = vector_normal,
-                        payload = {
-                            "name":         name,
-                            "store_name":   store,
-                            "mall_name":    mall,
-                            "image_url":    img_url,
-                            "category_tag": final_category,
-                            "price":        price,
-                            "product_id":   product_id,
-                            "box_source":   new_box_source,
-                        }
+                        payload = payload,
                     )]
                 )
 
@@ -960,22 +1049,29 @@ async def add_bulk_batch(batch: BulkBatchRequest):
                     vector_normal  = idx_data["vector_normal"]
                     final_category = idx_data.get("category", "unknown")
                     box_source     = idx_data.get("box_source", "unknown")
+                    shoe_style     = idx_data.get("shoe_style")
+
+                    batch_payload = {
+                        "name":         name,
+                        "store_name":   store,
+                        "mall_name":    mall,
+                        "image_url":    img_url,
+                        "category_tag": final_category,
+                        "price":        price,
+                        "product_id":   product_id,
+                        "box_source":   box_source,
+                    }
+                    if shoe_style:
+                        batch_payload["shoe_style"] = shoe_style
+                    if raw.get("is_golden"):
+                        batch_payload["is_golden"] = True
 
                     client.upsert(
                         collection_name=COLLECTION_NAME,
                         points=[PointStruct(
                             id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
                             vector  = vector_normal,
-                            payload = {
-                                "name":         name,
-                                "store_name":   store,
-                                "mall_name":    mall,
-                                "image_url":    img_url,
-                                "category_tag": final_category,
-                                "price":        price,
-                                "product_id":   product_id,
-                                "box_source":   box_source,
-                            }
+                            payload = batch_payload,
                         )]
                     )
                 return {"status": "ok", "item": name}

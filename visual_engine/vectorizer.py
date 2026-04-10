@@ -63,6 +63,32 @@ from clip_labels import (
 OVERRIDES_PATH = "/app/whitelist_overrides.json"
 
 # =============================================================================
+# SHOE STYLE — sub-category within the "shoes" collection.
+# Derived from YOLO-World prompt labels (detector_accessories.py PROMPTS).
+# Stored as a Qdrant payload field so searches can filter within shoes.
+#
+# Buckets: sneaker | boot | heel | sandal | other
+# =============================================================================
+
+def shoe_style_from_label(prompt_label: str) -> str:
+    """
+    Map a YOLO-World shoe prompt label to a coarse shoe_style bucket.
+    Called at index time (from the selected box label) and at search time
+    (from the query box label) to enable sub-collection filtering within shoes.
+    """
+    lbl = prompt_label.lower()
+    if any(k in lbl for k in ("sneaker", "trainer", "running shoe", "platform", "wedge", "clog", "slip-on")):
+        return "sneaker"
+    if "boot" in lbl:
+        return "boot"
+    if any(k in lbl for k in ("heel", "pump", "stiletto")):
+        return "heel"
+    if any(k in lbl for k in ("sandal", "loafer", "flat", "mule", "espadrille")):
+        return "sandal"
+    return "other"
+
+
+# =============================================================================
 # CATEGORY ALIASES
 # Maps voted final_category → acceptable YOLO search_label values (Tier 2).
 # =============================================================================
@@ -370,12 +396,21 @@ class LocusVisualizer:
             print(f"[INDEX]    '{title}' done in {time.time()-t0:.2f}s  "
                   f"cat={final_category}  box={box_source}")
 
+            # Compute shoe_style when the product is a shoe — used to enable
+            # sub-collection filtering (sneaker/boot/heel/sandal) at search time.
+            computed_shoe_style = None
+            if final_category == "shoes" and selected_box is not None:
+                box_label = selected_box.get("label", "")
+                computed_shoe_style = shoe_style_from_label(box_label) if box_label else "other"
+                print(f"[SHOE]     shoe_style='{computed_shoe_style}'  (box label: '{box_label}')")
+
             return {
                 "skipped":         False,
                 "skip_reason":     None,
                 "vector_normal":   vector_normal,
                 "category":        final_category,
                 "box_source":      box_source,
+                "shoe_style":      computed_shoe_style,
                 "selected_bbox":   [bx1, by1, bx2, by2],
                 "all_detections":  [
                     {
@@ -542,6 +577,14 @@ class LocusVisualizer:
         }
 
         if label_hint and label_hint.strip() in self.clip_labels:
+            # Hard override: caller explicitly selected a labelled box (e.g. user
+            # clicked a "jacket" detection in the UI).  We trust the selection over
+            # raw CLIP argmax here because the user has ground truth.
+            # ⚠ Known limitation: for T2-alias cases (YOLO detects "pants" for
+            # leggings), this override causes the gateway to filter the wrong
+            # Qdrant collection.  The evaluator already corrects this by sending
+            # the canonical category_tag instead of the YOLO alias.  A production
+            # fix (CLIP fine-tuning to distinguish leggings vs pants) is Phase 4.
             category_tag = label_hint.strip()
         else:
             clip_conf    = scores_tensor.max().item()

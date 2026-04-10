@@ -21,6 +21,7 @@ Requirements:
   pip install requests
 """
 
+import argparse
 import json
 import os
 import uuid
@@ -138,6 +139,7 @@ def build_set(set_num: int) -> dict | None:
             "mall"      : MALL_NAME,
             "price"     : "",
             "product_id": compute_product_id(url),
+            "is_golden" : True,
         }
         for name, url in relevant_pairs
     ]
@@ -245,5 +247,60 @@ def main():
     print()
 
 
+def backfill_is_golden():
+    """One-off migration: set is_golden=True on all existing golden_dataset points."""
+    from qdrant_client import QdrantClient
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    qdrant_url = os.getenv("QDRANT_URL")
+    qdrant_key = os.getenv("QDRANT_API_KEY")
+    if qdrant_url:
+        client = QdrantClient(url=qdrant_url, api_key=qdrant_key, timeout=30)
+    else:
+        client = QdrantClient(host="localhost", port=6333, timeout=30)
+
+    from qdrant_client.http import models
+
+    updated = 0
+    cursor  = None
+    print("Backfilling is_golden=True on all golden_dataset points…")
+    while True:
+        batch, next_cursor = client.scroll(
+            collection_name="locus_items",
+            scroll_filter=models.Filter(must=[models.FieldCondition(
+                key="store_name",
+                match=models.MatchValue(value="golden_dataset"),
+            )]),
+            limit=250,
+            offset=cursor,
+            with_payload=False,
+            with_vectors=False,
+        )
+        if not batch:
+            break
+        ids = [pt.id for pt in batch]
+        client.set_payload(
+            collection_name="locus_items",
+            payload={"is_golden": True},
+            points=ids,
+        )
+        updated += len(ids)
+        print(f"  Updated {updated} points…")
+        if next_cursor is None:
+            break
+        cursor = next_cursor
+
+    print(f"Done. Set is_golden=True on {updated} points.")
+
+
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--backfill", action="store_true",
+                        help="Backfill is_golden=True on all existing golden_dataset points")
+    args = parser.parse_args()
+
+    if args.backfill:
+        backfill_is_golden()
+    else:
+        main()
