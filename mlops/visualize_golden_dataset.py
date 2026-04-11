@@ -683,6 +683,16 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
     )
     existing_names = [e.get("query_name","") for e in entries_sorted]
 
+    # Build delete options: duplicate names get their date appended so each is selectable
+    from collections import Counter as _Counter
+    _name_counts = _Counter(e.get("query_name","") for e in entries_sorted)
+    delete_options = "".join(
+        f'<option value="{e.get("query_name","")}|{e.get("created_at","")}">'
+        f'{e.get("query_name","")}{"  (" + e.get("created_at","")[:10] + ")" if _name_counts[e.get("query_name","")] > 1 else ""}'
+        f'</option>'
+        for e in entries_sorted
+    )
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -801,7 +811,7 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
       <label>Select entry to delete</label>
       <select id="delete-select" onchange="document.getElementById('delete-confirm').style.display=this.value?'':'none'">
         <option value="">— pick a query —</option>
-        {"".join(f'<option value="{name}">{name}</option>' for name in existing_names)}
+        {delete_options}
       </select>
       <div id="delete-confirm" style="display:none;margin-top:12px;padding:10px;background:#2a1a1a;border:1px solid #7f1d1d;border-radius:6px;font-size:13px;color:#fca5a5;">
         This will permanently remove the entry from golden_dataset.json and delete its indexed images from Qdrant.
@@ -949,8 +959,9 @@ async function submitEntry() {{
 
   // ── Delete mode ──────────────────────────────────────────────────────────────
   if (mode === "delete") {{
-    const queryName = document.getElementById("delete-select").value;
-    if (!queryName) {{ showMsg("Select an entry to delete.", "err"); return; }}
+    const raw = document.getElementById("delete-select").value;
+    if (!raw) {{ showMsg("Select an entry to delete.", "err"); return; }}
+    const [queryName, createdAt] = raw.split("|");
     btn.disabled = true;
     btn.textContent = "Deleting…";
     showMsg(`Deleting "${{queryName}}"…`, "ok");
@@ -958,7 +969,7 @@ async function submitEntry() {{
       const res = await fetch(GATEWAY + "/golden-dataset/entry", {{
         method: "DELETE",
         headers: {{ "Content-Type": "application/json" }},
-        body: JSON.stringify({{ query_name: queryName }}),
+        body: JSON.stringify({{ query_name: queryName, created_at: createdAt || "" }}),
       }});
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));

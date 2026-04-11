@@ -45,6 +45,7 @@ services:
     volumes:
       - ./gateway:/app
       - ./mlops:/mlops
+      - ./mlops/golden_images:/mlops/golden_images
     dns:
       - 8.8.8.8
       - 1.1.1.1

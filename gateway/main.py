@@ -1,7 +1,9 @@
 import asyncio
+import hashlib
 import io
 import json as _json
 import os
+import pathlib
 import uuid
 from datetime import datetime
 from urllib.parse import urlparse
@@ -10,6 +12,7 @@ import httpx
 from bs4 import BeautifulSoup
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -65,6 +68,10 @@ SKIPPED_COLLECTION  = "locus_skipped"
 FEEDBACK_COLLECTION = "locus_feedback"
 PENDING_PATH        = "/app/pending_whitelist.json"
 GOLDEN_DATASET_PATH = os.getenv("GOLDEN_DATASET_PATH", "/mlops/golden_dataset.json")
+GOLDEN_IMAGES_DIR   = pathlib.Path(os.getenv("GOLDEN_IMAGES_DIR", "/mlops/golden_images"))
+
+GOLDEN_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/golden-dataset/images", StaticFiles(directory=str(GOLDEN_IMAGES_DIR)), name="golden_images")
 
 if QDRANT_URL:
     print(f"[QDRANT] Connecting to cloud: {QDRANT_URL}")
@@ -1285,6 +1292,58 @@ def _scrape_product_cards(soup: BeautifulSoup, base_url: str) -> list:
 # GOLDEN DATASET  — read/write golden_dataset.json from the gateway
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _local_golden_url(url: str) -> bool:
+    """Return True if url points to our local golden images directory."""
+    return url.startswith(GATEWAY_BASE_URL + "/golden-dataset/images/")
+
+
+def _delete_local_images(urls: list[str], surviving_urls: set[str]) -> int:
+    """Delete image files for urls that are local and not referenced by any surviving entry."""
+    deleted = 0
+    for url in urls:
+        if not _local_golden_url(url) or url in surviving_urls:
+            continue
+        filename = url.rsplit("/", 1)[-1]
+        path = GOLDEN_IMAGES_DIR / filename
+        try:
+            path.unlink(missing_ok=True)
+            deleted += 1
+        except Exception as e:
+            print(f"[IMAGES] Warning: could not delete {path}: {e}")
+    return deleted
+
+
+def _mirror_image(url: str) -> str:
+    """Download url and save to GOLDEN_IMAGES_DIR. Returns a stable gateway-relative URL.
+    If the URL is already a local golden-dataset URL, returns it unchanged.
+    On any download failure, returns the original URL as fallback."""
+    if url.startswith(GATEWAY_BASE_URL + "/golden-dataset/images/"):
+        return url
+    if url.startswith("data:"):
+        # base64 data URI — decode and save
+        try:
+            header, b64 = url.split(",", 1)
+            ext = "jpg" if "jpeg" in header else header.split("/")[-1].split(";")[0]
+            img_bytes = __import__("base64").b64decode(b64)
+        except Exception:
+            return url
+    else:
+        try:
+            resp = httpx.get(url, timeout=15.0, follow_redirects=True)
+            resp.raise_for_status()
+            img_bytes = resp.content
+            ct = resp.headers.get("content-type", "image/jpeg")
+            ext = ct.split("/")[-1].split(";")[0] or "jpg"
+        except Exception as e:
+            print(f"[MIRROR] Could not download {url}: {e}")
+            return url
+    filename = hashlib.sha1(url.encode()).hexdigest()[:20] + "." + ext
+    dest = GOLDEN_IMAGES_DIR / filename
+    if not dest.exists():
+        dest.write_bytes(img_bytes)
+    return f"{GATEWAY_BASE_URL}/golden-dataset/images/{filename}"
+
+
 def _load_golden() -> list:
     if not os.path.exists(GOLDEN_DATASET_PATH):
         return []
@@ -1360,7 +1419,7 @@ async def add_golden_entry(req: GoldenEntryRequest):
         {
             "product_id": item["product_id"],
             "name":       item["name"],
-            "image_url":  item["image_url"],
+            "image_url":  _mirror_image(item["image_url"]),
             "store_name": "golden_dataset",
         }
         for item in batch_items
@@ -1368,7 +1427,7 @@ async def add_golden_entry(req: GoldenEntryRequest):
     ]
 
     entry = {
-        "query_image_url":      req.query_image_url,
+        "query_image_url":      _mirror_image(req.query_image_url),
         "query_name":           req.query_name,
         "query_category_tag":   req.query_category,
         "relevant_product_ids": indexed_pids,
@@ -1397,6 +1456,17 @@ async def add_golden_entry(req: GoldenEntryRequest):
                     print(f"[REPLACE] Deleted {len(old_point_ids)} old locus_items for '{req.query_name}'")
                 except Exception as e:
                     print(f"[REPLACE] Warning: failed to delete old locus_items: {e}")
+            # Delete local image files not referenced by other entries
+            other_entries = [e for e in dataset if e.get("query_name") != req.query_name]
+            surviving_urls = {
+                u for e in other_entries
+                for u in ([e.get("query_image_url", "")] +
+                           [i["image_url"] for i in e.get("relevant_info", []) if i.get("image_url")])
+            }
+            old_urls = [old_entry.get("query_image_url", "")] + [
+                i["image_url"] for i in old_entry.get("relevant_info", []) if i.get("image_url")
+            ]
+            _delete_local_images(old_urls, surviving_urls)
         dataset = [e for e in dataset if e.get("query_name") != req.query_name]
     dataset.append(entry)
     _save_golden(dataset)
@@ -1433,26 +1503,44 @@ async def add_golden_entry(req: GoldenEntryRequest):
 
 class DeleteEntryRequest(BaseModel):
     query_name: str
+    created_at: str = ""   # disambiguates duplicates; if blank, deletes the first match
 
 
 @app.delete("/golden-dataset/entry")
 async def delete_golden_entry(req: DeleteEntryRequest):
-    """Remove all entries matching query_name from golden_dataset.json and delete their Qdrant points."""
+    """Remove one entry from golden_dataset.json and delete its Qdrant points.
+    If created_at is provided it targets that specific entry; otherwise the first match."""
     if not req.query_name:
         raise HTTPException(status_code=400, detail="query_name is required")
 
     dataset = _load_golden()
-    matching = [e for e in dataset if e.get("query_name") == req.query_name]
-    if not matching:
+
+    # Find the one entry to delete
+    if req.created_at:
+        target = next(
+            (e for e in dataset
+             if e.get("query_name") == req.query_name and e.get("created_at") == req.created_at),
+            None,
+        )
+    else:
+        target = next((e for e in dataset if e.get("query_name") == req.query_name), None)
+
+    if target is None:
         raise HTTPException(status_code=404, detail=f"Entry '{req.query_name}' not found")
 
-    # Collect unique point IDs across all matching entries
-    point_ids = list({
-        str(uuid.uuid5(uuid.NAMESPACE_URL, info["image_url"]))
-        for entry in matching
-        for info in entry.get("relevant_info", [])
+    # Only delete points that are not referenced by any OTHER remaining entry
+    surviving = [e for e in dataset if e is not target]
+    surviving_urls = {
+        info["image_url"]
+        for e in surviving
+        for info in e.get("relevant_info", [])
         if info.get("image_url")
-    })
+    }
+    point_ids = [
+        str(uuid.uuid5(uuid.NAMESPACE_URL, info["image_url"]))
+        for info in target.get("relevant_info", [])
+        if info.get("image_url") and info["image_url"] not in surviving_urls
+    ]
     if point_ids:
         try:
             client.delete(
@@ -1463,9 +1551,38 @@ async def delete_golden_entry(req: DeleteEntryRequest):
         except Exception as e:
             print(f"[DELETE] Warning: failed to delete locus_items: {e}")
 
-    dataset = [e for e in dataset if e.get("query_name") != req.query_name]
+    # Delete local image files not referenced by any surviving entry
+    surviving_urls = {
+        u for e in surviving
+        for u in ([e.get("query_image_url", "")] +
+                   [i["image_url"] for i in e.get("relevant_info", []) if i.get("image_url")])
+    }
+    old_urls = [target.get("query_image_url", "")] + [
+        i["image_url"] for i in target.get("relevant_info", []) if i.get("image_url")
+    ]
+    images_removed = _delete_local_images(old_urls, surviving_urls)
+
+    _save_golden(surviving)
+    return {"deleted": req.query_name, "points_removed": len(point_ids), "images_removed": images_removed}
+
+
+@app.post("/golden-dataset/migrate-images")
+async def migrate_golden_images():
+    """Download all external image URLs in golden_dataset.json to the local golden_images dir
+    and rewrite the URLs in place. Safe to run multiple times (already-local URLs are skipped)."""
+    dataset = _load_golden()
+    updated = 0
+    for entry in dataset:
+        if entry.get("query_image_url") and not _local_golden_url(entry["query_image_url"]):
+            entry["query_image_url"] = _mirror_image(entry["query_image_url"])
+            updated += 1
+        for info in entry.get("relevant_info", []):
+            if info.get("image_url") and not _local_golden_url(info["image_url"]):
+                info["image_url"] = _mirror_image(info["image_url"])
+                updated += 1
     _save_golden(dataset)
-    return {"deleted": req.query_name, "entries_removed": len(matching), "points_removed": len(point_ids)}
+    print(f"[MIGRATE] Mirrored {updated} images to {GOLDEN_IMAGES_DIR}")
+    return {"mirrored": updated, "entries": len(dataset)}
 
 
 class RegenerateRequest(BaseModel):
