@@ -33,22 +33,27 @@ PROMPTS = [
     "hoodie sweatshirt",                                        # 2  → sweater
     "coat overcoat",                                            # 3  → jacket
     "jumpsuit romper playsuit",                                 # 4  → jumpsuit
+    # ── dress/skirt fallback (DF2 misses complex silhouettes) ─────────────
+    "maxi dress long dress floor length dress",                 # 5  → dress
+    "midi dress knee length dress wrap dress shirt dress",      # 6  → dress
+    "mini dress short dress bodycon dress",                     # 7  → dress
+    "skirt midi skirt maxi skirt mini skirt",                   # 8  → skirt
     # ── shoes ─────────────────────────────────────────────────────────────
-    "sneaker trainer running shoe",                             # 5  → shoes
-    "boot ankle boot chelsea boot combat boot",                 # 6  → shoes
-    "high heel pump stiletto",                                  # 7  → shoes
-    "sandal strappy sandal flat sandal",                        # 8  → shoes
-    "loafer flat shoe ballet flat mule espadrille",             # 9  → shoes
-    "platform shoe wedge clog slip-on",                         # 10 → shoes
+    "sneaker trainer running shoe",                             # 9  → shoes
+    "boot ankle boot chelsea boot combat boot",                 # 10 → shoes
+    "high heel pump stiletto",                                  # 11 → shoes
+    "sandal strappy sandal flat sandal",                        # 12 → shoes
+    "loafer flat shoe ballet flat mule espadrille",             # 13 → shoes
+    "platform shoe wedge clog slip-on",                         # 14 → shoes
     # ── bag ───────────────────────────────────────────────────────────────
-    "handbag shoulder bag tote bag",                            # 11 → bag
-    "crossbody bag satchel clutch purse",                       # 12 → bag
-    "backpack rucksack",                                        # 13 → bag
+    "handbag shoulder bag tote bag",                            # 15 → bag
+    "crossbody bag satchel clutch purse",                       # 16 → bag
+    "backpack rucksack",                                        # 17 → bag
     # ── hat ───────────────────────────────────────────────────────────────
-    "baseball cap snapback trucker cap",                        # 14 → hat
-    "straw hat sun hat wide brim hat",                          # 15 → hat
-    "beanie bobble hat winter hat",                             # 16 → hat
-    "fedora panama bucket hat beret",                           # 17 → hat
+    "baseball cap snapback trucker cap",                        # 18 → hat
+    "straw hat sun hat wide brim hat",                          # 19 → hat
+    "beanie bobble hat winter hat",                             # 20 → hat
+    "fedora panama bucket hat beret",                           # 21 → hat
 ]
 
 # Maps prompt index → canonical label
@@ -58,19 +63,23 @@ PROMPT_TO_CANONICAL = {
     2:  "sweater",   # hoodie sweatshirt
     3:  "jacket",    # coat overcoat
     4:  "jumpsuit",  # jumpsuit romper
-    5:  "shoes",     # sneaker
-    6:  "shoes",     # boot
-    7:  "shoes",     # heel pump
-    8:  "shoes",     # sandal
-    9:  "shoes",     # loafer flat
-    10: "shoes",     # platform wedge
-    11: "bag",       # handbag shoulder
-    12: "bag",       # crossbody clutch
-    13: "bag",       # backpack
-    14: "hat",       # baseball cap
-    15: "hat",       # straw hat
-    16: "hat",       # beanie
-    17: "hat",       # fedora bucket
+    5:  "dress",     # maxi dress long dress
+    6:  "dress",     # midi dress wrap dress
+    7:  "dress",     # mini dress bodycon
+    8:  "skirt",     # skirt midi maxi mini
+    9:  "shoes",     # sneaker
+    10: "shoes",     # boot
+    11: "shoes",     # heel pump
+    12: "shoes",     # sandal
+    13: "shoes",     # loafer flat
+    14: "shoes",     # platform wedge
+    15: "bag",       # handbag shoulder
+    16: "bag",       # crossbody clutch
+    17: "bag",       # backpack
+    18: "hat",       # baseball cap
+    19: "hat",       # straw hat
+    20: "hat",       # beanie
+    21: "hat",       # fedora bucket
 }
 
 # Max image size fed to YOLO-World — larger images hurt detection of small items

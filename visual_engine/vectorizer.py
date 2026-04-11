@@ -92,12 +92,14 @@ def shoe_style_from_label(prompt_label: str) -> str:
 # CATEGORY ALIASES
 # Maps voted final_category → acceptable YOLO search_label values (Tier 2).
 # =============================================================================
+_ACCESSORY_CATEGORIES = {"shoes", "hat", "bag"}
+
 CATEGORY_ALIASES = {
     "top":        ["top", "shirt"],
     "sports_bra": ["sports_bra", "top", "shirt"],
     "sweater":    ["sweater", "top", "shirt"],
     "jacket":     ["jacket", "coat"],
-    "dress":      ["dress", "jumpsuit"],
+    "dress":      ["dress", "jumpsuit", "skirt"],
     "jumpsuit":   ["jumpsuit", "dress"],
     "skirt":      ["skirt", "dress"],
     "pants":      ["pants", "trousers", "jeans"],
@@ -132,6 +134,8 @@ def _nms(detections, iou_threshold=0.3):
     dets = sorted(detections, key=lambda d: d["score"], reverse=True)
     kept = []
     suppressed = set()
+    _FULL_GARMENT  = {"dress", "skirt"}   # full-length — protect from upper-body suppression
+    _PARTIAL_UPPER = {"top", "jacket"}    # upper-body crops that may overlap a dress bbox
     for i, d in enumerate(dets):
         if i in suppressed:
             continue
@@ -140,6 +144,12 @@ def _nms(detections, iou_threshold=0.3):
             if j in suppressed:
                 continue
             if _iou(d["bbox"], dets[j]["bbox"]) > iou_threshold:
+                # Don't let an upper-body box erase a full-garment box.
+                # A vest/top crop of the torso naturally overlaps the full dress bbox —
+                # both detections are valid and should survive for downstream selection.
+                if (d["search_label"] in _PARTIAL_UPPER
+                        and dets[j]["search_label"] in _FULL_GARMENT):
+                    continue  # keep both
                 suppressed.add(j)
     print(f"  NMS: {len(detections)} -> {len(kept)} detections after suppression")
     return kept
@@ -252,6 +262,15 @@ class LocusVisualizer:
             # correctly identifies tank tops, halternecks, etc. as "top".
             # Only override when CLIP confidence ≥ 0.52; below that keep YOLO.
             CLIP_RELABEL_THRESHOLD = 0.52
+            # dress ↔ skirt are visually indistinguishable to CLIP on a crop
+            # (slip/midi dresses look like skirts from the waist down).
+            # DeepFashion2 knows garment shape; block CLIP from flipping these.
+            _DRESS_SKIRT = {"dress", "skirt"}
+            # CLIP sees texture, not length. A knit dress crop looks like "sweater"
+            # or "top" to CLIP because it can't tell the garment is dress-length.
+            # When DeepFashion2 (the shape expert) detected a dress or skirt,
+            # block CLIP from flipping it to a texture-based category.
+            _TEXTURE_CATEGORIES = {"sweater", "top"}
 
             for det in all_detections:
                 bx1, by1, bx2, by2 = det["bbox"]
@@ -264,10 +283,19 @@ class LocusVisualizer:
                     clip_label, clip_conf, _ = self._classify_crop(crop)
                     if clip_label and clip_conf >= CLIP_RELABEL_THRESHOLD:
                         if clip_label != det["search_label"]:
-                            print(f"  [CLIP-RELABEL] '{det['search_label']}' "
-                                  f"→ '{clip_label}' (conf={clip_conf:.2f})")
-                        det["search_label"] = clip_label
-                        det["clip_conf"]    = round(clip_conf, 3)
+                            if det["search_label"] in _DRESS_SKIRT and clip_label in _DRESS_SKIRT:
+                                print(f"  [CLIP-RELABEL BLOCKED] '{det['search_label']}' "
+                                      f"→ '{clip_label}' (conf={clip_conf:.2f}) — dress/skirt pair")
+                            elif (det.get("source") == "deepfashion2"
+                                  and det["search_label"] in _DRESS_SKIRT
+                                  and clip_label in _TEXTURE_CATEGORIES):
+                                print(f"  [CLIP-RELABEL BLOCKED] DF2 '{det['search_label']}' "
+                                      f"→ '{clip_label}' (conf={clip_conf:.2f}) — shape > texture")
+                            else:
+                                print(f"  [CLIP-RELABEL] '{det['search_label']}' "
+                                      f"→ '{clip_label}' (conf={clip_conf:.2f})")
+                                det["search_label"] = clip_label
+                        det["clip_conf"] = round(clip_conf, 3)
                 except Exception:
                     pass  # keep original YOLO label on any error
             # ─────────────────────────────────────────────────────────────────
@@ -366,12 +394,19 @@ class LocusVisualizer:
                               f"for '{final_category}' conf={selected_box['score']:.2f}")
 
                 if selected_box is None:
-                    confident_any = [d for d in detections if d["score"] >= 0.50]
-                    if confident_any:
-                        selected_box = max(confident_any, key=lambda d: d["score"])
+                    if final_category in _ACCESSORY_CATEGORIES:
+                        same_family = [d for d in detections
+                                       if d["score"] >= 0.50
+                                       and d.get("search_label") in _ACCESSORY_CATEGORIES]
+                    else:
+                        same_family = [d for d in detections
+                                       if d["score"] >= 0.50
+                                       and d.get("search_label") not in _ACCESSORY_CATEGORIES]
+                    if same_family:
+                        selected_box = max(same_family, key=lambda d: d["score"])
                         box_source   = selected_box["source"] + "_best_available"
                         print(f"[CROP T3]  Best available '{selected_box['search_label']}' "
-                              f"conf={selected_box['score']:.2f}")
+                              f"for '{final_category}' conf={selected_box['score']:.2f}")
 
             if selected_box is None:
                 print(f"[CROP]     No usable box for '{title}' → skip")

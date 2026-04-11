@@ -456,7 +456,7 @@ YOLO_TO_CANONICAL = {
     "long sleeved shirt":    "top",
     "short sleeved outwear": "jacket",
     "long sleeved outwear":  "jacket",
-    # "vest" intentionally omitted — CLIP relabel decides top vs jacket per crop
+    "vest":                  "top",    # default "top"; CLIP relabel overrides → "jacket" for actual waistcoats (conf ≥ 0.52)
     "sling":                 "top",
     "shorts":                "shorts",
     "trousers":              "pants",

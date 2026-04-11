@@ -39,10 +39,10 @@ except ImportError:
 
 import requests
 
-HERE       = pathlib.Path(__file__).parent
-GOLDEN     = HERE / "golden_dataset.json"
-OUT_HTML   = HERE / "golden_dataset_report.html"
-CACHE_FILE = HERE / "results_cache.json"
+HERE              = pathlib.Path(__file__).parent
+GOLDEN            = HERE / "golden_dataset.json"
+OUT_HTML          = HERE / "golden_dataset_report.html"
+GOLDEN_IMAGES_DIR = HERE / "golden_images"
 
 CATEGORIES = [
     "top","pants","jacket","dress","shorts","skirt","sweater",
@@ -57,6 +57,13 @@ def get_image_bytes(url: str) -> bytes | None:
         if url.startswith("data:"):
             _, b64 = url.split(",", 1)
             return base64.b64decode(b64)
+        # Fast-path: read local golden-dataset images directly from disk (no HTTP)
+        if "golden-dataset/images/" in url:
+            filename = url.rsplit("/", 1)[-1]
+            local_path = GOLDEN_IMAGES_DIR / filename
+            if local_path.exists():
+                return local_path.read_bytes()
+        # Fallback: HTTP fetch for external URLs
         r = requests.get(
             url,
             headers={"User-Agent": "Mozilla/5.0 (Locus-Visualizer/1.0)"},
@@ -116,106 +123,6 @@ def crop_image(img_bytes: bytes, bbox: list) -> str | None:
 def bytes_to_data_uri(img_bytes: bytes) -> str:
     return "data:image/jpeg;base64," + base64.b64encode(img_bytes).decode()
 
-
-# ── Results cache ──────────────────────────────────────────────────────────────
-# Stores bbox coords + search metadata (no base64 images) between runs.
-# Allows --only mode to skip detect/search for unchanged entries.
-
-def load_cache() -> dict:
-    if CACHE_FILE.exists():
-        try:
-            with open(CACHE_FILE, encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"[warn] Could not load cache: {e}")
-    return {}
-
-
-def save_cache(results_map: dict):
-    cache = {}
-    for name, r in results_map.items():
-        cache[name] = {
-            "recall5":        r.get("recall5"),
-            "hits5":          r.get("hits5"),
-            "bbox_tier":      r.get("bbox_tier"),
-            "search_label":   r.get("search_label"),
-            "avg_groq_score": r.get("avg_groq_score"),
-            "bbox":           r.get("bbox"),
-            "results": [
-                {
-                    "rank":        rec["rank"],
-                    "image_url":   rec["image_url"],
-                    "result_bbox": rec.get("result_bbox"),
-                    "name":        rec["name"],
-                    "product_id":  rec["product_id"],
-                    "store_name":  rec.get("store_name", ""),
-                    "groq_score":  rec.get("groq_score"),
-                }
-                for rec in r.get("results", [])
-            ],
-            "gt_bboxes": r.get("gt_bboxes", {}),
-        }
-    try:
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(cache, f)
-    except Exception as e:
-        print(f"[warn] Could not save cache: {e}")
-
-
-def rebuild_visuals_from_cache(cached: dict, entry: dict, gateway: str) -> dict:
-    """Re-fetch images and redraw bboxes using cached coords. Skips detect/search."""
-    url  = entry.get("query_image_url", "")
-    bbox = cached.get("bbox")
-
-    img_bytes = get_image_bytes(url)
-
-    # Query image visuals
-    bbox_img_src = draw_bbox_on_image(img_bytes, bbox) if img_bytes and bbox else None
-    crop_src = None
-    if img_bytes:
-        if bbox and PIL_OK:
-            try:
-                img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-                x1, y1, x2, y2 = [int(v) for v in bbox]
-                cropped = img.crop((x1, y1, x2, y2))
-                buf = io.BytesIO()
-                cropped.save(buf, format="JPEG", quality=88)
-                crop_src = bytes_to_data_uri(buf.getvalue())
-            except Exception:
-                crop_src = bytes_to_data_uri(img_bytes)
-        else:
-            crop_src = bytes_to_data_uri(img_bytes)
-
-    # Result images — redraw cached bbox coords, no new detect/search
-    result_records = []
-    for rec in cached.get("results", []):
-        img_url    = rec.get("image_url", "")
-        result_bbox = rec.get("result_bbox")
-        res_bytes  = get_image_bytes(img_url) if img_url else None
-        res_bbox_src = draw_bbox_on_image(res_bytes, result_bbox) if res_bytes and result_bbox else None
-        result_records.append({**rec, "bbox_img_src": res_bbox_src})
-
-    # GT images — redraw cached bbox coords
-    gt_bboxes   = cached.get("gt_bboxes", {})
-    gt_bbox_imgs: dict = {}
-    for p in entry.get("relevant_info", []):
-        pid    = p.get("product_id", "")
-        gt_url = p.get("image_url", "")
-        gt_bbox = gt_bboxes.get(pid)
-        if not gt_url or not gt_bbox:
-            continue
-        gt_rb = get_image_bytes(gt_url)
-        gt_bbox_src = draw_bbox_on_image(gt_rb, gt_bbox) if gt_rb else None
-        if gt_bbox_src:
-            gt_bbox_imgs[pid] = gt_bbox_src
-
-    return {
-        **cached,
-        "bbox_img_src": bbox_img_src,
-        "crop_src":     crop_src,
-        "results":      result_records,
-        "gt_bbox_imgs": gt_bbox_imgs,
-    }
 
 
 def make_img(src: str, w: int = 130, h: int = 160, extra: str = "") -> str:
@@ -402,7 +309,8 @@ def _best_bbox(detections: list, category: str) -> dict | None:
         aliases = _ALIAS.get(category, set())
         if any(a in lb or a in sl for a in aliases):
             return d
-    return detections[0]
+    # No match — return None so the full image is used rather than a wrong bbox
+    return None
 
 
 # ── HTML template ──────────────────────────────────────────────────────────────
@@ -1084,8 +992,6 @@ def main():
                         type=lambda s: s.strip())
     parser.add_argument("--skip-groq", action="store_true",
                         help="Skip Groq scoring (faster, recall-only)")
-    parser.add_argument("--only", default="",
-                        help="Comma-separated query names to recompute; others loaded from cache")
     args = parser.parse_args()
 
     if not GOLDEN.exists():
@@ -1101,11 +1007,6 @@ def main():
               "Use --skip-groq to suppress this warning.")
         args.skip_groq = True
 
-    only_set = {n.strip() for n in args.only.split(",") if n.strip()} if args.only else set()
-    cache    = load_cache()
-    if only_set:
-        print(f"--only mode: recomputing {only_set}, loading rest from cache")
-
     results_map: dict = {}
 
     for i, entry in enumerate(golden, 1):
@@ -1114,21 +1015,6 @@ def main():
         url     = entry.get("query_image_url", "")
         gt_ids  = set(entry.get("relevant_product_ids", []))
         print(f"\n[{i:2d}/{len(golden)}] {name}")
-
-        # In --only mode: skip every entry that isn't in the target set.
-        # If the entry exists in cache, rebuild its visuals; otherwise load
-        # whatever data is in the cache without visuals (keeps the card in the
-        # report rather than losing it entirely).
-        if only_set and name not in only_set:
-            if name in cache:
-                print("  [cache] rebuilding visuals from cache (skipping detect/search)")
-                results_map[name] = rebuild_visuals_from_cache(cache[name], entry, args.gateway)
-            else:
-                print("  [cache] no cache entry — keeping blank card")
-                results_map[name] = {"recall5": None, "hits5": 0, "results": [],
-                                     "gt_bbox_imgs": {}, "bbox_tier": "—",
-                                     "search_label": ""}
-            continue
 
         img_bytes = get_image_bytes(url)
         if not img_bytes:
@@ -1176,20 +1062,13 @@ def main():
         recall5  = hits5 / len(gt_ids) if gt_ids else 0.0
         print(f"  Recall@5: {hits5}/{len(gt_ids)} ({recall5*100:.0f}%)")
 
-        # Groq scoring + result bbox detection
+        # Groq scoring (result images are shown as-is, no bbox detection needed)
         groq_scores = []
         result_records = []
         for rank, m in enumerate(matches[:5], 1):
             img_url = m.get("image_url", "")
             g_score = None
-            res_bytes = get_image_bytes(img_url) if img_url else None
-            # detect + draw bbox on result image
-            res_bbox_src = None
-            if res_bytes:
-                res_dets = detect(res_bytes, args.gateway)
-                res_best = _best_bbox(res_dets, cat)
-                res_bbox = res_best["bbox"] if res_best else None
-                res_bbox_src = draw_bbox_on_image(res_bytes, res_bbox) if res_bbox else None
+            res_bytes = get_image_bytes(img_url) if (img_url and not args.skip_groq) else None
             if not args.skip_groq and crop_bytes and res_bytes:
                 print(f"    Groq scoring #{rank}: {m.get('name','')[:40]}...", end=" ", flush=True)
                 g_score = groq_score(crop_bytes, res_bytes, groq_key)
@@ -1197,21 +1076,19 @@ def main():
                 if g_score is not None:
                     groq_scores.append(g_score)
             result_records.append({
-                "rank":         rank,
-                "image_url":    img_url,
-                "result_bbox":  res_bbox,
-                "bbox_img_src": res_bbox_src,
-                "name":         m.get("name", ""),
-                "product_id":   m.get("product_id", ""),
-                "store_name":   m.get("store_name", ""),
-                "groq_score":   g_score,
+                "rank":        rank,
+                "image_url":   img_url,
+                "name":        m.get("name", ""),
+                "product_id":  m.get("product_id", ""),
+                "store_name":  m.get("store_name", ""),
+                "groq_score":  g_score,
             })
 
         avg_groq = round(sum(groq_scores) / len(groq_scores), 3) if groq_scores else None
 
         # Detect + draw bbox on ground-truth images
-        gt_bboxes: dict    = {}   # pid -> [x1,y1,x2,y2]  (for cache)
-        gt_bbox_imgs: dict = {}   # pid -> data URI        (for render)
+        gt_bboxes: dict    = {}
+        gt_bbox_imgs: dict = {}
         for p in entry.get("relevant_info", []):
             pid = p.get("product_id", "")
             gt_url = p.get("image_url", "")
@@ -1243,7 +1120,6 @@ def main():
             "gt_bbox_imgs":   gt_bbox_imgs,
         }
 
-    save_cache(results_map)
     print("\nRendering HTML report...")
     html = render(golden, results_map, gateway_url=args.gateway)
     with open(OUT_HTML, "w", encoding="utf-8") as f:

@@ -49,6 +49,15 @@ CONCURRENCY        = int(os.getenv("CONCURRENCY", "3"))
 
 STALE_SOURCES = {"full_image", "unknown", None, ""}
 
+
+def _is_stale(box_source) -> bool:
+    """A point is stale if it has no crop (full_image/unknown) or was indexed
+    with a best_available fallback — which may have picked a wrong-family box
+    (e.g. shoe bbox for a dress) before the family-aware Tier 3 fix."""
+    return box_source in STALE_SOURCES or (
+        isinstance(box_source, str) and box_source.endswith("_best_available")
+    )
+
 if QDRANT_URL:
     print(f"[QDRANT] Cloud: {QDRANT_URL}")
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
@@ -160,7 +169,7 @@ def collect_stale_products() -> list[dict]:
             product_id = p.get("product_id", str(pt.id))
             box_source = p.get("box_source", None)
 
-            if box_source not in STALE_SOURCES:
+            if not _is_stale(box_source):
                 continue
 
             if product_id not in stale:

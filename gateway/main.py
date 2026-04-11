@@ -482,7 +482,7 @@ async def index_stats():
             "unique_products":   len(seen_product_ids),
             "by_box_source_raw": source_counts,
             "by_tier":           tier_summary,
-            "reindex_required":  (tier_summary["full_image"] + tier_summary["unknown"]) > 0,
+            "reindex_required":  (tier_summary["full_image"] + tier_summary["unknown"] + tier_summary["best_available"]) > 0,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Stats query failed: {e}")
@@ -608,6 +608,23 @@ async def search_items(
     if skip_filter_for_accessory:
         print(f"[SEARCH] Accessory uncertainty (accessory_signal={_accessory_signal:.4f}) "
               f"— dropping category filter, returning unfiltered results")
+
+    # ── Dress / skirt ambiguity fallback ──────────────────────────────────────
+    # CLIP (fashion-ViT) frequently classifies slip/midi/satin dresses as skirts
+    # because it fixates on the lower half of the garment.  When CLIP says skirt
+    # but the dress score is competitive (≥ 70 % of the skirt score), widen the
+    # Qdrant filter to match both categories so indexed dresses stay reachable.
+    _dress_score = _scores.get("dress", 0.0)
+    _skirt_score = _scores.get("skirt", 0.0)
+    widen_dress_skirt = (
+        not search_label                                      # user has not selected a box
+        and detected_category == "skirt"                      # CLIP said skirt
+        and _skirt_score > 0
+        and _dress_score / _skirt_score >= 0.70               # dress is competitive
+    )
+    if widen_dress_skirt:
+        print(f"[SEARCH] Dress/skirt ambiguity (dress={_dress_score:.4f} skirt={_skirt_score:.4f}) "
+              f"— widening category filter to dress+skirt")
     # ─────────────────────────────────────────────────────────────────────────
 
     query_filter    = None
@@ -615,10 +632,16 @@ async def search_items(
 
     must_conditions = []
     if effective_label:
-        must_conditions.append(models.FieldCondition(
-            key="category_tag",
-            match=models.MatchValue(value=effective_label)
-        ))
+        if widen_dress_skirt:
+            must_conditions.append(models.FieldCondition(
+                key="category_tag",
+                match=models.MatchAny(any=["dress", "skirt"])
+            ))
+        else:
+            must_conditions.append(models.FieldCondition(
+                key="category_tag",
+                match=models.MatchValue(value=effective_label)
+            ))
         # Shoe sub-type filter: when both category=shoes and a shoe_style are
         # provided, narrow the search to that sub-type (sneaker/boot/heel/sandal).
         # Falls back gracefully to shoes-only if shoe_style is missing or "other".
@@ -1392,7 +1415,7 @@ async def add_golden_entry(req: GoldenEntryRequest):
         name = item.get("name", "").strip() or req.query_name
         if not url:
             continue
-        pid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"golden::{url}"))
+        pid = str(uuid.uuid5(uuid.NAMESPACE_URL, url))
         batch_items.append({
             "name":       name,
             "image_url":  url,
@@ -1446,16 +1469,32 @@ async def add_golden_entry(req: GoldenEntryRequest):
     if req.replace:
         old_entry = next((e for e in dataset if e.get("query_name") == req.query_name), None)
         if old_entry:
+            # Delete by payload.product_id filter — point IDs in Qdrant use a
+            # different hash than product_id (no "golden::" prefix), so PointIdsList
+            # won't match. FilterSelector on the payload field always works.
+            surviving_pids = {
+                info["product_id"]
+                for e in [e for e in dataset if e.get("query_name") != req.query_name]
+                for info in e.get("relevant_info", [])
+                if info.get("product_id")
+            }
             old_point_ids = [
-                str(uuid.uuid5(uuid.NAMESPACE_URL, info["image_url"]))
+                info["product_id"]
                 for info in old_entry.get("relevant_info", [])
-                if info.get("image_url")
+                if info.get("product_id") and info["product_id"] not in surviving_pids
             ]
             if old_point_ids:
                 try:
                     client.delete(
                         collection_name=COLLECTION_NAME,
-                        points_selector=models.PointIdsList(points=old_point_ids),
+                        points_selector=models.FilterSelector(
+                            filter=models.Filter(
+                                must=[models.FieldCondition(
+                                    key="product_id",
+                                    match=models.MatchAny(any=old_point_ids),
+                                )]
+                            )
+                        ),
                     )
                     print(f"[REPLACE] Deleted {len(old_point_ids)} old locus_items for '{req.query_name}'")
                 except Exception as e:
@@ -1489,7 +1528,6 @@ async def add_golden_entry(req: GoldenEntryRequest):
             _sys.executable, str(_script),
             "--skip-groq",
             "--gateway", "http://localhost:8000",
-            "--only", req.query_name,
         ]
         _proc = await _asyncio.create_subprocess_exec(
             *_cmd,
@@ -1536,24 +1574,33 @@ async def delete_golden_entry(req: DeleteEntryRequest):
     if target is None:
         raise HTTPException(status_code=404, detail=f"Entry '{req.query_name}' not found")
 
-    # Only delete points that are not referenced by any OTHER remaining entry
+    # Only delete points that are not referenced by any OTHER remaining entry.
+    # Use stored product_id — re-hashing image_url is wrong because image_url
+    # is now the local mirror URL, not the original URL used at index time.
     surviving = [e for e in dataset if e is not target]
-    surviving_urls = {
-        info["image_url"]
+    surviving_pids = {
+        info["product_id"]
         for e in surviving
         for info in e.get("relevant_info", [])
-        if info.get("image_url")
+        if info.get("product_id")
     }
     point_ids = [
-        str(uuid.uuid5(uuid.NAMESPACE_URL, info["image_url"]))
+        info["product_id"]
         for info in target.get("relevant_info", [])
-        if info.get("image_url") and info["image_url"] not in surviving_urls
+        if info.get("product_id") and info["product_id"] not in surviving_pids
     ]
     if point_ids:
         try:
             client.delete(
                 collection_name=COLLECTION_NAME,
-                points_selector=models.PointIdsList(points=point_ids),
+                points_selector=models.FilterSelector(
+                    filter=models.Filter(
+                        must=[models.FieldCondition(
+                            key="product_id",
+                            match=models.MatchAny(any=point_ids),
+                        )]
+                    )
+                ),
             )
             print(f"[DELETE] Removed {len(point_ids)} locus_items for '{req.query_name}'")
         except Exception as e:
@@ -1591,6 +1638,200 @@ async def migrate_golden_images():
     _save_golden(dataset)
     print(f"[MIGRATE] Mirrored {updated} images to {GOLDEN_IMAGES_DIR}")
     return {"mirrored": updated, "entries": len(dataset)}
+
+
+@app.post("/golden-dataset/wipe")
+async def wipe_golden_dataset():
+    """Completely wipe all golden dataset data:
+    - All golden Qdrant points from locus_items
+    - golden_dataset.json reset to []
+    - All local golden images deleted
+    - results_cache.json deleted
+    """
+    client.delete(
+        collection_name=COLLECTION_NAME,
+        points_selector=models.FilterSelector(
+            filter=models.Filter(
+                must=[models.FieldCondition(
+                    key="store_name",
+                    match=models.MatchValue(value="golden_dataset"),
+                )]
+            )
+        ),
+    )
+
+    _save_golden([])
+
+    images_removed = 0
+    if GOLDEN_IMAGES_DIR.exists():
+        for f in GOLDEN_IMAGES_DIR.iterdir():
+            if f.is_file():
+                f.unlink()
+                images_removed += 1
+
+    cache_path = pathlib.Path("/mlops/results_cache.json")
+    cache_removed = cache_path.exists()
+    cache_path.unlink(missing_ok=True)
+
+    print(f"[WIPE] Done — images={images_removed}, cache={cache_removed}")
+    return {"images_removed": images_removed, "cache_removed": cache_removed, "status": "wiped"}
+
+
+@app.post("/golden-dataset/rebuild")
+async def rebuild_golden_dataset():
+    """
+    Nuclear reset for golden dataset Qdrant entries:
+      1. Delete ALL store_name='golden_dataset' points from locus_items.
+      2. Re-index every relevant image from golden_dataset.json using the
+         stored product_id as the Qdrant point ID (fixes historic ID mismatch).
+    Images are read directly from disk — no HTTP round-trip to StaticFiles.
+    Safe to run multiple times (idempotent upsert).
+    """
+    dataset = _load_golden()
+
+    # ── Step 1: wipe all golden points ────────────────────────────────────────
+    client.delete(
+        collection_name=COLLECTION_NAME,
+        points_selector=models.FilterSelector(
+            filter=models.Filter(
+                must=[models.FieldCondition(
+                    key="store_name",
+                    match=models.MatchValue(value="golden_dataset"),
+                )]
+            )
+        ),
+    )
+    print("[REBUILD] Wiped all golden_dataset points from locus_items")
+
+    # ── Step 2: re-index ──────────────────────────────────────────────────────
+    indexed = 0
+    failed  = 0
+    async with httpx.AsyncClient() as http:
+        for entry in dataset:
+            cat = entry.get("query_category_tag", "")
+            for info in entry.get("relevant_info", []):
+                pid       = info.get("product_id")
+                img_url   = info.get("image_url", "")
+                item_name = info.get("name", entry.get("query_name", "golden"))
+                if not pid or not img_url:
+                    continue
+
+                # Read image bytes directly from disk for local golden URLs
+                img_bytes = None
+                if "/golden-dataset/images/" in img_url:
+                    filename = img_url.rsplit("/", 1)[-1]
+                    local_path = GOLDEN_IMAGES_DIR / filename
+                    if local_path.exists():
+                        img_bytes = local_path.read_bytes()
+                if img_bytes is None:
+                    try:
+                        r = await http.get(img_url, timeout=15.0, follow_redirects=True)
+                        r.raise_for_status()
+                        img_bytes = r.content
+                    except Exception as e:
+                        print(f"[REBUILD] Cannot fetch {img_url[:60]}: {e}")
+                        failed += 1
+                        continue
+
+                try:
+                    vis = await http.post(
+                        f"{VISUAL_URL}/vectorize",
+                        files={"file": ("img.jpg", img_bytes, "image/jpeg")},
+                        data={"yolo_label": cat, "darken": "false"},
+                        timeout=60.0,
+                    )
+                    vis.raise_for_status()
+                    vis_data = vis.json()
+                    vector   = vis_data.get("vector")
+                    if not vector:
+                        print(f"[REBUILD] No vector returned for {item_name}")
+                        failed += 1
+                        continue
+
+                    client.upsert(
+                        collection_name=COLLECTION_NAME,
+                        points=[PointStruct(
+                            id=pid,
+                            vector=vector,
+                            payload={
+                                "name":         item_name,
+                                "store_name":   "golden_dataset",
+                                "mall_name":    "golden_dataset",
+                                "image_url":    img_url,
+                                "category_tag": cat,
+                                "price":        "",
+                                "product_id":   pid,
+                                "is_golden":    True,
+                            },
+                        )]
+                    )
+                    indexed += 1
+                except Exception as e:
+                    print(f"[REBUILD] Failed to index {item_name}: {e}")
+                    failed += 1
+
+    print(f"[REBUILD] Done — indexed={indexed}, failed={failed}")
+    return {"indexed": indexed, "failed": failed, "entries": len(dataset)}
+
+
+@app.post("/golden-dataset/gc")
+async def golden_dataset_gc():
+    """Delete any locus_items points with store_name='golden_dataset' whose
+    product_id is no longer referenced in golden_dataset.json.
+    Safe to run at any time — only removes orphaned points."""
+    dataset = _load_golden()
+
+    # Collect every product_id currently in the dataset
+    valid_pids = {
+        info["product_id"]
+        for entry in dataset
+        for info in entry.get("relevant_info", [])
+        if info.get("product_id")
+    }
+
+    # Scroll all golden points from Qdrant, comparing by payload.product_id
+    # (point.id uses a different hash than product_id — don't compare those).
+    orphan_pids = []
+    offset = None
+    while True:
+        batch, next_offset = client.scroll(
+            collection_name=COLLECTION_NAME,
+            scroll_filter=models.Filter(
+                must=[models.FieldCondition(
+                    key="store_name",
+                    match=models.MatchValue(value="golden_dataset"),
+                )]
+            ),
+            limit=250,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        for point in batch:
+            pid = (point.payload or {}).get("product_id")
+            if pid and pid not in valid_pids:
+                orphan_pids.append(pid)
+        if next_offset is None:
+            break
+        offset = next_offset
+
+    if orphan_pids:
+        client.delete(
+            collection_name=COLLECTION_NAME,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[models.FieldCondition(
+                        key="product_id",
+                        match=models.MatchAny(any=orphan_pids),
+                    )]
+                )
+            ),
+        )
+        print(f"[GC] Deleted {len(orphan_pids)} orphaned golden points")
+    else:
+        print("[GC] No orphaned golden points found")
+
+    return {"orphans_removed": len(orphan_pids), "valid_entries": len(valid_pids)}
 
 
 class RegenerateRequest(BaseModel):
