@@ -30,7 +30,6 @@ import json
 import os
 import pathlib
 import sys
-import urllib.request
 
 try:
     from PIL import Image, ImageDraw
@@ -58,11 +57,14 @@ def get_image_bytes(url: str) -> bytes | None:
         if url.startswith("data:"):
             _, b64 = url.split(",", 1)
             return base64.b64decode(b64)
-        req = urllib.request.Request(
-            url, headers={"User-Agent": "Mozilla/5.0 (Locus-Visualizer/1.0)"}
+        r = requests.get(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Locus-Visualizer/1.0)"},
+            timeout=(5, 15),  # (connect, read) — fail fast on dead hosts
+            allow_redirects=True,
         )
-        with urllib.request.urlopen(req, timeout=12) as r:
-            return r.read()
+        r.raise_for_status()
+        return r.content
     except Exception as e:
         print(f"    [warn] Cannot fetch {url[:60]}: {e}")
         return None
@@ -1078,7 +1080,8 @@ async function submitEntry() {{
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--gateway", default="http://localhost:8000")
+    parser.add_argument("--gateway", default="http://localhost:8000",
+                        type=lambda s: s.strip())
     parser.add_argument("--skip-groq", action="store_true",
                         help="Skip Groq scoring (faster, recall-only)")
     parser.add_argument("--only", default="",

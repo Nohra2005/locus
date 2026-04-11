@@ -1339,8 +1339,12 @@ def _mirror_image(url: str) -> str:
             return url
     filename = hashlib.sha1(url.encode()).hexdigest()[:20] + "." + ext
     dest = GOLDEN_IMAGES_DIR / filename
-    if not dest.exists():
-        dest.write_bytes(img_bytes)
+    try:
+        if not dest.exists():
+            dest.write_bytes(img_bytes)
+            print(f"[MIRROR] Saved {filename}")
+    except Exception as e:
+        print(f"[MIRROR] Failed to save {filename}: {e}")
     return f"{GATEWAY_BASE_URL}/golden-dataset/images/{filename}"
 
 
@@ -1456,9 +1460,13 @@ async def add_golden_entry(req: GoldenEntryRequest):
                     print(f"[REPLACE] Deleted {len(old_point_ids)} old locus_items for '{req.query_name}'")
                 except Exception as e:
                     print(f"[REPLACE] Warning: failed to delete old locus_items: {e}")
-            # Delete local image files not referenced by other entries
+            # Delete local image files not referenced by the new entry OR other entries.
+            # Do this AFTER mirroring so same-URL replacements don't lose their files.
             other_entries = [e for e in dataset if e.get("query_name") != req.query_name]
-            surviving_urls = {
+            new_urls = {entry["query_image_url"]} | {
+                i["image_url"] for i in entry.get("relevant_info", []) if i.get("image_url")
+            }
+            surviving_urls = new_urls | {
                 u for e in other_entries
                 for u in ([e.get("query_image_url", "")] +
                            [i["image_url"] for i in e.get("relevant_info", []) if i.get("image_url")])

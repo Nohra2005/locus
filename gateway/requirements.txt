@@ -1,5 +1,6 @@
 fastapi
 uvicorn
+aiofiles
 python-multipart
 httpx
 qdrant-client==1.10.0

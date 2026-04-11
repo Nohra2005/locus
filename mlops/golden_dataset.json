@@ -1390,5 +1390,53 @@
     "n_relevant": 5,
     "annotated_by": "frontend",
     "created_at": "2026-04-10T11:45:22.689855Z"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/ed128df05963296efc8d.jpeg",
+    "query_name": "blue high waisted leggings",
+    "query_category_tag": "leggings",
+    "relevant_product_ids": [
+      "48359687-18eb-5594-a10c-d685ea1d7b59",
+      "9ab39d15-a622-51d3-bb69-3c5b06c3c780",
+      "b0f5174e-da94-54c2-887e-230346efa344",
+      "2516d8d9-b023-53e2-a9f7-20194b8840e2",
+      "c76d2918-cfa4-59b4-870c-837621a1ab92"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "48359687-18eb-5594-a10c-d685ea1d7b59",
+        "name": "blue high waisted leggings",
+        "image_url": "http://localhost:8000/golden-dataset/images/2843f3df5fa34fcc38e2.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "9ab39d15-a622-51d3-bb69-3c5b06c3c780",
+        "name": "blue high waisted leggings",
+        "image_url": "http://localhost:8000/golden-dataset/images/87ea66eba5d26072b226.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "b0f5174e-da94-54c2-887e-230346efa344",
+        "name": "blue high waisted leggings",
+        "image_url": "http://localhost:8000/golden-dataset/images/6d2cc5a201e643cb71b3.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "2516d8d9-b023-53e2-a9f7-20194b8840e2",
+        "name": "blue high waisted leggings",
+        "image_url": "http://localhost:8000/golden-dataset/images/ea1d724e075ac6e19cfe.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "c76d2918-cfa4-59b4-870c-837621a1ab92",
+        "name": "blue high waisted leggings",
+        "image_url": "http://localhost:8000/golden-dataset/images/c8a26643cd7968dca716.jpeg",
+        "store_name": "golden_dataset"
+      }
+    ],
+    "source": "manual_frontend",
+    "n_relevant": 5,
+    "annotated_by": "frontend",
+    "created_at": "2026-04-11T06:44:17.181770Z"
   }
 ]
