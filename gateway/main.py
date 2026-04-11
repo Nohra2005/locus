@@ -1431,6 +1431,43 @@ async def add_golden_entry(req: GoldenEntryRequest):
     }
 
 
+class DeleteEntryRequest(BaseModel):
+    query_name: str
+
+
+@app.delete("/golden-dataset/entry")
+async def delete_golden_entry(req: DeleteEntryRequest):
+    """Remove all entries matching query_name from golden_dataset.json and delete their Qdrant points."""
+    if not req.query_name:
+        raise HTTPException(status_code=400, detail="query_name is required")
+
+    dataset = _load_golden()
+    matching = [e for e in dataset if e.get("query_name") == req.query_name]
+    if not matching:
+        raise HTTPException(status_code=404, detail=f"Entry '{req.query_name}' not found")
+
+    # Collect unique point IDs across all matching entries
+    point_ids = list({
+        str(uuid.uuid5(uuid.NAMESPACE_URL, info["image_url"]))
+        for entry in matching
+        for info in entry.get("relevant_info", [])
+        if info.get("image_url")
+    })
+    if point_ids:
+        try:
+            client.delete(
+                collection_name=COLLECTION_NAME,
+                points_selector=models.PointIdsList(points=point_ids),
+            )
+            print(f"[DELETE] Removed {len(point_ids)} locus_items for '{req.query_name}'")
+        except Exception as e:
+            print(f"[DELETE] Warning: failed to delete locus_items: {e}")
+
+    dataset = [e for e in dataset if e.get("query_name") != req.query_name]
+    _save_golden(dataset)
+    return {"deleted": req.query_name, "entries_removed": len(matching), "points_removed": len(point_ids)}
+
+
 class RegenerateRequest(BaseModel):
     query_names: list[str] = []
 
