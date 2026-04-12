@@ -1,3 +1,4 @@
+import asyncio
 import io
 import base64
 import json
@@ -27,7 +28,9 @@ def read_root():
 async def detect(file: UploadFile = File(...)):
     """Search time. Returns all YOLO boxes for user to select from."""
     image_data = await file.read()
-    detections, img_width, img_height = visualizer.detect_objects(image_data)
+    detections, img_width, img_height = await asyncio.to_thread(
+        visualizer.detect_objects, image_data
+    )
     return {
         "detections":   detections,
         "image_width":  img_width,
@@ -40,17 +43,21 @@ async def vectorize(
     file:       UploadFile = File(...),
     yolo_label: str        = Form(""),
     darken:     str        = Form("false"),
+    remove_bg:  str        = Form("false"),
 ):
     """
     Search time. Expects ALREADY CROPPED image bytes — gateway crops before calling.
     """
     image_data    = await file.read()
-    should_darken = darken.lower() == "true"
+    should_darken = darken.lower()     == "true"
+    should_rmbg   = remove_bg.lower()  == "true"
 
-    vector, category, confidence, debug_img = visualizer.process_image(
-        image_bytes = image_data,
-        yolo_label  = yolo_label,
-        darken      = should_darken,
+    vector, category, confidence, debug_img = await asyncio.to_thread(
+        visualizer.process_image,
+        image_bytes=image_data,
+        yolo_label=yolo_label,
+        darken=should_darken,
+        remove_bg=should_rmbg,
     )
 
     if not vector:
@@ -69,15 +76,20 @@ async def vectorize(
 
 @app.post("/index-image")
 async def index_image(
-    file:  UploadFile = File(...),
-    title: str        = Form(""),
+    file:      UploadFile = File(...),
+    title:     str        = Form(""),
+    remove_bg: str        = Form("false"),
 ):
     """
     Index time only. Returns vector + category + box_source,
     or {"skipped": true} with reason.
+    Pass remove_bg=true to strip background from the crop before embedding.
     """
-    image_data = await file.read()
-    result     = visualizer.index_product(image_data, title=title)
+    image_data    = await file.read()
+    should_rmbg   = remove_bg.lower() == "true"
+    result = await asyncio.to_thread(
+        visualizer.index_product, image_data, title=title, remove_bg=should_rmbg
+    )
     return result
 
 
@@ -97,7 +109,7 @@ async def debug_index(
     Does NOT write to Qdrant.
     """
     image_data = await file.read()
-    result     = visualizer.index_product(image_data, title=title)
+    result     = await asyncio.to_thread(visualizer.index_product, image_data, title=title)
 
     try:
         image = Image.open(io.BytesIO(image_data)).convert("RGB")

@@ -157,21 +157,23 @@ def print_report(r: dict):
         warnings.warn(f"Only {evaluated}/{n_queries} queries were evaluated successfully.")
 
 
-def log_mlflow(r: dict):
+def log_mlflow(r: dict, run_name: str | None = None):
     import mlflow
     ks   = r["ks"]
     gt   = r["total_ground_truth"]
 
     mlflow.set_experiment("locus_recall_eval")
-    with mlflow.start_run():
+    with mlflow.start_run(run_name=run_name):
         mlflow.log_param("queries_evaluated", r["evaluated"])
+        if run_name:
+            mlflow.set_tag("run_name", run_name)
         for k in ks:
             h   = r["hits"][k]
             pct = h / gt if gt else 0.0
             mlflow.log_metric(f"recall_at_{k}", pct)
             mlflow.log_metric(f"hits_at_{k}",   h)
         mlflow.log_metric("queries_evaluated", r["evaluated"])
-    print(f"[MLflow] Metrics logged to experiment 'locus_recall_eval'.")
+    print(f"[MLflow] Metrics logged to experiment 'locus_recall_eval' (run: {run_name}).")
 
 
 def main():
@@ -182,6 +184,8 @@ def main():
                         help="Comma-separated K values (default: 5,10,25)")
     parser.add_argument("--mlflow", action="store_true",
                         help="Log results to MLflow under experiment locus_recall_eval")
+    parser.add_argument("--run-name", default=None,
+                        help="MLflow run name (e.g. 'baseline' or 'remove_bg')")
     args = parser.parse_args()
 
     ks = [int(x.strip()) for x in args.k.split(",")]
@@ -190,7 +194,7 @@ def main():
     print_report(results)
 
     if args.mlflow:
-        log_mlflow(results)
+        log_mlflow(results, run_name=args.run_name)
 
     if results["evaluated"] < 25:
         sys.exit(1)

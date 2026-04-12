@@ -7,3 +7,4 @@ python-multipart
 huggingface_hub
 prometheus-fastapi-instrumentator
 openai-clip
+rembg[gpu]

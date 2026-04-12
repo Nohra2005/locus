@@ -1678,7 +1678,7 @@ async def wipe_golden_dataset():
 
 
 @app.post("/golden-dataset/rebuild")
-async def rebuild_golden_dataset():
+async def rebuild_golden_dataset(remove_bg: bool = False):
     """
     Nuclear reset for golden dataset Qdrant entries:
       1. Delete ALL store_name='golden_dataset' points from locus_items.
@@ -1686,6 +1686,7 @@ async def rebuild_golden_dataset():
          stored product_id as the Qdrant point ID (fixes historic ID mismatch).
     Images are read directly from disk — no HTTP round-trip to StaticFiles.
     Safe to run multiple times (idempotent upsert).
+    Pass remove_bg=true to strip background from crops before embedding (A/B experiment).
     """
     dataset = _load_golden()
 
@@ -1737,7 +1738,8 @@ async def rebuild_golden_dataset():
                     vis = await http.post(
                         f"{VISUAL_URL}/vectorize",
                         files={"file": ("img.jpg", img_bytes, "image/jpeg")},
-                        data={"yolo_label": cat, "darken": "false"},
+                        data={"yolo_label": cat, "darken": "false",
+                              "remove_bg": "true" if remove_bg else "false"},
                         timeout=60.0,
                     )
                     vis.raise_for_status()

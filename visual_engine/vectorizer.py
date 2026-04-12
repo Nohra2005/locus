@@ -48,6 +48,27 @@ import io
 import base64
 import time
 from PIL import Image, ImageEnhance
+
+# rembg is imported lazily on first use to avoid loading the model at startup.
+# Uses u2netp (4.7 MB) instead of the default u2net (168 MB) — 3–5× faster,
+# 97% less memory, imperceptible quality difference on YOLO-cropped fashion items.
+_rembg_session = None
+_rembg_remove  = None
+
+def _remove_background(pil_image: Image.Image) -> Image.Image:
+    """Remove background from a PIL image and composite onto white."""
+    global _rembg_remove, _rembg_session
+    if _rembg_session is None:
+        from rembg import new_session
+        _rembg_session = new_session("u2netp")
+    if _rembg_remove is None:
+        from rembg import remove as _remove
+        _rembg_remove = _remove
+    rgba = _rembg_remove(pil_image, session=_rembg_session)
+    bg   = Image.new("RGB", rgba.size, (255, 255, 255))
+    bg.paste(rgba, mask=rgba.split()[3])
+    del rgba
+    return bg
 from transformers import CLIPProcessor, CLIPModel
 from sentence_transformers import SentenceTransformer, util
 
@@ -271,6 +292,12 @@ class LocusVisualizer:
             # When DeepFashion2 (the shape expert) detected a dress or skirt,
             # block CLIP from flipping it to a texture-based category.
             _TEXTURE_CATEGORIES = {"sweater", "top"}
+            # Fashion-CLIP is systematically biased toward clothing and scores
+            # accessories (shoes, bag, hat) near zero even on clear accessory crops.
+            # YOLO-World was prompted with rich, specific accessory descriptions
+            # ("boot ankle boot chelsea boot combat boot", etc.) — trust it over CLIP.
+            # Block CLIP from flipping any YOLO-World accessory detection to clothing.
+            _ACCESSORY_LABELS = {"shoes", "bag", "hat"}
 
             for det in all_detections:
                 bx1, by1, bx2, by2 = det["bbox"]
@@ -291,6 +318,11 @@ class LocusVisualizer:
                                   and clip_label in _TEXTURE_CATEGORIES):
                                 print(f"  [CLIP-RELABEL BLOCKED] DF2 '{det['search_label']}' "
                                       f"→ '{clip_label}' (conf={clip_conf:.2f}) — shape > texture")
+                            elif (det.get("source") == "yolo_world"
+                                  and det["search_label"] in _ACCESSORY_LABELS
+                                  and clip_label not in _ACCESSORY_LABELS):
+                                print(f"  [CLIP-RELABEL BLOCKED] YOLO-World '{det['search_label']}' "
+                                      f"→ '{clip_label}' (conf={clip_conf:.2f}) — trust YOLO-World for accessories")
                             else:
                                 print(f"  [CLIP-RELABEL] '{det['search_label']}' "
                                       f"→ '{clip_label}' (conf={clip_conf:.2f})")
@@ -310,12 +342,19 @@ class LocusVisualizer:
     # =========================================================================
     # PUBLIC: process_image() — search time, pre-cropped bytes
     # =========================================================================
-    def process_image(self, image_bytes, yolo_label="", darken=False):
+    def process_image(self, image_bytes, yolo_label="", darken=False, remove_bg=False):
         t0 = time.time()
         try:
             input_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
             if max(input_image.size) > 512:
                 input_image.thumbnail((512, 512))
+
+            if remove_bg:
+                try:
+                    input_image = _remove_background(input_image)
+                    print("[BG-REMOVE] Applied to query crop")
+                except Exception as e:
+                    print(f"[BG-REMOVE] Failed on query crop: {e} — using original")
 
             clip_input    = ImageEnhance.Brightness(input_image).enhance(0.3) if darken else input_image
             vector, category_tag, category_scores = self._clip_embed(clip_input, yolo_label)
@@ -334,7 +373,7 @@ class LocusVisualizer:
     # =========================================================================
     # PUBLIC: index_product() — index time + debug
     # =========================================================================
-    def index_product(self, image_bytes: bytes, title: str = ""):
+    def index_product(self, image_bytes: bytes, title: str = "", remove_bg: bool = False):
         t0 = time.time()
         try:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -425,6 +464,13 @@ class LocusVisualizer:
             if max(crop.size) > 512:
                 crop = crop.copy()
                 crop.thumbnail((512, 512))
+
+            if remove_bg:
+                try:
+                    crop = _remove_background(crop)
+                    print(f"[BG-REMOVE] Applied to crop for '{title}'")
+                except Exception as e:
+                    print(f"[BG-REMOVE] Failed for '{title}': {e} — using original crop")
 
             vector_normal, _, _ = self._clip_embed(crop, final_category)
 
