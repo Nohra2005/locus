@@ -30,6 +30,13 @@ mlops/evaluation_results.json
 mlops/visual_similarity_results.json
 mlops/repair_report.json
 
+# ── LoRA retraining artifacts ─────────────────────────────────────────────────
+# Training runs, cached image pairs, and promoted model weights are large
+# machine-specific artifacts — regenerated on each training run.
+mlops/lora_runs/
+mlops/pairs_cache/
+visual_engine/models/
+
 # ── Frontend build ────────────────────────────────────────────────────────────
 frontend/dist/
 frontend/node_modules/

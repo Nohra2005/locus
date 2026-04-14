@@ -239,6 +239,50 @@ class LocusVisualizer:
         return {"tokens_before": old_count, "tokens_after": new_count}
 
     # =========================================================================
+    # PUBLIC: reload_adapter()
+    # Hot-swap the CLIP vision encoder's LoRA adapter without restarting.
+    # Called by POST /reload-adapter after promote_model.py copies new weights.
+    #
+    # Strategy: load a fresh CLIPModel, apply the adapter, swap self.clip_model.
+    # In-flight requests during the ~30s load keep using the old model reference,
+    # then new requests pick up the new one. No lock needed — Python's GIL
+    # makes the final attribute assignment atomic at the interpreter level.
+    # =========================================================================
+    def reload_adapter(self, adapter_path: str, visual_projection_path: str = "") -> dict:
+        from pathlib import Path
+        try:
+            from peft import PeftModel
+        except ImportError:
+            return {"success": False, "error": "peft not installed in visual_engine"}
+
+        adapter_path = Path(adapter_path)
+        if not adapter_path.exists():
+            return {"success": False, "error": f"Adapter path not found: {adapter_path}"}
+
+        try:
+            print(f"[RELOAD] Loading fresh base model + LoRA adapter from {adapter_path}...")
+            new_model     = CLIPModel.from_pretrained("patrickjohncyh/fashion-clip")
+            new_model.vision_model = PeftModel.from_pretrained(
+                new_model.vision_model, str(adapter_path)
+            )
+
+            if visual_projection_path and Path(visual_projection_path).exists():
+                proj_state = torch.load(visual_projection_path, map_location="cpu")
+                new_model.visual_projection.load_state_dict(proj_state)
+                print(f"[RELOAD] Reloaded visual_projection from {visual_projection_path}")
+
+            new_model.eval()
+
+            # Atomic swap — old model stays alive until GC collects it
+            self.clip_model = new_model
+            print(f"[RELOAD] LoRA adapter hot-swapped successfully")
+            return {"success": True, "adapter_path": str(adapter_path)}
+
+        except Exception as e:
+            print(f"[RELOAD] Failed to reload adapter: {e}")
+            return {"success": False, "error": str(e)}
+
+    # =========================================================================
     # PUBLIC: detect_objects() — search time only
     # =========================================================================
     def detect_objects(self, image_bytes):

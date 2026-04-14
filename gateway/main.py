@@ -1868,3 +1868,139 @@ async def regenerate_golden_report(req: RegenerateRequest = RegenerateRequest())
             detail=f"Regeneration failed: {stderr.decode()[-600:]}",
         )
     return {"status": "ok"}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /reindex  — re-embed all catalog products with the current visual engine model
+# Called by promote_model.py after a new LoRA adapter is promoted.
+# Runs as a fire-and-forget background task; returns immediately.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_reindex_running = False
+
+
+@app.post("/reindex")
+async def reindex_catalog(background_tasks: BackgroundTasks):
+    """
+    Re-embed every product in locus_items using the current visual engine model.
+    Triggered automatically after LoRA adapter promotion so that all catalog
+    vectors reflect the updated embedding space.
+    Returns immediately; re-indexing runs in the background.
+    """
+    global _reindex_running
+    if _reindex_running:
+        return {"status": "already_running", "message": "A re-index is already in progress"}
+    background_tasks.add_task(_run_full_reindex)
+    return {"status": "started", "message": "Re-indexing catalog in background"}
+
+
+async def _run_full_reindex():
+    global _reindex_running
+    _reindex_running = True
+    print("[REINDEX] Starting full catalog re-index...")
+    updated = 0
+    failed  = 0
+    semaphore = asyncio.Semaphore(3)  # limit concurrent visual engine calls
+
+    # Scroll all products from locus_items
+    all_products = []
+    offset = None
+    while True:
+        batch, next_offset = client.scroll(
+            collection_name=COLLECTION_NAME,
+            limit=250,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        if not batch:
+            break
+        all_products.extend(batch)
+        if next_offset is None:
+            break
+        offset = next_offset
+
+    print(f"[REINDEX] {len(all_products)} products to re-embed")
+
+    async def reembed_one(pt):
+        nonlocal updated, failed
+        p       = pt.payload
+        img_url = p.get("image_url", "")
+        name    = p.get("name", "")
+        if not img_url:
+            return
+        async with semaphore:
+            try:
+                async with httpx.AsyncClient() as http:
+                    img_resp = await http.get(img_url, timeout=15.0, follow_redirects=True)
+                    img_resp.raise_for_status()
+                    idx_resp = await http.post(
+                        f"{VISUAL_URL}/index-image",
+                        files={"file": ("product.jpg", img_resp.content, "image/jpeg")},
+                        data={"title": name},
+                        timeout=90.0,
+                    )
+                    idx_resp.raise_for_status()
+                    idx_data = idx_resp.json()
+
+                if idx_data.get("skipped"):
+                    return
+
+                new_payload = dict(p)
+                new_payload["category_tag"] = idx_data.get("category", p.get("category_tag", ""))
+                new_payload["box_source"]   = idx_data.get("box_source", p.get("box_source", ""))
+                if idx_data.get("shoe_style"):
+                    new_payload["shoe_style"] = idx_data["shoe_style"]
+
+                client.upsert(
+                    collection_name=COLLECTION_NAME,
+                    points=[PointStruct(
+                        id      = pt.id,
+                        vector  = idx_data["vector_normal"],
+                        payload = new_payload,
+                    )]
+                )
+                updated += 1
+            except Exception as e:
+                failed += 1
+                print(f"[REINDEX] Failed '{name}': {e}")
+
+    await asyncio.gather(*[reembed_one(pt) for pt in all_products])
+    _reindex_running = False
+    print(f"[REINDEX] Done — updated={updated} failed={failed} total={len(all_products)}")
+
+
+@app.get("/reindex/status")
+async def reindex_status():
+    return {"running": _reindex_running}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /trigger-retrain — kick off the LoRA retraining pipeline on demand
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/trigger-retrain")
+async def trigger_retrain(background_tasks: BackgroundTasks, force: bool = False):
+    """
+    Trigger the LoRA retraining pipeline asynchronously via subprocess.
+    Pass ?force=true to skip threshold checks.
+    The pipeline logs progress to MLflow; monitor via Grafana.
+    """
+    background_tasks.add_task(_run_retrain_subprocess, force)
+    return {"status": "triggered", "force": force,
+            "message": "Retraining pipeline started — monitor progress in Grafana"}
+
+
+async def _run_retrain_subprocess(force: bool):
+    import sys
+    cmd = [sys.executable, "/mlops/retrain_clip.py"]
+    if force:
+        cmd.append("--force")
+    print(f"[RETRAIN] Triggering pipeline: {' '.join(cmd)}")
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    stdout, _ = await proc.communicate()
+    print(f"[RETRAIN] Pipeline finished (exit={proc.returncode}):\n{stdout.decode()[-2000:]}")

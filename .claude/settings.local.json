@@ -4,7 +4,13 @@
       "Bash(python:*)",
       "Bash(python3:*)",
       "Bash(curl -sS https://bootstrap.pypa.io/get-pip.py)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Read(//tmp/**)",
+      "Bash(xxd /tmp/stash_main_lf.py)",
+      "Bash(grep -v \"^[0-9a-f]*: [0-9a-f ]*  .\\\\{16\\\\}$\")",
+      "Bash(grep -v \"^0[0-9a-f]$\\\\|^[0-7][0-9a-f]$\\\\|^$\")",
+      "Bash(docker buildx:*)",
+      "Bash(docker version:*)"
     ]
   }
 }

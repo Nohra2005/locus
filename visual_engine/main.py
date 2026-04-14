@@ -3,7 +3,7 @@ import base64
 import json
 import os
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from PIL import Image, ImageDraw
 from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -237,3 +237,31 @@ async def whitelist_overrides():
     overrides = _read_overrides()
     active    = [e for e in overrides if e.get("status") == "approved"]
     return {"total": len(active), "entries": active}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ADAPTER HOT-RELOAD
+# Called by promote_model.py after copying a new LoRA adapter to disk.
+# No container restart needed — swaps the CLIP vision encoder in-place.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ReloadAdapterRequest(BaseModel):
+    adapter_path:           str
+    visual_projection_path: str = ""
+
+
+@app.post("/reload-adapter")
+async def reload_adapter(req: ReloadAdapterRequest):
+    """
+    Hot-swap the LoRA adapter on the running visual engine.
+    Loads a fresh base model + new adapter, then atomically replaces
+    self.clip_model so in-flight requests are not disrupted.
+    Takes ~30s while the base model reloads from the HuggingFace cache.
+    """
+    result = visualizer.reload_adapter(
+        adapter_path           = req.adapter_path,
+        visual_projection_path = req.visual_projection_path,
+    )
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result

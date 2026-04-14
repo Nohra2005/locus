@@ -104,19 +104,50 @@ services:
     volumes:
       - mlflow_data:/mlflow
 
-  # ── 6. MLops Metrics Exporter ────────────────────────────────────
+  # ── 6. MLops Automated Retraining ────────────────────────────────
+  # Runs retrain_clip.py on a 48h schedule.
+  # Also triggered on-demand via POST /trigger-retrain on the gateway.
+  # Pipeline: build pairs → train LoRA → eval on golden → promote/rollback.
+  # All results logged to MLflow under experiment "locus_lora_retraining".
+  mlops_retrain:
+    build:
+      context: .
+      dockerfile: mlops/Dockerfile.retrain
+    working_dir: /mlops
+    command: ["python", "retrain_clip.py", "--schedule", "48"]
+    volumes:
+      - ./mlops:/mlops
+      - ./visual_engine:/visual_engine
+    environment:
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - GATEWAY_URL=http://gateway:8000
+      - VISUAL_HOST=http://visual_engine:8001
+      - VISUAL_ENGINE_MODELS=/visual_engine/models
+      - VISUAL_ENGINE_MODELS_INTERNAL=/app/models
+      - MIN_FEEDBACK_PAIRS=50
+      - MIN_ACS_THRESHOLD=0.70
+      - MAX_TRAIN_STEPS=${MAX_TRAIN_STEPS:-300}
+      - LOG_EVERY_STEPS=${LOG_EVERY_STEPS:-20}
+      - GIT_PYTHON_REFRESH=quiet
+    depends_on:
+      - gateway
+      - mlflow
+    restart: unless-stopped
+
+  # ── 7. MLops Metrics Exporter ────────────────────────────────────
   mlops_exporter:
     image: python:3.11-slim
     working_dir: /mlops
     command: >
-      sh -c "pip install prometheus_client --quiet && python metrics_exporter.py"
+      sh -c "pip install prometheus_client mlflow --quiet && python metrics_exporter.py"
     ports:
       - "8003:8003"
     volumes:
       - ./mlops:/mlops
     environment:
-      - GEMINI_RESULTS_PATH=/mlops/gemini_judge_results.json
-      - VSS_CACHE_PATH=/mlops/vss_cache.json
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
       - METRICS_PORT=8003
       - REFRESH_SECS=30
     restart: unless-stopped
@@ -135,7 +166,7 @@ services:
 
   # ── 7. Grafana ────────────────────────────────────────────────────
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.3
     ports:
       - "3000:3000"
     depends_on:

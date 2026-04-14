@@ -85,23 +85,23 @@
     },
 
     {
-      "id": 10, "type": "row", "title": "Gemini Visual Similarity Judge",
+      "id": 10, "type": "row", "title": "ML Quality — Recall@K & LoRA Retraining",
       "collapsed": false, "gridPos": { "x": 0, "y": 13, "w": 24, "h": 1 }
     },
     {
       "id": 11, "type": "gauge",
-      "title": "Avg VSS@5 — Latest Eval Run",
-      "description": "Average Gemini Visual Similarity Score. Baseline: 0.635. Target: >0.70",
+      "title": "Recall@5 — Golden Dataset",
+      "description": "Fraction of golden queries where ≥1 relevant product appears in top-5. Target: >0.90",
       "gridPos": { "x": 0, "y": 14, "w": 5, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_gemini_avg_vss5", "legendFormat": "VSS@5" }],
+      "targets": [{ "expr": "locus_recall_at_5", "legendFormat": "Recall@5" }],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit", "min": 0, "max": 1,
           "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": 0 }, { "color": "orange", "value": 0.55 },
-            { "color": "yellow", "value": 0.70 }, { "color": "green", "value": 0.85 }
+            { "color": "red", "value": 0 }, { "color": "orange", "value": 0.70 },
+            { "color": "yellow", "value": 0.85 }, { "color": "green", "value": 0.93 }
           ]},
           "color": { "mode": "thresholds" }
         }
@@ -109,36 +109,33 @@
     },
     {
       "id": 12, "type": "stat",
-      "title": "Queries Evaluated",
+      "title": "Recall@10",
       "gridPos": { "x": 5, "y": 14, "w": 4, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_gemini_queries_evaluated", "legendFormat": "Queries" }],
+      "targets": [{ "expr": "locus_recall_at_10", "legendFormat": "Recall@10" }],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none" },
-      "fieldConfig": { "defaults": { "unit": "short" } }
+      "fieldConfig": { "defaults": { "unit": "percentunit" } }
     },
     {
       "id": 13, "type": "stat",
-      "title": "Cache Entries",
-      "description": "Scored pairs saved to disk — these cost $0 on next eval run",
+      "title": "Recall@25",
       "gridPos": { "x": 5, "y": 18, "w": 4, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_gemini_cache_entries", "legendFormat": "Cached pairs" }],
+      "targets": [{ "expr": "locus_recall_at_25", "legendFormat": "Recall@25" }],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
       "fieldConfig": {
-        "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "green" } }
+        "defaults": { "unit": "percentunit", "color": { "mode": "fixed", "fixedColor": "green" } }
       }
     },
     {
       "id": 14, "type": "bargauge",
-      "title": "Grade Distribution",
-      "description": "Queries by quality tier. Goal: eliminate red, grow green.",
+      "title": "LoRA Retraining — Run Outcomes",
+      "description": "How many pipeline runs promoted vs rejected the new adapter.",
       "gridPos": { "x": 9, "y": 14, "w": 6, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
-        { "expr": "locus_gemini_queries_excellent", "legendFormat": "Excellent  ≥0.85" },
-        { "expr": "locus_gemini_queries_good",      "legendFormat": "Good       ≥0.70" },
-        { "expr": "locus_gemini_queries_fair",      "legendFormat": "Fair       ≥0.55" },
-        { "expr": "locus_gemini_queries_poor",      "legendFormat": "Poor        <0.55" }
+        { "expr": "locus_lora_promoted_total",                                        "legendFormat": "Promoted" },
+        { "expr": "locus_lora_runs_total - locus_lora_promoted_total",                "legendFormat": "Rejected" }
       ],
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true },
       "fieldConfig": {
@@ -148,41 +145,149 @@
           "color": { "mode": "thresholds" }
         },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "Excellent  ≥0.85" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
-          { "matcher": { "id": "byName", "options": "Good       ≥0.70" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }] },
-          { "matcher": { "id": "byName", "options": "Fair       ≥0.55" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }] },
-          { "matcher": { "id": "byName", "options": "Poor        <0.55" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+          { "matcher": { "id": "byName", "options": "Promoted" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+          { "matcher": { "id": "byName", "options": "Rejected" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] }
         ]
       }
     },
     {
-      "id": 15, "type": "bargauge",
-      "title": "VSS@5 Per Query",
-      "description": "Score for each golden query. Red = poor (accessories/outerwear), green = good (basic clothing).",
-      "gridPos": { "x": 15, "y": 14, "w": 9, "h": 8 },
+      "id": 15, "type": "stat",
+      "title": "Queries Evaluated",
+      "description": "Number of golden queries in the latest evaluation run.",
+      "gridPos": { "x": 15, "y": 14, "w": 5, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "sort_desc(locus_gemini_query_vss5)", "legendFormat": "{{label}}" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true },
+      "targets": [{ "expr": "locus_queries_evaluated_total", "legendFormat": "Queries" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 18, "type": "stat",
+      "title": "Latest LoRA Δhit@5",
+      "description": "hit@5 improvement of the last retraining run vs baseline. Positive = better model.",
+      "gridPos": { "x": 15, "y": 18, "w": 5, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "locus_lora_delta_hit5", "legendFormat": "Δhit@5" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit", "min": 0, "max": 1,
+          "unit": "percentunit",
           "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": 0 }, { "color": "orange", "value": 0.55 },
-            { "color": "yellow", "value": 0.70 }, { "color": "green", "value": 0.85 }
+            { "color": "red", "value": -1 }, { "color": "yellow", "value": -0.02 }, { "color": "green", "value": 0 }
           ]},
           "color": { "mode": "thresholds" }
         }
       }
     },
     {
-      "id": 16, "type": "timeseries",
-      "title": "VSS@5 Trend — Across Eval Runs",
-      "description": "This should go up after each CLIP fine-tuning round. Baseline is 0.635.",
-      "gridPos": { "x": 0, "y": 22, "w": 14, "h": 7 },
+      "id": 19, "type": "stat",
+      "title": "Baseline hit@5",
+      "description": "Best hit@5 from locus_search_accuracy. New adapters must beat this - 0.02 to be promoted.",
+      "gridPos": { "x": 20, "y": 14, "w": 4, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "locus_baseline_hit5", "legendFormat": "Baseline" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "color": { "mode": "fixed", "fixedColor": "blue" } } }
+    },
+    {
+      "id": 40, "type": "row", "title": "Latest Retrain Evaluation",
+      "collapsed": false, "gridPos": { "x": 0, "y": 29, "w": 24, "h": 1 }
+    },
+    {
+      "id": 41, "type": "gauge",
+      "title": "New Model hit@5",
+      "description": "hit@5 of the newly trained adapter from the most recent retrain run. Must be ≥ baseline − 0.02 to promote.",
+      "gridPos": { "x": 0, "y": 30, "w": 6, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "locus_lora_new_hit5", "legendFormat": "New hit@5" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit", "min": 0, "max": 1,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": 0 }, { "color": "orange", "value": 0.70 },
+            { "color": "yellow", "value": 0.85 }, { "color": "green", "value": 0.93 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 42, "type": "gauge",
+      "title": "New Model ACS@5",
+      "description": "Average cosine similarity of the top-5 results from the new adapter across golden queries.",
+      "gridPos": { "x": 6, "y": 30, "w": 6, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "locus_lora_new_acs5", "legendFormat": "New ACS@5" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit", "min": 0, "max": 1,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": 0 }, { "color": "orange", "value": 0.50 },
+            { "color": "yellow", "value": 0.65 }, { "color": "green", "value": 0.75 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 43, "type": "stat",
+      "title": "Promotion Decision",
+      "description": "Outcome of the last retrain run. Green = new adapter deployed; orange = rejected, kept existing model.",
+      "gridPos": { "x": 12, "y": 30, "w": 6, "h": 3 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "locus_lora_delta_hit5", "legendFormat": "Δhit@5" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit", "decimals": 3,
+          "displayName": "Δhit@5 vs baseline",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": -1 }, { "color": "orange", "value": -0.02 }, { "color": "green", "value": 0 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 44, "type": "stat",
+      "title": "Total Promotions",
+      "description": "How many times a retrained adapter has been promoted to production.",
+      "gridPos": { "x": 12, "y": 33, "w": 6, "h": 3 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "locus_lora_promoted_total", "legendFormat": "Promotions" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "green" } } }
+    },
+    {
+      "id": 45, "type": "timeseries",
+      "title": "Evaluation Quality Trend",
+      "description": "new_hit@5 and new_acs@5 from each completed retrain run. Upward trend = improving model.",
+      "gridPos": { "x": 18, "y": 30, "w": 6, "h": 6 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
-        { "expr": "locus_gemini_avg_vss5",  "legendFormat": "Avg VSS@5" },
-        { "expr": "locus_gemini_avg_top1",  "legendFormat": "Avg Top-1" }
+        { "expr": "locus_lora_new_hit5",  "legendFormat": "hit@5" },
+        { "expr": "locus_lora_new_acs5",  "legendFormat": "ACS@5" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit", "min": 0, "max": 1,
+          "custom": { "lineWidth": 2, "fillOpacity": 15 }
+        }
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+
+    {
+      "id": 16, "type": "timeseries",
+      "title": "Recall@K Trend — Across Eval Runs",
+      "description": "Should improve after each successful LoRA promotion.",
+      "gridPos": { "x": 0, "y": 37, "w": 14, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "locus_recall_at_5",  "legendFormat": "Recall@5" },
+        { "expr": "locus_recall_at_10", "legendFormat": "Recall@10" },
+        { "expr": "locus_recall_at_25", "legendFormat": "Recall@25" }
       ],
       "fieldConfig": {
         "defaults": {
@@ -194,29 +299,122 @@
     },
     {
       "id": 17, "type": "timeseries",
-      "title": "Score Distribution Over Time",
-      "description": "Cumulative count of individual result scores by bucket. Growing ≤1.0 line means more scored pairs in cache.",
-      "gridPos": { "x": 14, "y": 22, "w": 10, "h": 7 },
+      "title": "LoRA Retraining Runs Over Time",
+      "description": "Cumulative pipeline runs and promotions. Gap between lines = rejected runs.",
+      "gridPos": { "x": 14, "y": 37, "w": 10, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
-        { "expr": "locus_gemini_score_bucket{le=\"0.2\"}", "legendFormat": "≤0.20" },
-        { "expr": "locus_gemini_score_bucket{le=\"0.4\"}", "legendFormat": "≤0.40" },
-        { "expr": "locus_gemini_score_bucket{le=\"0.6\"}", "legendFormat": "≤0.60" },
-        { "expr": "locus_gemini_score_bucket{le=\"0.8\"}", "legendFormat": "≤0.80" },
-        { "expr": "locus_gemini_score_bucket{le=\"1.0\"}", "legendFormat": "≤1.00" }
+        { "expr": "locus_lora_runs_total",      "legendFormat": "Total runs" },
+        { "expr": "locus_lora_promoted_total",  "legendFormat": "Promotions" }
       ],
-      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 1, "fillOpacity": 10 } } },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
     },
 
     {
+      "id": 30, "type": "row", "title": "Live Retraining Monitor",
+      "collapsed": false, "gridPos": { "x": 0, "y": 44, "w": 24, "h": 1 }
+    },
+    {
+      "id": 31, "type": "stat",
+      "title": "Training Active",
+      "description": "1 while retrain_clip.py pipeline is running, 0 otherwise.",
+      "gridPos": { "x": 0, "y": 45, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "locus_retrain_active", "legendFormat": "Active" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "IDLE",     "color": "blue"  } } },
+            { "type": "value", "options": { "1": { "text": "TRAINING", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }, { "color": "green", "value": 1 }] },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 32, "type": "stat",
+      "title": "Current Step / Max Steps",
+      "description": "Training step progress in the active run.",
+      "gridPos": { "x": 4, "y": 45, "w": 5, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "locus_retrain_step",       "legendFormat": "Step" },
+        { "expr": "locus_retrain_max_steps",  "legendFormat": "Max" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none", "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 33, "type": "gauge",
+      "title": "Training Progress",
+      "description": "Percent of MAX_TRAIN_STEPS completed in the active run.",
+      "gridPos": { "x": 9, "y": 45, "w": 5, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{
+        "expr": "locus_retrain_step / clamp_min(locus_retrain_max_steps, 1)",
+        "legendFormat": "Progress"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit", "min": 0, "max": 1,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "blue", "value": 0 }, { "color": "green", "value": 1 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 34, "type": "stat",
+      "title": "Latest Train Loss",
+      "description": "Most recently logged InfoNCE train_loss from the active LoRA run.",
+      "gridPos": { "x": 14, "y": 45, "w": 5, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "locus_lora_train_loss", "legendFormat": "Loss" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short", "decimals": 4,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": 0 }, { "color": "orange", "value": 3 }, { "color": "yellow", "value": 2 }, { "color": "green", "value": 1 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 35, "type": "timeseries",
+      "title": "Train Loss Curve (live)",
+      "description": "InfoNCE loss sampled every LOG_EVERY_STEPS steps. Updates every 30s via the metrics exporter. Loss should decrease as training progresses.",
+      "gridPos": { "x": 0, "y": 49, "w": 24, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "locus_lora_train_loss", "legendFormat": "Train Loss" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short", "decimals": 4,
+          "custom": { "lineWidth": 2, "fillOpacity": 20, "spanNulls": false },
+          "color": { "mode": "fixed", "fixedColor": "orange" }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single" }
+      }
+    },
+
+    {
       "id": 20, "type": "row", "title": "Service Health",
-      "collapsed": false, "gridPos": { "x": 0, "y": 29, "w": 24, "h": 1 }
+      "collapsed": false, "gridPos": { "x": 0, "y": 57, "w": 24, "h": 1 }
     },
     {
       "id": 21, "type": "timeseries",
       "title": "Request Rate by Endpoint (req/s)",
-      "gridPos": { "x": 0, "y": 30, "w": 12, "h": 7 },
+      "gridPos": { "x": 0, "y": 58, "w": 12, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         { "expr": "rate(http_requests_total{handler=\"/search\"}[1m])",   "legendFormat": "/search" },
@@ -229,7 +427,7 @@
     {
       "id": 22, "type": "timeseries",
       "title": "P95 Response Latency by Endpoint (s)",
-      "gridPos": { "x": 12, "y": 30, "w": 12, "h": 7 },
+      "gridPos": { "x": 12, "y": 58, "w": 12, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         { "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/search\"}[2m]))",   "legendFormat": "/search p95" },
@@ -242,7 +440,7 @@
     {
       "id": 23, "type": "timeseries",
       "title": "Error Rate (4xx + 5xx per second)",
-      "gridPos": { "x": 0, "y": 37, "w": 12, "h": 7 },
+      "gridPos": { "x": 0, "y": 65, "w": 12, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{ "expr": "rate(http_requests_total{status=~\"4..|5..\"}[1m])", "legendFormat": "Errors/s" }],
       "fieldConfig": {
@@ -258,7 +456,7 @@
       "id": 24, "type": "timeseries",
       "title": "Searches by Detected Category",
       "description": "What types of clothing users are searching for most",
-      "gridPos": { "x": 12, "y": 37, "w": 12, "h": 7 },
+      "gridPos": { "x": 12, "y": 65, "w": 12, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{ "expr": "rate(locus_searches_total[5m])", "legendFormat": "{{category}}" }],
       "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
@@ -268,7 +466,7 @@
       "id": 25, "type": "bargauge",
       "title": "Feedback — Star Rating Distribution",
       "description": "All-time feedback by star rating. 4-5 = positive training signal, 1-2 = negative.",
-      "gridPos": { "x": 0, "y": 44, "w": 12, "h": 6 },
+      "gridPos": { "x": 0, "y": 72, "w": 12, "h": 6 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         { "expr": "sum(locus_feedback_stars_total{stars=\"5\"})", "legendFormat": "5 stars" },
@@ -284,7 +482,7 @@
       "id": 26, "type": "stat",
       "title": "Positive Feedback Ratio",
       "description": "Ratio of 4-5 star ratings vs all non-neutral ratings. >70% = users happy with results.",
-      "gridPos": { "x": 12, "y": 44, "w": 12, "h": 6 },
+      "gridPos": { "x": 12, "y": 72, "w": 12, "h": 6 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [{
         "expr": "sum(locus_feedback_stars_total{signal=\"positive\"}) / (sum(locus_feedback_stars_total{signal=\"positive\"}) + sum(locus_feedback_stars_total{signal=\"negative\"}))",
