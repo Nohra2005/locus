@@ -38,8 +38,9 @@ services:
       # LOCAL mode (commented out)
       # - QDRANT_HOST=qdrant
       # - QDRANT_PORT=6333
-      # Groq async judge (opt-in — leave blank to disable)
+      # Dual-provider async judge (Groq + Gemini) — leave either blank to disable that provider
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GATEWAY_BASE_URL=${GATEWAY_BASE_URL:-http://localhost:8000}
       - GOLDEN_DATASET_PATH=/mlops/golden_dataset.json
     volumes:

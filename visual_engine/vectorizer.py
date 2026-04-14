@@ -49,26 +49,6 @@ import base64
 import time
 from PIL import Image, ImageEnhance
 
-# rembg is imported lazily on first use to avoid loading the model at startup.
-# Uses u2netp (4.7 MB) instead of the default u2net (168 MB) — 3–5× faster,
-# 97% less memory, imperceptible quality difference on YOLO-cropped fashion items.
-_rembg_session = None
-_rembg_remove  = None
-
-def _remove_background(pil_image: Image.Image) -> Image.Image:
-    """Remove background from a PIL image and composite onto white."""
-    global _rembg_remove, _rembg_session
-    if _rembg_session is None:
-        from rembg import new_session
-        _rembg_session = new_session("u2netp")
-    if _rembg_remove is None:
-        from rembg import remove as _remove
-        _rembg_remove = _remove
-    rgba = _rembg_remove(pil_image, session=_rembg_session)
-    bg   = Image.new("RGB", rgba.size, (255, 255, 255))
-    bg.paste(rgba, mask=rgba.split()[3])
-    del rgba
-    return bg
 from transformers import CLIPProcessor, CLIPModel
 from sentence_transformers import SentenceTransformer, util
 
@@ -77,6 +57,7 @@ from detector_accessories import AccessoryDetector
 from clip_labels import (
     CANONICAL_LABELS,
     CLIP_PROMPTS,
+    QUERY_CLIP_PROMPTS,
     LABEL_DESCRIPTIONS,
     UNAMBIGUOUS_TOKEN_MAP,
 )
@@ -202,6 +183,17 @@ class LocusVisualizer:
             text_features      = self.clip_model.text_projection(text_out.pooler_output)
             self.text_features = text_features / text_features.norm(p=2, dim=-1, keepdim=True)
 
+        # Pre-compute query-time text embeddings (person-wearing style prompts).
+        # Used when classifying user-drawn crops from real-world photos — not
+        # clean product images.  Better prompts → better zero-shot accuracy.
+        query_text_inputs = self.clip_processor(
+            text=QUERY_CLIP_PROMPTS, return_tensors="pt", padding=True
+        )
+        with torch.no_grad():
+            query_text_out           = self.clip_model.text_model(**query_text_inputs)
+            query_text_features      = self.clip_model.text_projection(query_text_out.pooler_output)
+            self.query_text_features = query_text_features / query_text_features.norm(p=2, dim=-1, keepdim=True)
+
         print("Loading sentence-transformers (all-MiniLM-L6-v2)...")
         self.st_model         = SentenceTransformer("all-MiniLM-L6-v2")
         self._all_categories  = list(LABEL_DESCRIPTIONS.keys())
@@ -271,6 +263,8 @@ class LocusVisualizer:
             clothing       = self.clothing_detector.detect(image, self._classify_crop)
             accessories    = self.accessory_detector.detect(image, self._classify_crop)
             all_detections = _nms(clothing + accessories, iou_threshold=0.3)
+            # Cap at top-6 by confidence — prevents clutter on busy lifestyle photos
+            all_detections = sorted(all_detections, key=lambda d: d["score"], reverse=True)[:6]
 
             if not all_detections:
                 print("detect_objects(): no boxes found — returning empty list")
@@ -318,6 +312,14 @@ class LocusVisualizer:
                                   and clip_label in _TEXTURE_CATEGORIES):
                                 print(f"  [CLIP-RELABEL BLOCKED] DF2 '{det['search_label']}' "
                                       f"→ '{clip_label}' (conf={clip_conf:.2f}) — shape > texture")
+                            elif (det.get("source") == "deepfashion2"
+                                  and det["search_label"] not in _DRESS_SKIRT
+                                  and clip_label in _DRESS_SKIRT):
+                                # Mirror of the above: DF2 said shirt/jacket/pants/etc.
+                                # CLIP cannot see garment length on a crop and guesses dress.
+                                # Trust DeepFashion2 (shape expert) — block top → dress.
+                                print(f"  [CLIP-RELABEL BLOCKED] DF2 '{det['search_label']}' "
+                                      f"→ '{clip_label}' (conf={clip_conf:.2f}) — shape > CLIP length guess")
                             elif (det.get("source") == "yolo_world"
                                   and det["search_label"] in _ACCESSORY_LABELS
                                   and clip_label not in _ACCESSORY_LABELS):
@@ -342,22 +344,15 @@ class LocusVisualizer:
     # =========================================================================
     # PUBLIC: process_image() — search time, pre-cropped bytes
     # =========================================================================
-    def process_image(self, image_bytes, yolo_label="", darken=False, remove_bg=False):
+    def process_image(self, image_bytes, yolo_label="", darken=False, query_mode=False):
         t0 = time.time()
         try:
             input_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
             if max(input_image.size) > 512:
                 input_image.thumbnail((512, 512))
 
-            if remove_bg:
-                try:
-                    input_image = _remove_background(input_image)
-                    print("[BG-REMOVE] Applied to query crop")
-                except Exception as e:
-                    print(f"[BG-REMOVE] Failed on query crop: {e} — using original")
-
             clip_input    = ImageEnhance.Brightness(input_image).enhance(0.3) if darken else input_image
-            vector, category_tag, category_scores = self._clip_embed(clip_input, yolo_label)
+            vector, category_tag, category_scores = self._clip_embed(clip_input, yolo_label, query_mode=query_mode)
 
             buf = io.BytesIO()
             input_image.save(buf, format="PNG")
@@ -373,7 +368,7 @@ class LocusVisualizer:
     # =========================================================================
     # PUBLIC: index_product() — index time + debug
     # =========================================================================
-    def index_product(self, image_bytes: bytes, title: str = "", remove_bg: bool = False):
+    def index_product(self, image_bytes: bytes, title: str = ""):
         t0 = time.time()
         try:
             image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -464,13 +459,6 @@ class LocusVisualizer:
             if max(crop.size) > 512:
                 crop = crop.copy()
                 crop.thumbnail((512, 512))
-
-            if remove_bg:
-                try:
-                    crop = _remove_background(crop)
-                    print(f"[BG-REMOVE] Applied to crop for '{title}'")
-                except Exception as e:
-                    print(f"[BG-REMOVE] Failed for '{title}': {e} — using original crop")
 
             vector_normal, _, _ = self._clip_embed(crop, final_category)
 
@@ -641,7 +629,7 @@ class LocusVisualizer:
     # =========================================================================
     # PRIVATE: _clip_embed()
     # =========================================================================
-    def _clip_embed(self, pil_image: Image.Image, label_hint: str = ""):
+    def _clip_embed(self, pil_image: Image.Image, label_hint: str = "", query_mode: bool = False):
         clip_inputs = self.clip_processor(images=pil_image, return_tensors="pt")
         with torch.no_grad():
             vision_out     = self.clip_model.vision_model(**clip_inputs)
@@ -649,7 +637,10 @@ class LocusVisualizer:
         image_features /= image_features.norm(p=2, dim=-1, keepdim=True)
         vector = image_features[0].tolist()
 
-        similarity    = (100.0 * image_features @ self.text_features.T).softmax(dim=-1)
+        # query_mode=True uses prompts tuned for real-world photos ("a person wearing X").
+        # query_mode=False (default) uses product-photo prompts for index-time classification.
+        text_feats    = self.query_text_features if query_mode else self.text_features
+        similarity    = (100.0 * image_features @ text_feats.T).softmax(dim=-1)
         scores_tensor = similarity[0]
 
         category_scores = {
@@ -658,19 +649,17 @@ class LocusVisualizer:
         }
 
         if label_hint and label_hint.strip() in self.clip_labels:
-            # Hard override: caller explicitly selected a labelled box (e.g. user
-            # clicked a "jacket" detection in the UI).  We trust the selection over
-            # raw CLIP argmax here because the user has ground truth.
-            # ⚠ Known limitation: for T2-alias cases (YOLO detects "pants" for
-            # leggings), this override causes the gateway to filter the wrong
-            # Qdrant collection.  The evaluator already corrects this by sending
-            # the canonical category_tag instead of the YOLO alias.  A production
-            # fix (CLIP fine-tuning to distinguish leggings vs pants) is Phase 4.
+            # Hard override: caller explicitly confirmed a category (user has ground truth).
             category_tag = label_hint.strip()
         else:
-            clip_conf    = scores_tensor.max().item()
-            clip_label   = self.clip_labels[scores_tensor.argmax().item()]
-            category_tag = clip_label if clip_conf >= 0.45 else None
+            clip_conf  = scores_tensor.max().item()
+            clip_label = self.clip_labels[scores_tensor.argmax().item()]
+            if query_mode:
+                # Always return a best guess — user can correct in ConfirmView.
+                # No confidence floor: a low-confidence suggestion beats returning None.
+                category_tag = clip_label
+            else:
+                category_tag = clip_label if clip_conf >= 0.45 else None
 
         return vector, category_tag, category_scores
 

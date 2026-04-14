@@ -8,11 +8,19 @@ from fastapi import FastAPI, UploadFile, File, Form
 from PIL import Image, ImageDraw
 from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Histogram
 from vectorizer import LocusVisualizer
 
 app = FastAPI()
 Instrumentator().instrument(app).expose(app)
 visualizer = LocusVisualizer()
+
+locus_detections_histogram = Histogram(
+    "locus_detections_per_request",
+    "Number of YOLO boxes returned per /detect call",
+    buckets=[0, 1, 2, 3, 4, 5, 6, 8, 10, 15],
+)
+
 
 OVERRIDES_PATH = "/app/whitelist_overrides.json"
 
@@ -31,6 +39,7 @@ async def detect(file: UploadFile = File(...)):
     detections, img_width, img_height = await asyncio.to_thread(
         visualizer.detect_objects, image_data
     )
+    locus_detections_histogram.observe(len(detections))
     return {
         "detections":   detections,
         "image_width":  img_width,
@@ -43,21 +52,22 @@ async def vectorize(
     file:       UploadFile = File(...),
     yolo_label: str        = Form(""),
     darken:     str        = Form("false"),
-    remove_bg:  str        = Form("false"),
+    query:      str        = Form("false"),
 ):
     """
     Search time. Expects ALREADY CROPPED image bytes — gateway crops before calling.
+    Pass query=true when classifying a user-drawn crop (enables person-wearing prompts).
     """
     image_data    = await file.read()
-    should_darken = darken.lower()     == "true"
-    should_rmbg   = remove_bg.lower()  == "true"
+    should_darken = darken.lower() == "true"
+    query_mode    = query.lower() == "true"
 
     vector, category, confidence, debug_img = await asyncio.to_thread(
         visualizer.process_image,
         image_bytes=image_data,
         yolo_label=yolo_label,
         darken=should_darken,
-        remove_bg=should_rmbg,
+        query_mode=query_mode,
     )
 
     if not vector:
@@ -76,19 +86,16 @@ async def vectorize(
 
 @app.post("/index-image")
 async def index_image(
-    file:      UploadFile = File(...),
-    title:     str        = Form(""),
-    remove_bg: str        = Form("false"),
+    file:  UploadFile = File(...),
+    title: str        = Form(""),
 ):
     """
     Index time only. Returns vector + category + box_source,
     or {"skipped": true} with reason.
-    Pass remove_bg=true to strip background from the crop before embedding.
     """
-    image_data    = await file.read()
-    should_rmbg   = remove_bg.lower() == "true"
+    image_data = await file.read()
     result = await asyncio.to_thread(
-        visualizer.index_product, image_data, title=title, remove_bg=should_rmbg
+        visualizer.index_product, image_data, title=title
     )
     return result
 

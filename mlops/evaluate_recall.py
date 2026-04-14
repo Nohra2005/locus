@@ -27,6 +27,8 @@ logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 GOLDEN_DATASET_PATH = os.path.join(os.path.dirname(__file__), "golden_dataset.json")
+GOLDEN_IMAGES_DIR   = os.path.join(os.path.dirname(__file__), "golden_images")
+_GOLDEN_URL_PREFIX  = "/golden-dataset/images/"
 
 
 def load_golden_dataset(path: str) -> list[dict]:
@@ -44,15 +46,23 @@ def _image_bytes_from_entry(entry: dict) -> bytes | None:
         except Exception as e:
             logger.warning(f"Failed to decode data URI for '{entry.get('query_name')}': {e}")
             return None
-    else:
-        # Plain URL — download it
-        try:
-            resp = requests.get(url, timeout=15)
-            resp.raise_for_status()
-            return resp.content
-        except Exception as e:
-            logger.warning(f"Failed to download query image for '{entry.get('query_name')}': {e}")
-            return None
+    if _GOLDEN_URL_PREFIX in url:
+        # Local golden-dataset image — read directly from disk, no HTTP round-trip
+        filename   = url.rsplit("/", 1)[-1]
+        local_path = os.path.join(GOLDEN_IMAGES_DIR, filename)
+        if os.path.exists(local_path):
+            with open(local_path, "rb") as f:
+                return f.read()
+        logger.warning(f"Local image not found on disk: {local_path}")
+        return None
+    # Plain URL — download it
+    try:
+        resp = requests.get(url, timeout=15)
+        resp.raise_for_status()
+        return resp.content
+    except Exception as e:
+        logger.warning(f"Failed to download query image for '{entry.get('query_name')}': {e}")
+        return None
 
 
 def search(image_bytes: bytes, gateway_url: str, category_tag: str = "") -> list[str]:

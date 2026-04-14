@@ -336,54 +336,6 @@
     "created_at": "2026-04-11T17:32:28.954629Z"
   },
   {
-    "query_image_url": "http://localhost:8000/golden-dataset/images/d287ec0a72124fbb5110.jpeg",
-    "query_name": "white oversized shirt",
-    "query_category_tag": "top",
-    "relevant_product_ids": [
-      "e8ca7cab-f050-504e-9598-35be5f209636",
-      "25d85f86-4814-5f71-b405-0c1de2ba2abf",
-      "ff3e567d-0a6b-5c82-83fa-714ea3e7b011",
-      "a29e2b2e-8b6e-5683-af2f-5f0e52f03bba",
-      "56904623-2d02-5719-a320-5f40aca402d0"
-    ],
-    "relevant_info": [
-      {
-        "product_id": "e8ca7cab-f050-504e-9598-35be5f209636",
-        "name": "white oversized shirt",
-        "image_url": "http://localhost:8000/golden-dataset/images/3c49cbf134a1ba94c79b.jpeg",
-        "store_name": "golden_dataset"
-      },
-      {
-        "product_id": "25d85f86-4814-5f71-b405-0c1de2ba2abf",
-        "name": "white oversized shirt",
-        "image_url": "http://localhost:8000/golden-dataset/images/e6e7fe37f10cc0a682de.jpeg",
-        "store_name": "golden_dataset"
-      },
-      {
-        "product_id": "ff3e567d-0a6b-5c82-83fa-714ea3e7b011",
-        "name": "white oversized shirt",
-        "image_url": "http://localhost:8000/golden-dataset/images/0450d7513f8642cf87fa.jpeg",
-        "store_name": "golden_dataset"
-      },
-      {
-        "product_id": "a29e2b2e-8b6e-5683-af2f-5f0e52f03bba",
-        "name": "white oversized shirt",
-        "image_url": "http://localhost:8000/golden-dataset/images/6f295e572fbae2c0554d.jpeg",
-        "store_name": "golden_dataset"
-      },
-      {
-        "product_id": "56904623-2d02-5719-a320-5f40aca402d0",
-        "name": "white oversized shirt",
-        "image_url": "http://localhost:8000/golden-dataset/images/564dd57aac7fd7e5618b.jpeg",
-        "store_name": "golden_dataset"
-      }
-    ],
-    "source": "manual_frontend",
-    "n_relevant": 5,
-    "annotated_by": "frontend",
-    "created_at": "2026-04-11T17:34:38.115932Z"
-  },
-  {
     "query_image_url": "http://localhost:8000/golden-dataset/images/e89f47248f0efb91cc2b.jpeg",
     "query_name": "camel longline wool coat",
     "query_category_tag": "jacket",
@@ -816,54 +768,6 @@
     "created_at": "2026-04-12T10:30:01.425522Z"
   },
   {
-    "query_image_url": "http://localhost:8000/golden-dataset/images/00958b9b5f7d3d03427f.jpeg",
-    "query_name": "navy blue wide leg tailored trousers",
-    "query_category_tag": "pants",
-    "relevant_product_ids": [
-      "7a29a332-1c74-5889-b0c9-df351ca1b5f2",
-      "5f9fc233-01af-561d-b390-eb5167e1543b",
-      "1d89a934-bb97-5a3d-a745-ff9977ca5f25",
-      "c9b7fcfb-fd24-5a4b-b084-ee74b5c5b329",
-      "80774eaa-a8c2-5c52-bb94-371dd9b42306"
-    ],
-    "relevant_info": [
-      {
-        "product_id": "7a29a332-1c74-5889-b0c9-df351ca1b5f2",
-        "name": "navy blue wide leg tailored trousers",
-        "image_url": "http://localhost:8000/golden-dataset/images/5faa63b105f8ce5d4143.jpeg",
-        "store_name": "golden_dataset"
-      },
-      {
-        "product_id": "5f9fc233-01af-561d-b390-eb5167e1543b",
-        "name": "navy blue wide leg tailored trousers",
-        "image_url": "http://localhost:8000/golden-dataset/images/bcab9e8dba8e84e16d33.jpeg",
-        "store_name": "golden_dataset"
-      },
-      {
-        "product_id": "1d89a934-bb97-5a3d-a745-ff9977ca5f25",
-        "name": "navy blue wide leg tailored trousers",
-        "image_url": "http://localhost:8000/golden-dataset/images/85c1e0302f99d1a6f49e.jpeg",
-        "store_name": "golden_dataset"
-      },
-      {
-        "product_id": "c9b7fcfb-fd24-5a4b-b084-ee74b5c5b329",
-        "name": "navy blue wide leg tailored trousers",
-        "image_url": "http://localhost:8000/golden-dataset/images/fb7637010e8cf5c89fa5.jpeg",
-        "store_name": "golden_dataset"
-      },
-      {
-        "product_id": "80774eaa-a8c2-5c52-bb94-371dd9b42306",
-        "name": "navy blue wide leg tailored trousers",
-        "image_url": "http://localhost:8000/golden-dataset/images/06e46a3b8cc252bcbf3c.jpeg",
-        "store_name": "golden_dataset"
-      }
-    ],
-    "source": "manual_frontend",
-    "n_relevant": 5,
-    "annotated_by": "frontend",
-    "created_at": "2026-04-12T10:41:07.475743Z"
-  },
-  {
     "query_image_url": "http://localhost:8000/golden-dataset/images/4d5e4e166bbe32dafe76.jpeg",
     "query_name": "red linen maxi dress",
     "query_category_tag": "dress",
@@ -1008,54 +912,6 @@
     "created_at": "2026-04-12T11:09:01.540676Z"
   },
   {
-    "query_image_url": "http://localhost:8000/golden-dataset/images/4f40162bc54df09df1e6.jpeg",
-    "query_name": "black mini shoulder bag",
-    "query_category_tag": "bag",
-    "relevant_product_ids": [
-      "9c48ee91-693b-5a4d-b934-9a6c3a435c10",
-      "cf3d93da-1073-5084-80d1-19dfb538f328",
-      "10fa9b68-1c1a-5f9b-9b34-eaec23f16e86",
-      "182d925d-00ed-5ed4-9c33-4f354bd820da",
-      "05e9bc5a-96e5-5dac-9d3e-51c66b752a7d"
-    ],
-    "relevant_info": [
-      {
-        "product_id": "9c48ee91-693b-5a4d-b934-9a6c3a435c10",
-        "name": "black mini shoulder bag",
-        "image_url": "http://localhost:8000/golden-dataset/images/973575b4dc3b611e8da9.jpeg",
-        "store_name": "golden_dataset"
-      },
-      {
-        "product_id": "cf3d93da-1073-5084-80d1-19dfb538f328",
-        "name": "black mini shoulder bag",
-        "image_url": "http://localhost:8000/golden-dataset/images/4f1a60856723196330a0.jpeg",
-        "store_name": "golden_dataset"
-      },
-      {
-        "product_id": "10fa9b68-1c1a-5f9b-9b34-eaec23f16e86",
-        "name": "black mini shoulder bag",
-        "image_url": "http://localhost:8000/golden-dataset/images/b6a43dc0f76349dd593c.jpeg",
-        "store_name": "golden_dataset"
-      },
-      {
-        "product_id": "182d925d-00ed-5ed4-9c33-4f354bd820da",
-        "name": "black mini shoulder bag",
-        "image_url": "http://localhost:8000/golden-dataset/images/63d0717d7b7cfceb7d68.jpeg",
-        "store_name": "golden_dataset"
-      },
-      {
-        "product_id": "05e9bc5a-96e5-5dac-9d3e-51c66b752a7d",
-        "name": "black mini shoulder bag",
-        "image_url": "http://localhost:8000/golden-dataset/images/90d4967df89e22052457.jpeg",
-        "store_name": "golden_dataset"
-      }
-    ],
-    "source": "manual_frontend",
-    "n_relevant": 5,
-    "annotated_by": "frontend",
-    "created_at": "2026-04-12T11:16:06.841365Z"
-  },
-  {
     "query_image_url": "http://localhost:8000/golden-dataset/images/3740adfbdf2342d00f10.jpeg",
     "query_name": "black bottine",
     "query_category_tag": "shoes",
@@ -1102,5 +958,485 @@
     "n_relevant": 5,
     "annotated_by": "frontend",
     "created_at": "2026-04-12T11:25:22.907548Z"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/6402f0b0e7270d38cfff.jpeg",
+    "query_name": "black shoulder bag",
+    "query_category_tag": "bag",
+    "relevant_product_ids": [
+      "6d82e4da-7f58-5259-a1c9-2cfcdee30ab1",
+      "5edd9e54-76f5-5286-8291-6ea4615f0398",
+      "317ca124-1663-56ef-b51f-83eabb858f52",
+      "aea7cba4-c7ae-54e3-b13d-dd10078e985c",
+      "b87ea58c-328b-55cf-87c9-a3dd46d49b67"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "6d82e4da-7f58-5259-a1c9-2cfcdee30ab1",
+        "name": "black shoulder bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/d01951a045769aa99d87.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "5edd9e54-76f5-5286-8291-6ea4615f0398",
+        "name": "black shoulder bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/e364c403ff0882eddc4d.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "317ca124-1663-56ef-b51f-83eabb858f52",
+        "name": "black shoulder bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/c94540e1caa3a7feb386.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "aea7cba4-c7ae-54e3-b13d-dd10078e985c",
+        "name": "black shoulder bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/a200f57744dbab3230a8.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "b87ea58c-328b-55cf-87c9-a3dd46d49b67",
+        "name": "black shoulder bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/7bcc88438297feab6226.jpeg",
+        "store_name": "golden_dataset"
+      }
+    ],
+    "source": "manual_frontend",
+    "n_relevant": 5,
+    "annotated_by": "frontend",
+    "created_at": "2026-04-13T09:45:10.120095Z"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/442b01d899d9a5873262.jpeg",
+    "query_name": "brown suede hand bag",
+    "query_category_tag": "bag",
+    "relevant_product_ids": [
+      "1f651d00-cc83-590d-868b-182ba314030a",
+      "539fe3ad-0862-5781-a49b-df170f9cf09e",
+      "1b6d4563-a75c-5463-b2d3-22f14358d0c6",
+      "c45d4716-c9b3-5676-bd4a-b060be077bdc",
+      "125ad52f-2764-5d3d-9508-55c975739b1b"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "1f651d00-cc83-590d-868b-182ba314030a",
+        "name": "brown suede hand bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/8a76eef07b8a0d89901f.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "539fe3ad-0862-5781-a49b-df170f9cf09e",
+        "name": "brown suede hand bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/628410d437af1cef97a1.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "1b6d4563-a75c-5463-b2d3-22f14358d0c6",
+        "name": "brown suede hand bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/41536802f4d40a61b00d.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "c45d4716-c9b3-5676-bd4a-b060be077bdc",
+        "name": "brown suede hand bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/bf1b21cb35844f843434.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "125ad52f-2764-5d3d-9508-55c975739b1b",
+        "name": "brown suede hand bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/921e5e906478ba123069.jpeg",
+        "store_name": "golden_dataset"
+      }
+    ],
+    "source": "manual_frontend",
+    "n_relevant": 5,
+    "annotated_by": "frontend",
+    "created_at": "2026-04-13T11:26:17.163127Z"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/5cfe116b92702f2a141b.jpeg",
+    "query_name": "Black satin midi bias skirt",
+    "query_category_tag": "skirt",
+    "relevant_product_ids": [
+      "d8153942-5a48-5c3d-b50d-76a0e2197bf4",
+      "9053d767-7162-528e-81b6-35f1ac03b8c7",
+      "55c90624-b00c-5087-9a80-8730dba75cc0",
+      "b21d2279-1619-53d2-9e97-23c115affb23",
+      "054d366d-03ea-51eb-837a-970dcdc6b4d8"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "d8153942-5a48-5c3d-b50d-76a0e2197bf4",
+        "name": "Black satin midi bias skirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/b3150c77fbed1c8cfa42.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "9053d767-7162-528e-81b6-35f1ac03b8c7",
+        "name": "Black satin midi bias skirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/e9fdff2f7789aa07d3ed.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "55c90624-b00c-5087-9a80-8730dba75cc0",
+        "name": "Black satin midi bias skirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/a7653024c1603e526650.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "b21d2279-1619-53d2-9e97-23c115affb23",
+        "name": "Black satin midi bias skirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/4c3637d7a468071c455b.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "054d366d-03ea-51eb-837a-970dcdc6b4d8",
+        "name": "Black satin midi bias skirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/4815e2c8bc3f38f46e41.jpeg",
+        "store_name": "golden_dataset"
+      }
+    ],
+    "source": "manual_frontend",
+    "n_relevant": 5,
+    "annotated_by": "frontend",
+    "created_at": "2026-04-13T11:32:43.750219Z"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/80efb9f3ff927174814f.jpeg",
+    "query_name": "blue high waisted seamless leggings",
+    "query_category_tag": "leggings",
+    "relevant_product_ids": [
+      "d8642748-f85a-5a3c-9841-86c9404cc9a5",
+      "04a16edf-2896-5f00-ac5f-70d89395d8dd",
+      "4e94e7b4-1c76-53b7-a0c9-f9d4cd36c445",
+      "909966ec-7d20-52e4-95ec-9d2d2c083a99",
+      "5669bd6c-2ea5-557b-b59d-8880f18e1a7c"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "d8642748-f85a-5a3c-9841-86c9404cc9a5",
+        "name": "blue high waisted seamless leggings",
+        "image_url": "http://localhost:8000/golden-dataset/images/7f68063fe1b3527af59c.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "04a16edf-2896-5f00-ac5f-70d89395d8dd",
+        "name": "blue high waisted seamless leggings",
+        "image_url": "http://localhost:8000/golden-dataset/images/55574df216dadfdb0fb1.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "4e94e7b4-1c76-53b7-a0c9-f9d4cd36c445",
+        "name": "blue high waisted seamless leggings",
+        "image_url": "http://localhost:8000/golden-dataset/images/03f2802e59bcc327a17e.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "909966ec-7d20-52e4-95ec-9d2d2c083a99",
+        "name": "blue high waisted seamless leggings",
+        "image_url": "http://localhost:8000/golden-dataset/images/668edb0d32196b941d45.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "5669bd6c-2ea5-557b-b59d-8880f18e1a7c",
+        "name": "blue high waisted seamless leggings",
+        "image_url": "http://localhost:8000/golden-dataset/images/0fdd83c0546ecc49959e.jpeg",
+        "store_name": "golden_dataset"
+      }
+    ],
+    "source": "manual_frontend",
+    "n_relevant": 5,
+    "annotated_by": "frontend",
+    "created_at": "2026-04-13T11:56:39.535701Z"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/361b1cd9ce289c20bf78.jpeg",
+    "query_name": "black wide leg sleeveless jumpsuit",
+    "query_category_tag": "jumpsuit",
+    "relevant_product_ids": [
+      "c0d046a6-0008-5347-95d7-5392b8032746",
+      "b58aa3b8-65d2-5841-82e4-702b7686550c",
+      "ee1f7a15-fa28-512d-b4a4-d14c54fce13c",
+      "5cc41f8d-19f0-57c7-b2c6-8906eb3b8683",
+      "f06e6087-7ca3-5dc6-8624-ef1f1a829bd2"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "c0d046a6-0008-5347-95d7-5392b8032746",
+        "name": "black wide leg sleeveless jumpsuit",
+        "image_url": "http://localhost:8000/golden-dataset/images/ef0ea67535bfa1665dc9.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "b58aa3b8-65d2-5841-82e4-702b7686550c",
+        "name": "black wide leg sleeveless jumpsuit",
+        "image_url": "http://localhost:8000/golden-dataset/images/8ef3277a85755eaa8e4f.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "ee1f7a15-fa28-512d-b4a4-d14c54fce13c",
+        "name": "black wide leg sleeveless jumpsuit",
+        "image_url": "http://localhost:8000/golden-dataset/images/c134ac75e0c7fd2c345c.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "5cc41f8d-19f0-57c7-b2c6-8906eb3b8683",
+        "name": "black wide leg sleeveless jumpsuit",
+        "image_url": "http://localhost:8000/golden-dataset/images/543c8a049c32b291b22c.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "f06e6087-7ca3-5dc6-8624-ef1f1a829bd2",
+        "name": "black wide leg sleeveless jumpsuit",
+        "image_url": "http://localhost:8000/golden-dataset/images/fe1a8a58662ffe4718d8.jpeg",
+        "store_name": "golden_dataset"
+      }
+    ],
+    "source": "manual_frontend",
+    "n_relevant": 5,
+    "annotated_by": "frontend",
+    "created_at": "2026-04-13T12:01:57.736231Z"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/a577be291917ef1574c7.jpeg",
+    "query_name": "beige wide brim straw hat",
+    "query_category_tag": "hat",
+    "relevant_product_ids": [
+      "f70ee9a4-4238-5f09-82b4-899b3ad76467",
+      "4c07aac5-f332-5161-9ef8-03fb56bdc8ec",
+      "cf8e22d2-3bfa-5efb-85f1-f93fd255c4ff",
+      "df063253-f1c3-5714-95be-3f3cde4f8029",
+      "551c12ae-da83-50f0-aed8-4a84383a342c"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "f70ee9a4-4238-5f09-82b4-899b3ad76467",
+        "name": "beige wide brim straw hat",
+        "image_url": "http://localhost:8000/golden-dataset/images/2486a4c3044abf75b111.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "4c07aac5-f332-5161-9ef8-03fb56bdc8ec",
+        "name": "beige wide brim straw hat",
+        "image_url": "http://localhost:8000/golden-dataset/images/3997583d848f37dfc65c.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "cf8e22d2-3bfa-5efb-85f1-f93fd255c4ff",
+        "name": "beige wide brim straw hat",
+        "image_url": "http://localhost:8000/golden-dataset/images/3b452cdf5a2388575bae.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "df063253-f1c3-5714-95be-3f3cde4f8029",
+        "name": "beige wide brim straw hat",
+        "image_url": "http://localhost:8000/golden-dataset/images/05ddded2d837c145b5b0.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "551c12ae-da83-50f0-aed8-4a84383a342c",
+        "name": "beige wide brim straw hat",
+        "image_url": "http://localhost:8000/golden-dataset/images/6593efd27e2cf4990572.jpeg",
+        "store_name": "golden_dataset"
+      }
+    ],
+    "source": "manual_frontend",
+    "n_relevant": 5,
+    "annotated_by": "frontend",
+    "created_at": "2026-04-13T12:05:28.214231Z"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/e51f397c61f1bace77b7.jpeg",
+    "query_name": "black cap",
+    "query_category_tag": "hat",
+    "relevant_product_ids": [
+      "ee3da7e3-9516-543c-96eb-5a79a7a25fe8",
+      "4327840b-94d7-5d68-ae2c-e48292064a21",
+      "e97d4fbc-496c-5ed2-862d-768c7d26acbe",
+      "2818e90d-e5f5-5880-860a-13ac59dd8767",
+      "83266ad5-4d9f-5c43-be32-626fc4e22369"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "ee3da7e3-9516-543c-96eb-5a79a7a25fe8",
+        "name": "black cap",
+        "image_url": "http://localhost:8000/golden-dataset/images/9b373d3ff9ddc0942036.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "4327840b-94d7-5d68-ae2c-e48292064a21",
+        "name": "black cap",
+        "image_url": "http://localhost:8000/golden-dataset/images/849e5b0803c060995261.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "e97d4fbc-496c-5ed2-862d-768c7d26acbe",
+        "name": "black cap",
+        "image_url": "http://localhost:8000/golden-dataset/images/b5600757f3966d56bfdd.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "2818e90d-e5f5-5880-860a-13ac59dd8767",
+        "name": "black cap",
+        "image_url": "http://localhost:8000/golden-dataset/images/e51ff58e3cba8ddcf5cc.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "83266ad5-4d9f-5c43-be32-626fc4e22369",
+        "name": "black cap",
+        "image_url": "http://localhost:8000/golden-dataset/images/804e5bd3ca8e164263eb.jpeg",
+        "store_name": "golden_dataset"
+      }
+    ],
+    "source": "manual_frontend",
+    "n_relevant": 5,
+    "annotated_by": "frontend",
+    "created_at": "2026-04-13T12:08:24.518754Z"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/65108ac780284f1b1e87.jpg",
+    "query_name": "tan leather tote bag",
+    "query_category_tag": "bag",
+    "relevant_product_ids": [
+      "e17c9cf5-afad-5b27-a2f7-549ba3d41f65",
+      "5a5fd643-4bc1-5882-8e43-efb502401faa",
+      "5d4e9f5c-8112-5ff1-946f-98fde36b56bd",
+      "a47dd5d1-dabb-59b9-98a7-7baab58680d5",
+      "415ecb73-64e7-56df-aa62-7543823d08e8"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "e17c9cf5-afad-5b27-a2f7-549ba3d41f65",
+        "name": "tan leather tote bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/d1eb6c62bb0546f541a4.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "5a5fd643-4bc1-5882-8e43-efb502401faa",
+        "name": "tan leather tote bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/0ba10a589d7ed3d70de1.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "5d4e9f5c-8112-5ff1-946f-98fde36b56bd",
+        "name": "tan leather tote bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/900d7771d34633e18183.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "a47dd5d1-dabb-59b9-98a7-7baab58680d5",
+        "name": "tan leather tote bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/02423166249d0cbf9966.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "415ecb73-64e7-56df-aa62-7543823d08e8",
+        "name": "tan leather tote bag",
+        "image_url": "http://localhost:8000/golden-dataset/images/fc97a38888d1c16460b7.jpeg",
+        "store_name": "golden_dataset"
+      }
+    ],
+    "source": "manual_frontend",
+    "n_relevant": 5,
+    "annotated_by": "frontend",
+    "created_at": "2026-04-13T12:26:45.678113Z"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/08bc239d9d7d66d83829.jpeg",
+    "query_name": "white oversized shirt",
+    "query_category_tag": "top",
+    "relevant_product_ids": [
+      "5e357352-f1ed-572d-ba1d-10613d37db3a",
+      "f61aace9-ec2b-5962-9fa8-211748be7204",
+      "fc347a79-3652-57d5-88f2-2d1e8d6e9b54",
+      "02cc3c50-470c-5c2a-901b-2700481c974e",
+      "7fb61277-0a91-58ac-8ef3-3b6158b43897"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "5e357352-f1ed-572d-ba1d-10613d37db3a",
+        "name": "white oversized shirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/564dd57aac7fd7e5618b.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "f61aace9-ec2b-5962-9fa8-211748be7204",
+        "name": "white oversized shirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/7a81e069b5496b39e973.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "fc347a79-3652-57d5-88f2-2d1e8d6e9b54",
+        "name": "white oversized shirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/c179ad28ab1dc0e42298.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "02cc3c50-470c-5c2a-901b-2700481c974e",
+        "name": "white oversized shirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/d7d437ec4f9fa02758b9.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "7fb61277-0a91-58ac-8ef3-3b6158b43897",
+        "name": "white oversized shirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/652c3835f3834b73a487.jpeg",
+        "store_name": "golden_dataset"
+      }
+    ],
+    "source": "manual_frontend",
+    "n_relevant": 5,
+    "annotated_by": "frontend",
+    "created_at": "2026-04-13T13:13:16.464715Z"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/9b2739aa411c3b1f5591.jpeg",
+    "query_name": "brown mini skirt",
+    "query_category_tag": "skirt",
+    "relevant_product_ids": [
+      "171b5a29-dfcb-5382-a51c-463a6a242f31",
+      "bf449ca2-660a-5b83-9882-2405aa54af94",
+      "f24301c4-6571-5ec8-9d5d-bf43cf6568bf",
+      "42052aec-6db9-5aa6-bd27-63bb3af0690c",
+      "1e30ba78-fff7-5e60-a621-b75306311f38"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "171b5a29-dfcb-5382-a51c-463a6a242f31",
+        "name": "brown mini skirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/b43ecb67d8bb07fdebe2.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "bf449ca2-660a-5b83-9882-2405aa54af94",
+        "name": "brown mini skirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/b4e96e37b4f3c8e49321.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "f24301c4-6571-5ec8-9d5d-bf43cf6568bf",
+        "name": "brown mini skirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/d07697c6a12038ab14fe.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "42052aec-6db9-5aa6-bd27-63bb3af0690c",
+        "name": "brown mini skirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/14867233ab90facba502.jpeg",
+        "store_name": "golden_dataset"
+      },
+      {
+        "product_id": "1e30ba78-fff7-5e60-a621-b75306311f38",
+        "name": "brown mini skirt",
+        "image_url": "http://localhost:8000/golden-dataset/images/a13f192348bb8d0a894d.jpeg",
+        "store_name": "golden_dataset"
+      }
+    ],
+    "source": "manual_frontend",
+    "n_relevant": 5,
+    "annotated_by": "frontend",
+    "created_at": "2026-04-13T13:30:12.651387Z"
   }
 ]

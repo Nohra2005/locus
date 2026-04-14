@@ -2,7 +2,7 @@
 locus_dashboard.py — Locus developer dashboard.
 
 Run with:
-    pip install streamlit qdrant-client pillow requests
+    pip install streamlit qdrant-client pillow requests python-dotenv
     streamlit run locus_dashboard.py
 """
 
@@ -10,6 +10,9 @@ import io
 import base64
 import time
 import os
+
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 import requests
 import streamlit as st

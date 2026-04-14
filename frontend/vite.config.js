@@ -35,11 +35,13 @@ export default defineConfig({
     host: true,
     port: 5173,
     proxy: {
-      "/detect":   { target: "http://localhost:8000", changeOrigin: true },
-      "/search":   { target: "http://localhost:8000", changeOrigin: true },
-      "/add":      { target: "http://localhost:8000", changeOrigin: true },
-      "/feedback": { target: "http://localhost:8000", changeOrigin: true },
-      "/static":   { target: "http://localhost:8000", changeOrigin: true },
+      "/detect":       { target: "http://localhost:8000", changeOrigin: true },
+      "/search":       { target: "http://localhost:8000", changeOrigin: true },
+      "/add":          { target: "http://localhost:8000", changeOrigin: true },
+      "/feedback":     { target: "http://localhost:8000", changeOrigin: true },
+      "/static":       { target: "http://localhost:8000", changeOrigin: true },
+      "/judge-scores": { target: "http://localhost:8000", changeOrigin: true },
+      "/classify-crop":{ target: "http://localhost:8000", changeOrigin: true },
     },
   },
 });
