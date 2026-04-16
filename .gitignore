@@ -29,6 +29,13 @@ mlartifacts/
 mlops/evaluation_results.json
 mlops/visual_similarity_results.json
 mlops/repair_report.json
+mlops/link_health_report.json
+mlops/gemini_judge_results.json
+mlops/vss_cache.json
+
+# ── Gateway runtime state ─────────────────────────────────────────────────────
+# Written at runtime by the gateway process — not source code.
+gateway/flagged.json
 
 # ── LoRA retraining artifacts ─────────────────────────────────────────────────
 # Training runs, cached image pairs, and promoted model weights are large
