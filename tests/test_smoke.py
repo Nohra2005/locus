@@ -121,8 +121,10 @@ class TestMLflow:
 
     def test_mlflow_experiments_exist(self):
         """MLflow has the expected experiments."""
-        r = requests.get(
+        # MLflow 2.x requires POST with max_results > 0
+        r = requests.post(
             f"{MLFLOW_URL}/api/2.0/mlflow/experiments/search",
+            json={"max_results": 100},
             timeout=TIMEOUT,
         )
         assert r.status_code == 200

@@ -1,29 +1,32 @@
-FROM python:3.9-slim
+# syntax=docker/dockerfile:1
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for image processing
-# Switched 'libgl1-mesa-glx' to 'libgl1' for newer Debian versions
-RUN apt-get update && apt-get install -y \
-    libgl1 \
-    libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+# System deps — cached apt lists, no layer bloat
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0
 
-# Install torch first (large ~200MB download — cached in its own layer)
-RUN pip install --no-cache-dir \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
-    torch==2.6.0+cpu \
-    torchvision==0.21.0+cpu
+# numpy first so torch's dep-resolver finds it already satisfied
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install numpy
 
-# Install ultralytics separately (pulls scipy ~38MB, cache this layer)
-RUN pip install --no-cache-dir ultralytics
+# torch + torchvision (~700 MB) — pip wheel cache persists across rebuilds
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --timeout 300 --retries 5 \
+        --index-url https://download.pytorch.org/whl/cpu \
+        torch==2.6.0+cpu torchvision==0.21.0+cpu
 
-# Install remaining dependencies
+# ultralytics (pulls scipy ~38 MB) — own layer so torch cache is never busted
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install ultralytics
+
+# App deps — only re-runs when requirements.txt changes
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
-# Copy the application code
 COPY . .
 
-# Start the Visual Engine on port 8001
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]

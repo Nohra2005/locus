@@ -26,6 +26,7 @@ CANONICAL_LABELS = [
     "hat",
     "bag",
     "jumpsuit",
+    "not_fashion",
 ]
 
 # =============================================================================
@@ -68,10 +69,41 @@ CLIP_PROMPTS = [
     "bag handbag",
     # jumpsuit
     "jumpsuit",
+    # not_fashion — conservative at index time; only fires on clearly non-garment items
+    "socks underwear swimsuit belt scarf non-clothing",
 ]
 
 assert len(CLIP_PROMPTS) == len(CANONICAL_LABELS), (
     "CLIP_PROMPTS and CANONICAL_LABELS must have the same length and order"
+)
+
+# =============================================================================
+# QUERY_CLIP_PROMPTS
+# Used at query time when the user draws a crop from a real-world photo.
+# Standard CLIP prompt engineering: "a photo of a person wearing X" outperforms
+# bare label names on in-the-wild images (vs product-on-white-background).
+# Same order as CANONICAL_LABELS. Does NOT affect index-time classification.
+# =============================================================================
+
+QUERY_CLIP_PROMPTS = [
+    "a shirt or top covering the chest and upper torso",              # top
+    "a sports bra or athletic crop top on the chest",                 # sports_bra
+    "pants or jeans covering the legs and lower body from waist down",# pants
+    "leggings or tights, stretchy fabric covering the legs",          # leggings
+    "shorts on the upper legs above the knee",                        # shorts
+    "a skirt around the hips and upper legs",                         # skirt
+    "a dress covering the body from shoulders down to the legs",      # dress
+    "a sweater or hoodie covering the chest and shoulders",           # sweater
+    "a jacket or coat over the upper body",                           # jacket
+    "shoes or boots on the feet",                                     # shoes
+    "a hat or cap on the head",                                       # hat
+    "a handbag or purse",                                             # bag
+    "a jumpsuit or one-piece garment covering the full body",         # jumpsuit
+    "socks, underwear, swimwear, belt, or non-clothing accessory",    # not_fashion
+]
+
+assert len(QUERY_CLIP_PROMPTS) == len(CANONICAL_LABELS), (
+    "QUERY_CLIP_PROMPTS and CANONICAL_LABELS must have the same length and order"
 )
 
 # =============================================================================
@@ -191,6 +223,7 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "trousers":     "pants",
     "trouser":      "pants",
     "jeans":        "pants",
+    "jean":        "pants",
     "joggers":      "pants",
     "sweatpants":   "pants",
     "trackpants":   "pants",
@@ -467,56 +500,3 @@ YOLO_TO_CANONICAL = {
     "sling dress":           "dress",
 }
 
-
-# =============================================================================
-# FASHIONPEDIA_TO_CANONICAL
-#
-# "vest" removed for the same reason as YOLO_TO_CANONICAL above.
-# =============================================================================
-
-FASHIONPEDIA_TO_CANONICAL = {
-    "shirt, blouse":                           "top",
-    "top, t-shirt, sweatshirt":                "top",
-    "sweater":                                 "sweater",
-    "cardigan":                                "sweater",
-    "jacket":                                  "jacket",
-    # "vest" intentionally omitted — CLIP relabel decides top vs jacket per crop
-    "coat":                                    "jacket",
-    "cape":                                    "jacket",
-    "pants":                                   "pants",
-    "shorts":                                  "shorts",
-    "skirt":                                   "skirt",
-    "dress":                                   "dress",
-    "jumpsuit":                                "jumpsuit",
-    "hat":                                     "hat",
-    "headband, head covering, hair accessory": "hat",
-    "shoe":                                    "shoes",
-    "bag, wallet":                             "bag",
-}
-
-
-# =============================================================================
-# SEARCHABLE_IDS
-# ID 5 (vest) kept in SEARCHABLE_IDS so the box is still returned to the UI —
-# we just don't pre-label it. CLIP relabel in detect_objects() labels it.
-# =============================================================================
-
-SEARCHABLE_IDS = {
-    0,   # shirt, blouse       → top
-    1,   # top, t-shirt        → top
-    2,   # sweater             → sweater
-    3,   # cardigan            → sweater
-    4,   # jacket              → jacket
-    5,   # vest                → CLIP relabel (top or jacket depending on crop)
-    6,   # pants               → pants
-    7,   # shorts              → shorts
-    8,   # skirt               → skirt
-    9,   # coat                → jacket
-    10,  # dress               → dress
-    11,  # jumpsuit            → jumpsuit
-    12,  # cape                → jacket
-    14,  # hat                 → hat
-    15,  # headband            → hat
-    23,  # shoe                → shoes
-    24,  # bag, wallet         → bag
-}

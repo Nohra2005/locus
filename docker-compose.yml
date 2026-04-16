@@ -38,8 +38,9 @@ services:
       # LOCAL mode (commented out)
       # - QDRANT_HOST=qdrant
       # - QDRANT_PORT=6333
-      # Groq async judge (opt-in — leave blank to disable)
+      # Dual-provider async judge (Groq + Gemini) — leave either blank to disable that provider
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GATEWAY_BASE_URL=${GATEWAY_BASE_URL:-http://localhost:8000}
       - GOLDEN_DATASET_PATH=/mlops/golden_dataset.json
     volumes:
@@ -104,17 +105,80 @@ services:
     volumes:
       - mlflow_data:/mlflow
 
-  # ── 6. MLops Metrics Exporter ────────────────────────────────────
+  # ── 6. Link Health Monitor ───────────────────────────────────────
+  # Runs repair_broken_links.py every 5 days.
+  # Phase 1: HEAD-checks every image_url in locus_items.
+  # Phase 2: Marks dead items broken=True (hidden from search immediately).
+  # Phase 3: Re-scrapes affected stores, re-indexes recovered items, deletes old points.
+  # Report written to mlops/link_health_report.json after each run.
+  # To run manually: docker compose exec gateway python repair_broken_links.py
+  link_monitor:
+    build: ./gateway
+    working_dir: /app
+    command: >
+      sh -c "while true; do
+        echo '[LINK MONITOR] Starting run at $$(date)';
+        python repair_broken_links.py;
+        echo '[LINK MONITOR] Done. Sleeping 5 days.';
+        sleep 432000;
+      done"
+    volumes:
+      - ./gateway:/app
+      - ./mlops:/mlops
+    environment:
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+      - VISUAL_URL=http://visual_engine:8001
+      - GATEWAY_URL=http://gateway:8000
+    depends_on:
+      - gateway
+      - visual_engine
+    restart: unless-stopped
+
+  # ── 7. MLops Automated Retraining ────────────────────────────────
+  # Runs retrain_clip.py on a 48h schedule.
+  # Also triggered on-demand via POST /trigger-retrain on the gateway.
+  # Pipeline: build pairs → train LoRA → eval on golden → promote/rollback.
+  # All results logged to MLflow under experiment "locus_lora_retraining".
+  mlops_retrain:
+    build:
+      context: .
+      dockerfile: mlops/Dockerfile.retrain
+    working_dir: /mlops
+    command: ["python", "retrain_clip.py", "--schedule", "48"]
+    volumes:
+      - ./mlops:/mlops
+      - ./visual_engine:/visual_engine
+    environment:
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - GATEWAY_URL=http://gateway:8000
+      - VISUAL_HOST=http://visual_engine:8001
+      - VISUAL_ENGINE_MODELS=/visual_engine/models
+      - VISUAL_ENGINE_MODELS_INTERNAL=/app/models
+      - MIN_FEEDBACK_PAIRS=50
+      - MIN_ACS_THRESHOLD=0.70
+      - MAX_TRAIN_STEPS=${MAX_TRAIN_STEPS:-300}
+      - LOG_EVERY_STEPS=${LOG_EVERY_STEPS:-20}
+      - GIT_PYTHON_REFRESH=quiet
+    depends_on:
+      - gateway
+      - mlflow
+    restart: unless-stopped
+
+  # ── 7. MLops Metrics Exporter ────────────────────────────────────
   mlops_exporter:
     image: python:3.11-slim
     working_dir: /mlops
     command: >
-      sh -c "pip install prometheus_client --quiet && python metrics_exporter.py"
+      sh -c "pip install prometheus_client mlflow --quiet && python metrics_exporter.py"
     ports:
       - "8003:8003"
     volumes:
       - ./mlops:/mlops
     environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
       - GEMINI_RESULTS_PATH=/mlops/gemini_judge_results.json
       - VSS_CACHE_PATH=/mlops/vss_cache.json
       - METRICS_PORT=8003
@@ -135,7 +199,7 @@ services:
 
   # ── 7. Grafana ────────────────────────────────────────────────────
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.3
     ports:
       - "3000:3000"
     depends_on:
@@ -143,6 +207,7 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_PANELS_DISABLE_SANITIZE_HTML=true
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning

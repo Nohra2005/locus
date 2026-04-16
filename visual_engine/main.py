@@ -1,17 +1,26 @@
+import asyncio
 import io
 import base64
 import json
 import os
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from PIL import Image, ImageDraw
 from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Histogram
 from vectorizer import LocusVisualizer
 
 app = FastAPI()
 Instrumentator().instrument(app).expose(app)
 visualizer = LocusVisualizer()
+
+locus_detections_histogram = Histogram(
+    "locus_detections_per_request",
+    "Number of YOLO boxes returned per /detect call",
+    buckets=[0, 1, 2, 3, 4, 5, 6, 8, 10, 15],
+)
+
 
 OVERRIDES_PATH = "/app/whitelist_overrides.json"
 
@@ -27,7 +36,10 @@ def read_root():
 async def detect(file: UploadFile = File(...)):
     """Search time. Returns all YOLO boxes for user to select from."""
     image_data = await file.read()
-    detections, img_width, img_height = visualizer.detect_objects(image_data)
+    detections, img_width, img_height = await asyncio.to_thread(
+        visualizer.detect_objects, image_data
+    )
+    locus_detections_histogram.observe(len(detections))
     return {
         "detections":   detections,
         "image_width":  img_width,
@@ -40,17 +52,22 @@ async def vectorize(
     file:       UploadFile = File(...),
     yolo_label: str        = Form(""),
     darken:     str        = Form("false"),
+    query:      str        = Form("false"),
 ):
     """
     Search time. Expects ALREADY CROPPED image bytes — gateway crops before calling.
+    Pass query=true when classifying a user-drawn crop (enables person-wearing prompts).
     """
     image_data    = await file.read()
     should_darken = darken.lower() == "true"
+    query_mode    = query.lower() == "true"
 
-    vector, category, confidence, debug_img = visualizer.process_image(
-        image_bytes = image_data,
-        yolo_label  = yolo_label,
-        darken      = should_darken,
+    vector, category, confidence, debug_img = await asyncio.to_thread(
+        visualizer.process_image,
+        image_bytes=image_data,
+        yolo_label=yolo_label,
+        darken=should_darken,
+        query_mode=query_mode,
     )
 
     if not vector:
@@ -77,7 +94,9 @@ async def index_image(
     or {"skipped": true} with reason.
     """
     image_data = await file.read()
-    result     = visualizer.index_product(image_data, title=title)
+    result = await asyncio.to_thread(
+        visualizer.index_product, image_data, title=title
+    )
     return result
 
 
@@ -97,7 +116,7 @@ async def debug_index(
     Does NOT write to Qdrant.
     """
     image_data = await file.read()
-    result     = visualizer.index_product(image_data, title=title)
+    result     = await asyncio.to_thread(visualizer.index_product, image_data, title=title)
 
     try:
         image = Image.open(io.BytesIO(image_data)).convert("RGB")
@@ -237,3 +256,32 @@ async def whitelist_overrides():
     overrides = _read_overrides()
     active    = [e for e in overrides if e.get("status") == "approved"]
     return {"total": len(active), "entries": active}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ADAPTER HOT-RELOAD
+# Called by promote_model.py after copying a new LoRA adapter to disk.
+# No container restart needed — swaps the CLIP vision encoder in-place.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ReloadAdapterRequest(BaseModel):
+    adapter_path:           str
+    visual_projection_path: str = ""
+
+
+@app.post("/reload-adapter")
+async def reload_adapter(req: ReloadAdapterRequest):
+    """
+    Hot-swap the LoRA adapter on the running visual engine.
+    Loads a fresh base model + new adapter, then atomically replaces
+    self.clip_model so in-flight requests are not disrupted.
+    Takes ~30s while the base model reloads from the HuggingFace cache.
+    """
+    result = await asyncio.to_thread(
+        visualizer.reload_adapter,
+        adapter_path=req.adapter_path,
+        visual_projection_path=req.visual_projection_path,
+    )
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result
