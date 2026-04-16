@@ -400,6 +400,7 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
   const [drawing,     setDrawing]     = useState(false);
   const [startPt,     setStartPt]     = useState(null);
   const [box,         setBox]         = useState(null); // rendered coords {x1,y1,x2,y2}
+  const [resizing,    setResizing]    = useState(null); // null | "tl" | "tr" | "bl" | "br"
   const [loading,     setLoading]     = useState(false);
 
   const measureRendered = (el) => {
@@ -434,6 +435,10 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
 
   const onPointerDown = (e) => {
     if (loading || imgRendered.w === 0) return;
+    // If a box is already drawn, ignore new touches on the container so the
+    // user can scroll freely. They must press "Redraw" to start over.
+    const boxIsSet = box && (box.x2 - box.x1) >= 10 && (box.y2 - box.y1) >= 10;
+    if (boxIsSet) return;
     e.preventDefault();
     const pt = getPoint(e);
     setStartPt(pt);
@@ -442,6 +447,21 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
   };
 
   const onPointerMove = (e) => {
+    // Handle corner-resize drag
+    if (resizing) {
+      e.preventDefault();
+      const pt = getPoint(e);
+      setBox(prev => {
+        if (!prev) return prev;
+        const b = { ...prev };
+        if (resizing.includes("l")) b.x1 = Math.min(pt.x, prev.x2 - 20);
+        if (resizing.includes("r")) b.x2 = Math.max(pt.x, prev.x1 + 20);
+        if (resizing.includes("t")) b.y1 = Math.min(pt.y, prev.y2 - 20);
+        if (resizing.includes("b")) b.y2 = Math.max(pt.y, prev.y1 + 20);
+        return b;
+      });
+      return;
+    }
     if (!drawing || !startPt) return;
     e.preventDefault();
     const pt = getPoint(e);
@@ -452,6 +472,10 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
   };
 
   const onPointerUp = (e) => {
+    if (resizing) {
+      setResizing(null);
+      return;
+    }
     if (!drawing) return;
     e.preventDefault();
     setDrawing(false);
@@ -517,7 +541,7 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px" }}>
         <div
           ref={containerRef}
-          style={{ position: "relative", width: "100%", maxWidth: 640, cursor: loading ? "wait" : "crosshair", touchAction: "none", userSelect: "none" }}
+          style={{ position: "relative", width: "100%", maxWidth: 640, cursor: loading ? "wait" : (hasBox ? "default" : "crosshair"), touchAction: (hasBox && !resizing) ? "pan-y" : "none", userSelect: "none" }}
           onMouseDown={onPointerDown}
           onMouseMove={onPointerMove}
           onMouseUp={onPointerUp}
@@ -560,19 +584,39 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
                   rx={4}
                 />
               )}
-              {/* Corner handles once drawing is done */}
-              {hasBox && !drawing && (
-                [[box.x1, box.y1], [box.x2, box.y1], [box.x1, box.y2], [box.x2, box.y2]].map(([cx, cy], i) => (
-                  <circle key={i} cx={cx} cy={cy} r={5} fill={T.accent} />
-                ))
-              )}
             </svg>
+          )}
+          {/* Draggable corner handles — HTML divs so pointer events work on mobile */}
+          {hasBox && !drawing && (
+            [
+              { id: "tl", cx: box.x1, cy: box.y1, cursor: "nwse-resize" },
+              { id: "tr", cx: box.x2, cy: box.y1, cursor: "nesw-resize" },
+              { id: "bl", cx: box.x1, cy: box.y2, cursor: "nesw-resize" },
+              { id: "br", cx: box.x2, cy: box.y2, cursor: "nwse-resize" },
+            ].map(({ id, cx, cy, cursor }) => (
+              <div
+                key={id}
+                onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); setResizing(id); }}
+                onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); setResizing(id); }}
+                style={{
+                  position: "absolute",
+                  left: cx, top: cy,
+                  width: 28, height: 28,
+                  transform: "translate(-50%, -50%)",
+                  borderRadius: "50%",
+                  background: T.accent,
+                  cursor,
+                  touchAction: "none",
+                  zIndex: 10,
+                }}
+              />
+            ))
           )}
         </div>
 
         <div style={{ width: "100%", maxWidth: 640, marginTop: 16, display: "flex", gap: 10 }}>
           {hasBox && (
-            <button className="btn-ghost" style={{ flexShrink: 0 }} onClick={() => { setBox(null); setStartPt(null); }}>
+            <button className="btn-ghost" style={{ flexShrink: 0 }} onClick={() => { setBox(null); setStartPt(null); setResizing(null); }}>
               Redraw
             </button>
           )}
@@ -611,7 +655,10 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
     return () => { if (cropURL) URL.revokeObjectURL(cropURL); };
   }, [cropURL]);
 
-  const [category, setCategory] = useState(predictedCategory || Object.keys(CATEGORY_LABELS)[0]);
+  const isNotFashion = predictedCategory === "not_fashion";
+  const [category, setCategory] = useState(
+    isNotFashion ? Object.keys(CATEGORY_LABELS)[0] : (predictedCategory || Object.keys(CATEGORY_LABELS)[0])
+  );
 
   const conf      = (allScores && category) ? (allScores[category] ?? 0) : 0;
   const confLabel = conf > 0.6 ? "high confidence" : conf > 0.35 ? "medium confidence" : "low confidence";
@@ -624,7 +671,18 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
         <span style={{ fontSize: "0.75rem", color: T.textMuted, letterSpacing: "0.08em" }}>CONFIRM ITEM</span>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "32px 24px", gap: 28 }}>
+      {isNotFashion && (
+        <div style={{ margin: "24px 24px 0", padding: "18px 20px", background: "rgba(220,60,60,0.08)", border: "1px solid rgba(220,60,60,0.35)", borderRadius: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#e05a5a" }}>Not a fashion item</div>
+          <div style={{ fontSize: "0.75rem", color: T.textMuted, lineHeight: 1.6 }}>
+            The selected area doesn't look like a clothing item or accessory (socks, underwear, belts, etc. aren't searchable).<br />
+            Go back and draw a box around a clothing item instead.
+          </div>
+          <button className="btn-ghost" style={{ alignSelf: "flex-start", marginTop: 4 }} onClick={onBack}>← Redraw</button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "32px 24px", gap: 28, display: isNotFashion ? "none" : "flex" }}>
 
         <div style={{ display: "flex", gap: 20, alignItems: "flex-start", width: "100%", maxWidth: 480 }}>
           {/* Crop thumbnail */}
@@ -707,7 +765,7 @@ function ResultCard({ result, category, onFeedback, highlighted, judgeScore }) {
   const scoreColor   = displayScore >= 0.80 ? T.green : displayScore >= 0.60 ? T.yellow : T.red;
 
   const handleVote = async (stars) => {
-    if (vote !== null) return;
+    if (stars === vote) return; // same rating clicked again — no-op
     setVote(stars);
     setHover(null);
     await onFeedback(
@@ -754,16 +812,13 @@ function ResultCard({ result, category, onFeedback, highlighted, judgeScore }) {
           <span style={{ fontSize: "0.68rem", color: T.textMuted }}>{payload.store || ""}</span>
         </div>
 
-        <div
-          style={{ display: "flex", gap: "1px", marginTop: "auto", paddingTop: "4px" }}
-          onMouseLeave={() => vote === null && setHover(null)}
-        >
+        <div style={{ display: "flex", gap: "1px", marginTop: "auto", paddingTop: "4px" }}>
           {[1, 2, 3, 4, 5].map(star => (
             <button
               key={star}
-              className={`star-btn ${star <= fillUpTo ? "filled" : vote !== null ? "dimmed" : ""}`}
-              disabled={vote !== null}
-              onMouseEnter={() => vote === null && setHover(star)}
+              className={`star-btn ${star <= fillUpTo ? "filled" : ""}`}
+              onMouseEnter={() => setHover(star)}
+              onMouseLeave={() => setHover(null)}
               onClick={() => handleVote(star)}
               title={`Rate ${star} star${star > 1 ? "s" : ""}`}
             >
@@ -804,9 +859,23 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
   });
 
   const visibleResults = results.filter(r => !r.payload?.store || storesInRadius.includes(r.payload.store));
-  const displayResults = highlightedStore
+  const unfilteredResults = highlightedStore
     ? visibleResults.filter(r => r.payload?.store === highlightedStore)
     : visibleResults;
+
+  // Re-sort by AI judge score once available; unjudged items stay at end in CLIP order
+  const displayResults = [...unfilteredResults].sort((a, b) => {
+    const flatA = a.payload ?? a;
+    const flatB = b.payload ?? b;
+    const pidA  = flatA.product_id || flatA.item_id || flatA.image_url;
+    const pidB  = flatB.product_id || flatB.item_id || flatB.image_url;
+    const sA    = judgeScores[pidA];
+    const sB    = judgeScores[pidB];
+    if (sA !== undefined && sB !== undefined) return sB - sA;
+    if (sA !== undefined) return -1;
+    if (sB !== undefined) return 1;
+    return (b.score ?? 0) - (a.score ?? 0);
+  });
 
   return (
     <div className="fade-in" style={{ minHeight: "calc(100dvh - 61px)", paddingBottom: "48px" }}>
@@ -920,12 +989,12 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
           </div>
         ) : (
           <div className="results-grid">
-            {displayResults.map((result, i) => {
+            {displayResults.map((result) => {
               const flat = result.payload ?? result;
               const pid  = flat.product_id || flat.item_id || flat.image_url;
               return (
                 <ResultCard
-                  key={i}
+                  key={pid}
                   result={result}
                   category={category}
                   onFeedback={onFeedback}

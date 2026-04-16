@@ -26,6 +26,7 @@ CANONICAL_LABELS = [
     "hat",
     "bag",
     "jumpsuit",
+    "not_fashion",
 ]
 
 # =============================================================================
@@ -68,6 +69,8 @@ CLIP_PROMPTS = [
     "bag handbag",
     # jumpsuit
     "jumpsuit",
+    # not_fashion — conservative at index time; only fires on clearly non-garment items
+    "socks underwear swimsuit belt scarf non-clothing",
 ]
 
 assert len(CLIP_PROMPTS) == len(CANONICAL_LABELS), (
@@ -96,6 +99,7 @@ QUERY_CLIP_PROMPTS = [
     "a hat or cap on the head",                                       # hat
     "a handbag or purse",                                             # bag
     "a jumpsuit or one-piece garment covering the full body",         # jumpsuit
+    "socks, underwear, swimwear, belt, or non-clothing accessory",    # not_fashion
 ]
 
 assert len(QUERY_CLIP_PROMPTS) == len(CANONICAL_LABELS), (

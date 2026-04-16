@@ -276,8 +276,14 @@ def run_judge(
         logger.info(f"judge: [{provider}] scoring '{result_name}' ({result_image_url[:80]})")
         score = judge_pair(query_b64, result_image_url, provider, api_key)
 
+        # If primary returned nothing, try the fallback before giving up
+        if score is None and fallback:
+            fallback_provider, fallback_key = fallback
+            logger.info(f"judge: [{provider}] returned None — trying fallback [{fallback_provider}] for '{result_name}'")
+            score = judge_pair(query_b64, result_image_url, fallback_provider, fallback_key)
+
         if score is None:
-            logger.info(f"judge: [{provider}] no score for '{result_name}'")
+            logger.info(f"judge: no score for '{result_name}' from any provider")
             continue
 
         stars = score_to_stars(score)
