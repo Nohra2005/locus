@@ -21,7 +21,24 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.models import Distance, PointStruct, VectorParams
 
+import time as _time_module
+
 from judge import run_judge
+
+# ── Per-search judge score store ──────────────────────────────────────────────
+# search_id → {product_id: float_score}  written incrementally by run_judge.
+# Entries are cleaned up after _JUDGE_TTL seconds so memory doesn't grow forever.
+_judge_scores:     dict[str, dict[str, float]] = {}
+_judge_timestamps: dict[str, float]            = {}
+_JUDGE_TTL = 300  # 5 minutes
+
+
+def _cleanup_judge_scores() -> None:
+    cutoff = _time_module.monotonic() - _JUDGE_TTL
+    stale  = [sid for sid, ts in _judge_timestamps.items() if ts < cutoff]
+    for sid in stale:
+        _judge_scores.pop(sid, None)
+        _judge_timestamps.pop(sid, None)
 
 app = FastAPI()
 Instrumentator().instrument(app).expose(app)
@@ -70,9 +87,11 @@ VISUAL_URL          = os.getenv("VISUAL_HOST",    "http://visual_engine:8001")
 QDRANT_URL          = os.getenv("QDRANT_URL")
 QDRANT_API_KEY      = os.getenv("QDRANT_API_KEY")
 GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
+GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
 GATEWAY_BASE_URL    = os.getenv("GATEWAY_BASE_URL", "http://localhost:8000")
 QDRANT_HOST         = os.getenv("QDRANT_HOST",    "qdrant")
 QDRANT_PORT         = int(os.getenv("QDRANT_PORT", 6333))
+# Experiment flag: apply background removal to accessory (shoes/bag/hat) query crops.
 COLLECTION_NAME     = "locus_items"
 SKIPPED_COLLECTION  = "locus_skipped"
 FEEDBACK_COLLECTION = "locus_feedback"
@@ -580,20 +599,59 @@ async def delete_catalogue_item(item_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Classify crop (query-time: user drew a box, CLIP predicts category) ────────
+
+@app.post("/classify-crop")
+async def classify_crop(
+    file: UploadFile = File(...),
+    x1:   float      = Form(0),
+    y1:   float      = Form(0),
+    x2:   float      = Form(0),
+    y2:   float      = Form(0),
+):
+    """
+    Crops the uploaded image to the given bbox and runs CLIP classification.
+    Returns the predicted category and all per-category scores.
+    Called by the frontend after the user draws a bounding box, before searching.
+    """
+    image_bytes = await file.read()
+    crop_bytes  = _crop_image_bytes(image_bytes, x1, y1, x2, y2) if (x2 > x1 and y2 > y1) else image_bytes
+
+    async with httpx.AsyncClient() as http:
+        vis_response = await http.post(
+            f"{VISUAL_URL}/vectorize",
+            files={"file": (file.filename, crop_bytes, "image/jpeg")},
+            data={"yolo_label": "", "darken": "false", "query": "true"},
+            timeout=60.0,
+        )
+        vis_response.raise_for_status()
+        vis_data = vis_response.json()
+
+    all_scores = vis_data.get("category_confidence", {})
+    category   = vis_data.get("category")
+    confidence = all_scores.get(category, 0.0) if isinstance(all_scores, dict) else 0.0
+
+    return {
+        "category":   category,
+        "confidence": round(confidence, 3),
+        "all_scores": all_scores,
+    }
+
+
 # ── Search ─────────────────────────────────────────────────────────────────────
 
 @app.post("/search")
 async def search_items(
-    background_tasks: BackgroundTasks,
-    file:             UploadFile = File(...),
-    x1:               float      = Form(0),
-    y1:               float      = Form(0),
-    x2:               float      = Form(0),
-    y2:               float      = Form(0),
-    search_label:     str        = Form(""),
-    shoe_style:       str        = Form(""),   # optional sub-type for shoes (sneaker|boot|heel|sandal)
-    include_golden:   bool       = False,
-    skip_judge:       bool       = Form(False),
+    background_tasks:   BackgroundTasks,
+    file:               UploadFile = File(...),
+    x1:                 float      = Form(0),
+    y1:                 float      = Form(0),
+    x2:                 float      = Form(0),
+    y2:                 float      = Form(0),
+    search_label:       str        = Form(""),
+    shoe_style:         str        = Form(""),   # optional sub-type for shoes (sneaker|boot|heel|sandal)
+    include_golden:     bool       = False,
+    skip_judge:         bool       = Form(False),
 ):
     image_bytes = await file.read()
 
@@ -763,7 +821,7 @@ async def search_items(
 
     best_per_product = {}
     for hit in raw_results:
-        product_id = hit.payload.get("product_id", hit.payload.get("image_url", str(hit.id)))
+        product_id = hit.payload.get("product_id") or hit.payload.get("image_url") or str(hit.id)
         if product_id not in best_per_product or hit.score > best_per_product[product_id]["score"]:
             best_per_product[product_id] = {
                 "name":       hit.payload.get("name", "Unknown"),
@@ -778,22 +836,43 @@ async def search_items(
 
     matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:25]
 
-    if GROQ_API_KEY:
+    search_id    = str(uuid.uuid4())[:12]
+    scores_dict  = {}
+
+    if (GROQ_API_KEY or GEMINI_API_KEY) and not skip_judge and not include_golden:
+        _cleanup_judge_scores()
+        _judge_scores[search_id]     = scores_dict
+        _judge_timestamps[search_id] = _time_module.monotonic()
         background_tasks.add_task(
             run_judge,
             crop_bytes,
             matches,
             GATEWAY_BASE_URL,
             GROQ_API_KEY,
+            scores_dict,
+            GEMINI_API_KEY,
         )
 
     return {
         "matches":                   matches,
+        "search_id":                 search_id,
         "debug_image":               processed_image,
         "detected_category":         detected_category,
         "category_confidence":       category_confidence,
         "category_mismatch_warning": mismatch_warning,
     }
+
+
+# ── Judge score polling ────────────────────────────────────────────────────────
+
+@app.get("/judge-scores/{search_id}")
+async def get_judge_scores(search_id: str):
+    """
+    Returns the judge scores collected so far for a given search.
+    Returns {product_id: float} — only entries scored so far are included.
+    Frontend polls this every 3s after receiving search results.
+    """
+    return _judge_scores.get(search_id, {})
 
 
 # ══════════════════════════════════════════════════════════════════════════════

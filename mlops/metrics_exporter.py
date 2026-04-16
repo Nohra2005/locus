@@ -2,14 +2,10 @@
 """
 Locus — MLops Metrics Exporter
 ================================
-Reads evaluation results from MLflow every 30s and exposes them as
-Prometheus metrics on port 8003.
+Reads evaluation results from MLflow AND Gemini judge JSON files every 30s,
+then exposes all of them as Prometheus metrics on port 8003.
 
-Replaces the deprecated Gemini/VSS exporter. All metrics now derive from
-the objective Recall@K evaluator (evaluate_recall.py) and the LoRA
-retraining pipeline (retrain_clip.py), both logged to MLflow.
-
-Metrics exposed:
+MLflow-based metrics (LoRA retraining pipeline):
   locus_recall_at_5               — latest Recall@5 from locus_search_accuracy
   locus_recall_at_10              — latest Recall@10
   locus_recall_at_25              — latest Recall@25
@@ -18,21 +14,32 @@ Metrics exposed:
   locus_lora_promoted_total       — cumulative adapter promotions
   locus_lora_runs_total           — total retraining pipeline runs
   locus_queries_evaluated_total   — number of golden queries in latest eval run
-
   locus_retrain_active            — 1 if a retrain run is currently RUNNING, else 0
   locus_retrain_step              — latest logged training step in the active run
   locus_lora_train_loss           — latest train_loss value in the active run
   locus_retrain_max_steps         — MAX_TRAIN_STEPS param from the active run
+
+Gemini Judge metrics (from gemini_judge_results.json):
+  locus_gemini_avg_vss5           — average VSS@5 across all evaluated queries
+  locus_gemini_query_vss5{label}  — VSS@5 per individual query
+  locus_gemini_cache_entries      — total entries in vss_cache.json
+  locus_gemini_queries_evaluated  — how many queries were in the last eval run
+  locus_gemini_queries_poor/fair/good/excellent — grade distribution
+  locus_gemini_avg_top1           — average Top-1 VSS score
+  locus_gemini_score_bucket{le}   — score distribution histogram buckets
 """
 
+import json
 import os
 import time
 
 from prometheus_client import Gauge, Counter, start_http_server
 
-MLFLOW_URI   = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
-EXPORT_PORT  = int(os.getenv("METRICS_PORT", "8003"))
-REFRESH_SECS = int(os.getenv("REFRESH_SECS", "30"))
+MLFLOW_URI     = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
+EXPORT_PORT    = int(os.getenv("METRICS_PORT", "8003"))
+REFRESH_SECS   = int(os.getenv("REFRESH_SECS", "30"))
+RESULTS_PATH   = os.getenv("GEMINI_RESULTS_PATH", "/mlops/gemini_judge_results.json")
+CACHE_PATH     = os.getenv("VSS_CACHE_PATH",       "/mlops/vss_cache.json")
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 
@@ -56,6 +63,18 @@ retrain_max_steps = Gauge("locus_retrain_max_steps",  "MAX_TRAIN_STEPS param of 
 # Latest completed run evaluation results
 lora_new_hit5  = Gauge("locus_lora_new_hit5",  "hit@5 of the newly trained adapter in the last retrain run")
 lora_new_acs5  = Gauge("locus_lora_new_acs5",  "ACS@5 of the newly trained adapter in the last retrain run")
+
+# ── Gemini Judge metrics ──────────────────────────────────────────────────────
+gemini_avg_vss5      = Gauge("locus_gemini_avg_vss5",         "Average VSS@5 across all queries in latest eval run")
+gemini_query_vss5    = Gauge("locus_gemini_query_vss5",        "VSS@5 score per query", ["label"])
+gemini_cache_entries = Gauge("locus_gemini_cache_entries",     "Total entries in vss_cache.json")
+gemini_queries_eval  = Gauge("locus_gemini_queries_evaluated", "Queries evaluated in latest Gemini run")
+gemini_queries_poor  = Gauge("locus_gemini_queries_poor",      "Queries with VSS@5 < 0.55")
+gemini_queries_fair  = Gauge("locus_gemini_queries_fair",      "Queries with VSS@5 in [0.55, 0.70)")
+gemini_queries_good  = Gauge("locus_gemini_queries_good",      "Queries with VSS@5 in [0.70, 0.85)")
+gemini_queries_excel = Gauge("locus_gemini_queries_excellent", "Queries with VSS@5 >= 0.85")
+gemini_top1_avg      = Gauge("locus_gemini_avg_top1",          "Average Top-1 VSS score across all queries")
+gemini_score_bucket  = Gauge("locus_gemini_score_bucket",      "Count of result scores <= threshold", ["le"])
 
 
 def _get_mlflow_client():
@@ -217,6 +236,62 @@ def _refresh_live_training_metrics(client) -> None:
         retrain_active.set(0)
 
 
+def _refresh_gemini_metrics() -> None:
+    """Read gemini_judge_results.json and vss_cache.json, update Gemini gauges."""
+    if not os.path.exists(RESULTS_PATH):
+        print(f"[exporter] Gemini results not found: {RESULTS_PATH} — waiting for first eval run")
+        return
+    try:
+        with open(RESULTS_PATH) as f:
+            results = json.load(f)
+    except Exception as e:
+        print(f"[exporter] Could not read Gemini results: {e}")
+        return
+
+    vss5_list  = [r["vss5"]       for r in results if "vss5"       in r]
+    top1_list  = [r["top1_score"] for r in results if "top1_score" in r]
+    all_scores = [s for r in results for s in r.get("scores", [])]
+
+    if not vss5_list:
+        return
+
+    avg = sum(vss5_list) / len(vss5_list)
+    gemini_avg_vss5.set(round(avg, 4))
+    gemini_queries_eval.set(len(vss5_list))
+    if top1_list:
+        gemini_top1_avg.set(round(sum(top1_list) / len(top1_list), 4))
+
+    gemini_queries_poor.set( sum(1 for s in vss5_list if s < 0.55))
+    gemini_queries_fair.set( sum(1 for s in vss5_list if 0.55 <= s < 0.70))
+    gemini_queries_good.set( sum(1 for s in vss5_list if 0.70 <= s < 0.85))
+    gemini_queries_excel.set(sum(1 for s in vss5_list if s >= 0.85))
+
+    for r in results:
+        if "vss5" in r:
+            gemini_query_vss5.labels(label=r["label"][:50]).set(r["vss5"])
+
+    for threshold in [0.2, 0.4, 0.6, 0.8, 1.0]:
+        gemini_score_bucket.labels(le=str(threshold)).set(
+            sum(1 for s in all_scores if s <= threshold)
+        )
+
+    if os.path.exists(CACHE_PATH):
+        try:
+            with open(CACHE_PATH) as f:
+                cache = json.load(f)
+            gemini_cache_entries.set(len(cache))
+        except Exception as e:
+            print(f"[exporter] Could not read VSS cache: {e}")
+
+    print(
+        f"[exporter] Gemini — {len(vss5_list)} queries, avg_vss5={avg:.3f}, "
+        f"poor={int(gemini_queries_poor._value.get())} "
+        f"fair={int(gemini_queries_fair._value.get())} "
+        f"good={int(gemini_queries_good._value.get())} "
+        f"excellent={int(gemini_queries_excel._value.get())}"
+    )
+
+
 def refresh() -> None:
     try:
         client = _get_mlflow_client()
@@ -225,6 +300,7 @@ def refresh() -> None:
         _refresh_live_training_metrics(client)
     except Exception as e:
         print(f"[exporter] MLflow connection error: {e}")
+    _refresh_gemini_metrics()
 
 
 if __name__ == "__main__":

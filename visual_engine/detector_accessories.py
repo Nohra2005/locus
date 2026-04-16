@@ -21,7 +21,7 @@
 from ultralytics import YOLOWorld
 from PIL import Image
 
-MIN_CONFIDENCE = 0.08   # YOLO-World zero-shot scores are lower than supervised
+MIN_CONFIDENCE = 0.25   # YOLO-World zero-shot scores are lower than supervised; 0.25 filters ghost boxes while still catching small accessories
 MIN_AREA       = 800    # px² — smaller than DF2 to catch small accessories
 
 # Rich text prompts — order determines class_id in results.

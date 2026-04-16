@@ -1,21 +1,18 @@
 """
 Golden Dataset Report — Locus
 ==============================
-Generates golden_dataset_report.html showing how Groq judges each golden query.
+Generates golden_dataset_report.html showing recall for each golden query.
 
 For each query:
   • Full query image
   • Bounding box drawn on it (what YOLO detected)
-  • The cropped image — exactly what Groq and CLIP receive
+  • The cropped image — what CLIP receives
   • Ground-truth relevant products (green border)
-  • Top-5 search results with Groq similarity score + star rating
-  • Recall@5 hit indicator
+  • Top-5 search results with recall@5 hit indicator
 
 Usage:
     cd mlops
-    python visualize_golden_dataset.py [--gateway http://localhost:8000] [--skip-groq]
-
-    --skip-groq   Skip live Groq scoring (just show recall results, much faster)
+    python visualize_golden_dataset.py [--gateway http://localhost:8000]
 
 Output:
     mlops/golden_dataset_report.html
@@ -154,6 +151,9 @@ def detect(img_bytes: bytes, gateway: str) -> list:
         return []
 
 
+
+
+
 def search(img_bytes: bytes, gateway: str, label: str = "", k: int = 25) -> list:
     try:
         data = {"skip_judge": "true"}
@@ -172,113 +172,6 @@ def search(img_bytes: bytes, gateway: str, label: str = "", k: int = 25) -> list
         return []
 
 
-# ── Groq scoring ──────────────────────────────────────────────────────────────
-# Groq free-tier: 30 RPM.  We target 24 RPM (2.5 s gap) for safety.
-# The sleep happens INSIDE groq_score so every call (including retries) respects
-# the gap — callers no longer need to sleep themselves.
-
-import time as _time
-import re as _re
-import httpx as _httpx
-
-_GROQ_MIN_GAP     = 2.5   # seconds between calls → 24 RPM
-_GROQ_MAX_RETRIES = 3
-_groq_last_call_t = 0.0   # module-level timestamp of the last successful send
-
-
-def groq_score(crop_bytes: bytes, result_bytes: bytes, api_key: str) -> float | None:
-    """Call Groq, return 0-1 score. Enforces rate limit and retries on 429."""
-    global _groq_last_call_t
-    if not result_bytes:
-        return None
-    result_b64 = base64.b64encode(result_bytes).decode()
-    query_b64  = base64.b64encode(crop_bytes).decode()
-    groq_key   = api_key or os.getenv("GROQ_API_KEY", "")
-
-    payload = {
-        "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": (
-                    "You are a fashion visual similarity expert.\n"
-                    "First image = QUERY, second image = RESULT.\n"
-                    "Rate visual similarity 0.00–1.00 (two decimals).\n"
-                    "1.00=identical, 0.80=very similar, 0.60=similar style, "
-                    "0.40=same category, 0.20=loosely related, 0.00=unrelated.\n"
-                    "Respond with ONLY the numeric score."
-                )},
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{query_b64}"}},
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{result_b64}"}},
-            ],
-        }],
-        "max_tokens": 10,
-        "temperature": 0.0,
-    }
-
-    for attempt in range(1, _GROQ_MAX_RETRIES + 1):
-        # Enforce minimum gap before every send (including retries)
-        elapsed = _time.monotonic() - _groq_last_call_t
-        if elapsed < _GROQ_MIN_GAP:
-            _time.sleep(_GROQ_MIN_GAP - elapsed)
-
-        try:
-            _groq_last_call_t = _time.monotonic()
-            resp = _httpx.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                json=payload,
-                headers={"Authorization": f"Bearer {groq_key}"},
-                timeout=30,
-            )
-            if resp.status_code == 429:
-                retry_after = (
-                    resp.headers.get("retry-after")
-                    or resp.headers.get("x-ratelimit-reset-requests")
-                )
-                try:
-                    wait = float(retry_after)
-                except (TypeError, ValueError):
-                    wait = 15.0 * (2 ** (attempt - 1))   # 15s, 30s, 60s
-                wait = max(wait, 5.0)
-                print(f" [rate-limit] 429 — waiting {wait:.0f}s "
-                      f"(attempt {attempt}/{_GROQ_MAX_RETRIES})", flush=True)
-                _time.sleep(wait)
-                _groq_last_call_t = _time.monotonic()   # reset after cooldown
-                continue
-            resp.raise_for_status()
-            content = resp.json()["choices"][0]["message"]["content"].strip()
-            m = _re.search(r"\d+\.\d+|\d+", content)
-            return float(m.group()) if m else None
-        except _httpx.HTTPStatusError as e:
-            if attempt < _GROQ_MAX_RETRIES:
-                _time.sleep(5.0 * (2 ** (attempt - 1)))
-                continue
-            print(f"      [warn] Groq error after {attempt} attempts: {e}")
-            return None
-        except Exception as e:
-            print(f"      [warn] Groq score failed: {e}")
-            return None
-    return None
-
-
-def stars(score: float | None) -> int | None:
-    if score is None:
-        return None
-    if score >= 0.80: return 5
-    if score >= 0.60: return 4
-    if score >= 0.40: return 3
-    if score >= 0.20: return 2
-    return 1
-
-
-def star_html(score: float | None) -> str:
-    if score is None:
-        return '<span class="badge gray">–</span>'
-    s = stars(score)
-    cls = ["", "red", "orange", "yellow", "lime", "green"][s]
-    filled = "★" * s + "☆" * (5 - s)
-    return (f'<span class="badge {cls}" title="Groq score: {score:.2f}">'
-            f'{filled} <small>{score:.2f}</small></span>')
 
 
 # ── Select best bbox ───────────────────────────────────────────────────────────
@@ -443,7 +336,6 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
         rec5 = r.get("recall5")
         hits = r.get("hits5", 0)
         gt_n = len(e.get("relevant_product_ids", []))
-        avg_groq = r.get("avg_groq_score")
         anchor = name.replace(" ", "_")
 
         rec_html = "—"
@@ -452,16 +344,11 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
             cls = "green" if pct >= 60 else ("yellow" if pct >= 40 else "red")
             rec_html = f'<span class="badge {cls}">{hits}/{gt_n} ({pct}%)</span>'
 
-        groq_html = "—"
-        if avg_groq is not None:
-            cls = "green" if avg_groq >= 0.70 else ("yellow" if avg_groq >= 0.50 else "red")
-            groq_html = f'<span class="badge {cls}">{avg_groq:.2f}</span>'
-
         tier = r.get("bbox_tier", "—")
         label = r.get("search_label", "—")
         sum_rows.append(
             f"<tr><td><a class='anchor-link' href='#{anchor}'>{name}</a></td>"
-            f"<td>{cat}</td><td>{rec_html}</td><td>{groq_html}</td>"
+            f"<td>{cat}</td><td>{rec_html}</td>"
             f"<td>{tier}</td><td>{label}</td></tr>"
         )
 
@@ -508,7 +395,7 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
 
         # ── middle col: crop ─────────────────────────────────────────────────
         if crop_src:
-            crop_label = "Crop sent to Groq & CLIP"
+            crop_label = "Crop sent to CLIP"
         elif bbox:
             crop_label = "Crop (PIL unavailable)"
         else:
@@ -518,6 +405,7 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
       <div class="col-lbl">{crop_label}</div>
       {make_img(crop_src or full_src, 124, 155)}
     </div>"""
+
 
         # ── ground-truth items ────────────────────────────────────────────────
         gt_html = ""
@@ -541,7 +429,6 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
             img      = rec.get("bbox_img_src") or rec.get("image_url", "")
             nm       = (rec.get("name") or "")[:30]
             pid      = rec.get("product_id", "")
-            score    = rec.get("groq_score")
             is_gt    = pid in gt_ids
             border   = "outline:3px solid #7aab8a;outline-offset:2px;" if is_gt else ""
             gt_lbl   = '<span class="gt-lbl">✓ GT match</span>' if is_gt else ""
@@ -549,7 +436,6 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
       <div class="ritem">
         <span class="rank">#{rank}</span>
         {make_img(img, 118, 140, extra=border)}
-        {star_html(score)}
         {gt_lbl}
         <span class="nm" title="{rec.get('name','')}">{nm}</span>
       </div>"""
@@ -560,9 +446,6 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
         meta_parts = [f"tier: <b>{tier}</b>", f"search_label: <b>{label or '—'}</b>"]
         if bbox:
             meta_parts.append(f"bbox: <b>[{', '.join(str(int(v)) for v in bbox)}]</b>")
-        avg_groq = r.get("avg_groq_score")
-        if avg_groq is not None:
-            meta_parts.append(f"avg Groq score: <b>{avg_groq:.2f}</b>")
 
         cards.append(f"""
   <div class="qcard" id="{anchor}">
@@ -673,7 +556,7 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
 
 <div class="topbar">
   <h1>Locus — Golden Dataset Report</h1>
-  <p>{n} queries · sorted worst→best Recall@5 · using Groq llama-4-scout for scoring</p>
+  <p>{n} queries · sorted worst→best Recall@5</p>
   <span class="pill">Recall@5 avg: {avg_recall}</span>
   <span class="pill">Hits: {hits_total} / {gt_total}</span>
 </div>
@@ -683,7 +566,7 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
   <table>
     <thead>
       <tr><th>Query</th><th>Category</th><th>Recall@5</th>
-          <th>Avg Groq score</th><th>BBox tier</th><th>Search label</th></tr>
+          <th>BBox tier</th><th>Search label</th></tr>
     </thead>
     <tbody>{"".join(sum_rows)}</tbody>
   </table>
@@ -990,8 +873,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--gateway", default="http://localhost:8000",
                         type=lambda s: s.strip())
-    parser.add_argument("--skip-groq", action="store_true",
-                        help="Skip Groq scoring (faster, recall-only)")
     args = parser.parse_args()
 
     if not GOLDEN.exists():
@@ -1000,12 +881,6 @@ def main():
     with open(GOLDEN, encoding="utf-8") as f:
         golden = json.load(f)
     print(f"Loaded {len(golden)} entries from golden_dataset.json")
-
-    groq_key = os.getenv("GROQ_API_KEY", "")
-    if not args.skip_groq and not groq_key:
-        print("[warn] GROQ_API_KEY not set — Groq scoring disabled. "
-              "Use --skip-groq to suppress this warning.")
-        args.skip_groq = True
 
     results_map: dict = {}
 
@@ -1033,7 +908,7 @@ def main():
         # Draw bbox on image
         bbox_img_src = draw_bbox_on_image(img_bytes, bbox) if bbox else None
 
-        # Crop (what Groq and CLIP actually see)
+        # Crop (what CLIP actually sees)
         if bbox:
             crop_bytes = None
             if PIL_OK:
@@ -1049,11 +924,12 @@ def main():
         else:
             crop_bytes = img_bytes
 
-        crop_src = bytes_to_data_uri(crop_bytes) if crop_bytes else None
+        crop_src  = bytes_to_data_uri(crop_bytes) if crop_bytes else None
 
-        # Search
-        search_bytes = crop_bytes or img_bytes
-        matches = search(search_bytes, args.gateway, sl)
+        # Search — always use the full query image so the gateway can run its own
+        # YOLO crop pipeline (same as evaluate_recall.py). Sending a pre-cropped
+        # image causes YOLO to mis-detect on the tight crop and tanks recall.
+        matches = search(img_bytes, args.gateway, cat)
         print(f"  Search returned {len(matches)} results")
 
         # Recall@5
@@ -1062,29 +938,15 @@ def main():
         recall5  = hits5 / len(gt_ids) if gt_ids else 0.0
         print(f"  Recall@5: {hits5}/{len(gt_ids)} ({recall5*100:.0f}%)")
 
-        # Groq scoring (result images are shown as-is, no bbox detection needed)
-        groq_scores = []
         result_records = []
         for rank, m in enumerate(matches[:5], 1):
-            img_url = m.get("image_url", "")
-            g_score = None
-            res_bytes = get_image_bytes(img_url) if (img_url and not args.skip_groq) else None
-            if not args.skip_groq and crop_bytes and res_bytes:
-                print(f"    Groq scoring #{rank}: {m.get('name','')[:40]}...", end=" ", flush=True)
-                g_score = groq_score(crop_bytes, res_bytes, groq_key)
-                print(f"{g_score:.2f}" if g_score is not None else "failed")
-                if g_score is not None:
-                    groq_scores.append(g_score)
             result_records.append({
                 "rank":        rank,
-                "image_url":   img_url,
+                "image_url":   m.get("image_url", ""),
                 "name":        m.get("name", ""),
                 "product_id":  m.get("product_id", ""),
                 "store_name":  m.get("store_name", ""),
-                "groq_score":  g_score,
             })
-
-        avg_groq = round(sum(groq_scores) / len(groq_scores), 3) if groq_scores else None
 
         # Detect + draw bbox on ground-truth images
         gt_bboxes: dict    = {}
@@ -1114,7 +976,6 @@ def main():
             "bbox":           bbox,
             "bbox_img_src":   bbox_img_src,
             "crop_src":       crop_src,
-            "avg_groq_score": avg_groq,
             "results":        result_records,
             "gt_bboxes":      gt_bboxes,
             "gt_bbox_imgs":   gt_bbox_imgs,

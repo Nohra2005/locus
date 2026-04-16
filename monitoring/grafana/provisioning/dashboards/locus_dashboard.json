@@ -552,6 +552,124 @@
         "mode": "html",
         "content": "<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px\">\n  <p style=\"color:#aaa;font-size:0.85rem;text-align:center;margin:0\">Trigger a full URL audit + recovery run now</p>\n  <a href=\"http://localhost:8000/trigger-link-check\" target=\"_blank\" style=\"text-decoration:none\">\n    <button style=\"background:#c9a96e;color:#0a0a0a;border:none;padding:10px 24px;border-radius:6px;font-size:0.95rem;font-weight:700;cursor:pointer;letter-spacing:0.05em\">&#9654; Run Link Check Now</button>\n  </a>\n  <p style=\"color:#555;font-size:0.72rem;text-align:center;margin:0\">Opens gateway /trigger-link-check in a new tab</p>\n</div>"
       }
+    },
+
+    {
+      "id": 60, "type": "row", "title": "Gemini Visual Similarity Judge",
+      "collapsed": false, "gridPos": { "x": 0, "y": 84, "w": 24, "h": 1 }
+    },
+    {
+      "id": 61, "type": "gauge",
+      "title": "Avg VSS@5 — Latest Eval Run",
+      "description": "Average Gemini Visual Similarity Score. Baseline: 0.635. Target: >0.70",
+      "gridPos": { "x": 0, "y": 85, "w": 5, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "locus_gemini_avg_vss5", "legendFormat": "VSS@5" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit", "min": 0, "max": 1,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": 0 }, { "color": "orange", "value": 0.55 },
+            { "color": "yellow", "value": 0.70 }, { "color": "green", "value": 0.85 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 62, "type": "stat",
+      "title": "Queries Evaluated",
+      "gridPos": { "x": 5, "y": 85, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "locus_gemini_queries_evaluated", "legendFormat": "Queries" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 63, "type": "stat",
+      "title": "Cache Entries",
+      "description": "Scored pairs saved to disk — these cost $0 on next eval run",
+      "gridPos": { "x": 5, "y": 89, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "locus_gemini_cache_entries", "legendFormat": "Cached pairs" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "green" } } }
+    },
+    {
+      "id": 64, "type": "bargauge",
+      "title": "Grade Distribution",
+      "description": "Queries by quality tier. Goal: eliminate red, grow green.",
+      "gridPos": { "x": 9, "y": 85, "w": 6, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "locus_gemini_queries_excellent", "legendFormat": "Excellent ≥0.85" },
+        { "expr": "locus_gemini_queries_good",      "legendFormat": "Good      ≥0.70" },
+        { "expr": "locus_gemini_queries_fair",      "legendFormat": "Fair      ≥0.55" },
+        { "expr": "locus_gemini_queries_poor",      "legendFormat": "Poor       <0.55" }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }] }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Excellent ≥0.85" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+          { "matcher": { "id": "byName", "options": "Good      ≥0.70" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }] },
+          { "matcher": { "id": "byName", "options": "Fair      ≥0.55" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }] },
+          { "matcher": { "id": "byName", "options": "Poor       <0.55" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+        ]
+      }
+    },
+    {
+      "id": 65, "type": "bargauge",
+      "title": "VSS@5 Per Query",
+      "description": "Score for each golden query. Red = poor, green = good.",
+      "gridPos": { "x": 15, "y": 85, "w": 9, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "sort_desc(locus_gemini_query_vss5)", "legendFormat": "{{label}}" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit", "min": 0, "max": 1,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": 0 }, { "color": "orange", "value": 0.55 },
+            { "color": "yellow", "value": 0.70 }, { "color": "green", "value": 0.85 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 66, "type": "timeseries",
+      "title": "VSS@5 Trend — Across Eval Runs",
+      "description": "Should go up after each CLIP fine-tuning round. Baseline is 0.635.",
+      "gridPos": { "x": 0, "y": 93, "w": 14, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "locus_gemini_avg_vss5",  "legendFormat": "Avg VSS@5" },
+        { "expr": "locus_gemini_avg_top1",  "legendFormat": "Avg Top-1" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "percentunit", "min": 0, "max": 1, "custom": { "lineWidth": 2, "fillOpacity": 15 } }
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 67, "type": "timeseries",
+      "title": "Score Distribution Over Time",
+      "description": "Cumulative count of individual result scores by bucket.",
+      "gridPos": { "x": 14, "y": 93, "w": 10, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "locus_gemini_score_bucket{le=\"0.2\"}", "legendFormat": "≤0.20" },
+        { "expr": "locus_gemini_score_bucket{le=\"0.4\"}", "legendFormat": "≤0.40" },
+        { "expr": "locus_gemini_score_bucket{le=\"0.6\"}", "legendFormat": "≤0.60" },
+        { "expr": "locus_gemini_score_bucket{le=\"0.8\"}", "legendFormat": "≤0.80" },
+        { "expr": "locus_gemini_score_bucket{le=\"1.0\"}", "legendFormat": "≤1.00" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 1, "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
     }
   ],
 
