@@ -104,7 +104,37 @@ services:
     volumes:
       - mlflow_data:/mlflow
 
-  # ── 6. MLops Automated Retraining ────────────────────────────────
+  # ── 6. Link Health Monitor ───────────────────────────────────────
+  # Runs repair_broken_links.py every 5 days.
+  # Phase 1: HEAD-checks every image_url in locus_items.
+  # Phase 2: Marks dead items broken=True (hidden from search immediately).
+  # Phase 3: Re-scrapes affected stores, re-indexes recovered items, deletes old points.
+  # Report written to mlops/link_health_report.json after each run.
+  # To run manually: docker compose exec gateway python repair_broken_links.py
+  link_monitor:
+    build: ./gateway
+    working_dir: /app
+    command: >
+      sh -c "while true; do
+        echo '[LINK MONITOR] Starting run at $$(date)';
+        python repair_broken_links.py;
+        echo '[LINK MONITOR] Done. Sleeping 5 days.';
+        sleep 432000;
+      done"
+    volumes:
+      - ./gateway:/app
+      - ./mlops:/mlops
+    environment:
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+      - VISUAL_URL=http://visual_engine:8001
+      - GATEWAY_URL=http://gateway:8000
+    depends_on:
+      - gateway
+      - visual_engine
+    restart: unless-stopped
+
+  # ── 7. MLops Automated Retraining ────────────────────────────────
   # Runs retrain_clip.py on a 48h schedule.
   # Also triggered on-demand via POST /trigger-retrain on the gateway.
   # Pipeline: build pairs → train LoRA → eval on golden → promote/rollback.
@@ -174,6 +204,7 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_PANELS_DISABLE_SANITIZE_HTML=true
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning

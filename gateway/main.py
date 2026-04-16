@@ -49,6 +49,16 @@ locus_feedback_stars = Counter(
     ["stars", "signal"],
 )
 
+# Link health monitor timing
+locus_link_monitor_last_run = Gauge(
+    "locus_link_monitor_last_run_timestamp",
+    "Unix timestamp of the last link health check run",
+)
+locus_link_monitor_next_run = Gauge(
+    "locus_link_monitor_next_run_timestamp",
+    "Unix timestamp of the next scheduled link health check run",
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -67,8 +77,10 @@ COLLECTION_NAME     = "locus_items"
 SKIPPED_COLLECTION  = "locus_skipped"
 FEEDBACK_COLLECTION = "locus_feedback"
 PENDING_PATH        = "/app/pending_whitelist.json"
-GOLDEN_DATASET_PATH = os.getenv("GOLDEN_DATASET_PATH", "/mlops/golden_dataset.json")
-GOLDEN_IMAGES_DIR   = pathlib.Path(os.getenv("GOLDEN_IMAGES_DIR", "/mlops/golden_images"))
+GOLDEN_DATASET_PATH      = os.getenv("GOLDEN_DATASET_PATH", "/mlops/golden_dataset.json")
+GOLDEN_IMAGES_DIR        = pathlib.Path(os.getenv("GOLDEN_IMAGES_DIR", "/mlops/golden_images"))
+LINK_HEALTH_REPORT       = pathlib.Path("/mlops/link_health_report.json")
+LINK_MONITOR_INTERVAL    = 432000  # 5 days in seconds (matches docker-compose sleep)
 
 GOLDEN_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/golden-dataset/images", StaticFiles(directory=str(GOLDEN_IMAGES_DIR)), name="golden_images")
@@ -93,9 +105,33 @@ async def _refresh_qdrant_metrics():
         await asyncio.sleep(60)
 
 
+async def _refresh_link_monitor_metrics():
+    """Background task: update link health monitor timing metrics every 60s."""
+    from datetime import timezone
+    while True:
+        try:
+            if LINK_HEALTH_REPORT.exists():
+                with open(LINK_HEALTH_REPORT) as f:
+                    import json as _link_json
+                    report = _link_json.load(f)
+                run_at_str = report.get("run_at")
+                if run_at_str:
+                    run_at = datetime.fromisoformat(run_at_str)
+                    if run_at.tzinfo is None:
+                        run_at = run_at.replace(tzinfo=timezone.utc)
+                    last_ts = run_at.timestamp()
+                    next_ts = last_ts + LINK_MONITOR_INTERVAL
+                    locus_link_monitor_last_run.set(last_ts)
+                    locus_link_monitor_next_run.set(next_ts)
+        except Exception as e:
+            print(f"[METRICS] Could not refresh link monitor metrics: {e}")
+        await asyncio.sleep(60)
+
+
 @app.on_event("startup")
 async def startup_metrics():
     asyncio.create_task(_refresh_qdrant_metrics())
+    asyncio.create_task(_refresh_link_monitor_metrics())
 
 
 @app.on_event("startup")
@@ -119,6 +155,14 @@ def startup_event():
         client.create_payload_index(
             collection_name=COLLECTION_NAME,
             field_name="is_golden",
+            field_schema=models.PayloadSchemaType.BOOL,
+        )
+    except Exception:
+        pass
+    try:
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="broken",
             field_schema=models.PayloadSchemaType.BOOL,
         )
     except Exception:
@@ -659,6 +703,11 @@ async def search_items(
             key="store_name",
             match=models.MatchValue(value="golden_dataset")
         ))
+    # Exclude items with broken image URLs (hidden until repaired)
+    must_not_conditions.append(models.FieldCondition(
+        key="broken",
+        match=models.MatchValue(value=True)
+    ))
 
     if must_conditions or must_not_conditions:
         query_filter = models.Filter(
@@ -2004,3 +2053,44 @@ async def _run_retrain_subprocess(force: bool):
     )
     stdout, _ = await proc.communicate()
     print(f"[RETRAIN] Pipeline finished (exit={proc.returncode}):\n{stdout.decode()[-2000:]}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /trigger-link-check — force-run the link health monitor pipeline immediately
+# ══════════════════════════════════════════════════════════════════════════════
+
+_link_check_running = False
+
+
+@app.post("/trigger-link-check")
+@app.get("/trigger-link-check")
+async def trigger_link_check(background_tasks: BackgroundTasks):
+    """
+    Force-run the link health monitor (repair_broken_links.py) immediately.
+    Accessible via GET so a browser click works from the Grafana button.
+    """
+    global _link_check_running
+    if _link_check_running:
+        return {"status": "already_running",
+                "message": "Link health check is already in progress"}
+    background_tasks.add_task(_run_link_check_subprocess)
+    return {"status": "triggered",
+            "message": "Link health check started — report will appear at mlops/link_health_report.json"}
+
+
+async def _run_link_check_subprocess():
+    global _link_check_running
+    import sys
+    _link_check_running = True
+    try:
+        cmd = [sys.executable, "/app/repair_broken_links.py"]
+        print(f"[LINK CHECK] Triggering pipeline: {' '.join(cmd)}")
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await proc.communicate()
+        print(f"[LINK CHECK] Pipeline finished (exit={proc.returncode}):\n{stdout.decode()[-2000:]}")
+    finally:
+        _link_check_running = False
