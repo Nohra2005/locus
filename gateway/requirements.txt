@@ -10,3 +10,4 @@ lxml
 pydantic
 requests
 prometheus-fastapi-instrumentator
+google-genai

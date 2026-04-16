@@ -21,7 +21,24 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.models import Distance, PointStruct, VectorParams
 
+import time as _time_module
+
 from judge import run_judge
+
+# ── Per-search judge score store ──────────────────────────────────────────────
+# search_id → {product_id: float_score}  written incrementally by run_judge.
+# Entries are cleaned up after _JUDGE_TTL seconds so memory doesn't grow forever.
+_judge_scores:     dict[str, dict[str, float]] = {}
+_judge_timestamps: dict[str, float]            = {}
+_JUDGE_TTL = 300  # 5 minutes
+
+
+def _cleanup_judge_scores() -> None:
+    cutoff = _time_module.monotonic() - _JUDGE_TTL
+    stale  = [sid for sid, ts in _judge_timestamps.items() if ts < cutoff]
+    for sid in stale:
+        _judge_scores.pop(sid, None)
+        _judge_timestamps.pop(sid, None)
 
 app = FastAPI()
 Instrumentator().instrument(app).expose(app)
@@ -49,6 +66,16 @@ locus_feedback_stars = Counter(
     ["stars", "signal"],
 )
 
+# Link health monitor timing
+locus_link_monitor_last_run = Gauge(
+    "locus_link_monitor_last_run_timestamp",
+    "Unix timestamp of the last link health check run",
+)
+locus_link_monitor_next_run = Gauge(
+    "locus_link_monitor_next_run_timestamp",
+    "Unix timestamp of the next scheduled link health check run",
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -60,15 +87,19 @@ VISUAL_URL          = os.getenv("VISUAL_HOST",    "http://visual_engine:8001")
 QDRANT_URL          = os.getenv("QDRANT_URL")
 QDRANT_API_KEY      = os.getenv("QDRANT_API_KEY")
 GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
+GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
 GATEWAY_BASE_URL    = os.getenv("GATEWAY_BASE_URL", "http://localhost:8000")
 QDRANT_HOST         = os.getenv("QDRANT_HOST",    "qdrant")
 QDRANT_PORT         = int(os.getenv("QDRANT_PORT", 6333))
+# Experiment flag: apply background removal to accessory (shoes/bag/hat) query crops.
 COLLECTION_NAME     = "locus_items"
 SKIPPED_COLLECTION  = "locus_skipped"
 FEEDBACK_COLLECTION = "locus_feedback"
 PENDING_PATH        = "/app/pending_whitelist.json"
-GOLDEN_DATASET_PATH = os.getenv("GOLDEN_DATASET_PATH", "/mlops/golden_dataset.json")
-GOLDEN_IMAGES_DIR   = pathlib.Path(os.getenv("GOLDEN_IMAGES_DIR", "/mlops/golden_images"))
+GOLDEN_DATASET_PATH      = os.getenv("GOLDEN_DATASET_PATH", "/mlops/golden_dataset.json")
+GOLDEN_IMAGES_DIR        = pathlib.Path(os.getenv("GOLDEN_IMAGES_DIR", "/mlops/golden_images"))
+LINK_HEALTH_REPORT       = pathlib.Path("/mlops/link_health_report.json")
+LINK_MONITOR_INTERVAL    = 432000  # 5 days in seconds (matches docker-compose sleep)
 
 GOLDEN_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/golden-dataset/images", StaticFiles(directory=str(GOLDEN_IMAGES_DIR)), name="golden_images")
@@ -93,9 +124,33 @@ async def _refresh_qdrant_metrics():
         await asyncio.sleep(60)
 
 
+async def _refresh_link_monitor_metrics():
+    """Background task: update link health monitor timing metrics every 60s."""
+    from datetime import timezone
+    while True:
+        try:
+            if LINK_HEALTH_REPORT.exists():
+                with open(LINK_HEALTH_REPORT) as f:
+                    import json as _link_json
+                    report = _link_json.load(f)
+                run_at_str = report.get("run_at")
+                if run_at_str:
+                    run_at = datetime.fromisoformat(run_at_str)
+                    if run_at.tzinfo is None:
+                        run_at = run_at.replace(tzinfo=timezone.utc)
+                    last_ts = run_at.timestamp()
+                    next_ts = last_ts + LINK_MONITOR_INTERVAL
+                    locus_link_monitor_last_run.set(last_ts)
+                    locus_link_monitor_next_run.set(next_ts)
+        except Exception as e:
+            print(f"[METRICS] Could not refresh link monitor metrics: {e}")
+        await asyncio.sleep(60)
+
+
 @app.on_event("startup")
 async def startup_metrics():
     asyncio.create_task(_refresh_qdrant_metrics())
+    asyncio.create_task(_refresh_link_monitor_metrics())
 
 
 @app.on_event("startup")
@@ -119,6 +174,14 @@ def startup_event():
         client.create_payload_index(
             collection_name=COLLECTION_NAME,
             field_name="is_golden",
+            field_schema=models.PayloadSchemaType.BOOL,
+        )
+    except Exception:
+        pass
+    try:
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="broken",
             field_schema=models.PayloadSchemaType.BOOL,
         )
     except Exception:
@@ -536,20 +599,59 @@ async def delete_catalogue_item(item_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Classify crop (query-time: user drew a box, CLIP predicts category) ────────
+
+@app.post("/classify-crop")
+async def classify_crop(
+    file: UploadFile = File(...),
+    x1:   float      = Form(0),
+    y1:   float      = Form(0),
+    x2:   float      = Form(0),
+    y2:   float      = Form(0),
+):
+    """
+    Crops the uploaded image to the given bbox and runs CLIP classification.
+    Returns the predicted category and all per-category scores.
+    Called by the frontend after the user draws a bounding box, before searching.
+    """
+    image_bytes = await file.read()
+    crop_bytes  = _crop_image_bytes(image_bytes, x1, y1, x2, y2) if (x2 > x1 and y2 > y1) else image_bytes
+
+    async with httpx.AsyncClient() as http:
+        vis_response = await http.post(
+            f"{VISUAL_URL}/vectorize",
+            files={"file": (file.filename, crop_bytes, "image/jpeg")},
+            data={"yolo_label": "", "darken": "false", "query": "true"},
+            timeout=60.0,
+        )
+        vis_response.raise_for_status()
+        vis_data = vis_response.json()
+
+    all_scores = vis_data.get("category_confidence", {})
+    category   = vis_data.get("category")
+    confidence = all_scores.get(category, 0.0) if isinstance(all_scores, dict) else 0.0
+
+    return {
+        "category":   category,
+        "confidence": round(confidence, 3),
+        "all_scores": all_scores,
+    }
+
+
 # ── Search ─────────────────────────────────────────────────────────────────────
 
 @app.post("/search")
 async def search_items(
-    background_tasks: BackgroundTasks,
-    file:             UploadFile = File(...),
-    x1:               float      = Form(0),
-    y1:               float      = Form(0),
-    x2:               float      = Form(0),
-    y2:               float      = Form(0),
-    search_label:     str        = Form(""),
-    shoe_style:       str        = Form(""),   # optional sub-type for shoes (sneaker|boot|heel|sandal)
-    include_golden:   bool       = False,
-    skip_judge:       bool       = Form(False),
+    background_tasks:   BackgroundTasks,
+    file:               UploadFile = File(...),
+    x1:                 float      = Form(0),
+    y1:                 float      = Form(0),
+    x2:                 float      = Form(0),
+    y2:                 float      = Form(0),
+    search_label:       str        = Form(""),
+    shoe_style:         str        = Form(""),   # optional sub-type for shoes (sneaker|boot|heel|sandal)
+    include_golden:     bool       = False,
+    skip_judge:         bool       = Form(False),
 ):
     image_bytes = await file.read()
 
@@ -659,6 +761,11 @@ async def search_items(
             key="store_name",
             match=models.MatchValue(value="golden_dataset")
         ))
+    # Exclude items with broken image URLs (hidden until repaired)
+    must_not_conditions.append(models.FieldCondition(
+        key="broken",
+        match=models.MatchValue(value=True)
+    ))
 
     if must_conditions or must_not_conditions:
         query_filter = models.Filter(
@@ -714,7 +821,7 @@ async def search_items(
 
     best_per_product = {}
     for hit in raw_results:
-        product_id = hit.payload.get("product_id", hit.payload.get("image_url", str(hit.id)))
+        product_id = hit.payload.get("product_id") or hit.payload.get("image_url") or str(hit.id)
         if product_id not in best_per_product or hit.score > best_per_product[product_id]["score"]:
             best_per_product[product_id] = {
                 "name":       hit.payload.get("name", "Unknown"),
@@ -729,22 +836,43 @@ async def search_items(
 
     matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:25]
 
-    if GROQ_API_KEY:
+    search_id    = str(uuid.uuid4())[:12]
+    scores_dict  = {}
+
+    if (GROQ_API_KEY or GEMINI_API_KEY) and not skip_judge and not include_golden:
+        _cleanup_judge_scores()
+        _judge_scores[search_id]     = scores_dict
+        _judge_timestamps[search_id] = _time_module.monotonic()
         background_tasks.add_task(
             run_judge,
             crop_bytes,
             matches,
             GATEWAY_BASE_URL,
             GROQ_API_KEY,
+            scores_dict,
+            GEMINI_API_KEY,
         )
 
     return {
         "matches":                   matches,
+        "search_id":                 search_id,
         "debug_image":               processed_image,
         "detected_category":         detected_category,
         "category_confidence":       category_confidence,
         "category_mismatch_warning": mismatch_warning,
     }
+
+
+# ── Judge score polling ────────────────────────────────────────────────────────
+
+@app.get("/judge-scores/{search_id}")
+async def get_judge_scores(search_id: str):
+    """
+    Returns the judge scores collected so far for a given search.
+    Returns {product_id: float} — only entries scored so far are included.
+    Frontend polls this every 3s after receiving search results.
+    """
+    return _judge_scores.get(search_id, {})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1868,3 +1996,180 @@ async def regenerate_golden_report(req: RegenerateRequest = RegenerateRequest())
             detail=f"Regeneration failed: {stderr.decode()[-600:]}",
         )
     return {"status": "ok"}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /reindex  — re-embed all catalog products with the current visual engine model
+# Called by promote_model.py after a new LoRA adapter is promoted.
+# Runs as a fire-and-forget background task; returns immediately.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_reindex_running = False
+
+
+@app.post("/reindex")
+async def reindex_catalog(background_tasks: BackgroundTasks):
+    """
+    Re-embed every product in locus_items using the current visual engine model.
+    Triggered automatically after LoRA adapter promotion so that all catalog
+    vectors reflect the updated embedding space.
+    Returns immediately; re-indexing runs in the background.
+    """
+    global _reindex_running
+    if _reindex_running:
+        return {"status": "already_running", "message": "A re-index is already in progress"}
+    background_tasks.add_task(_run_full_reindex)
+    return {"status": "started", "message": "Re-indexing catalog in background"}
+
+
+async def _run_full_reindex():
+    global _reindex_running
+    _reindex_running = True
+    print("[REINDEX] Starting full catalog re-index...")
+    updated = 0
+    failed  = 0
+    semaphore = asyncio.Semaphore(3)  # limit concurrent visual engine calls
+
+    # Scroll all products from locus_items
+    all_products = []
+    offset = None
+    while True:
+        batch, next_offset = client.scroll(
+            collection_name=COLLECTION_NAME,
+            limit=250,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        if not batch:
+            break
+        all_products.extend(batch)
+        if next_offset is None:
+            break
+        offset = next_offset
+
+    print(f"[REINDEX] {len(all_products)} products to re-embed")
+
+    async def reembed_one(pt):
+        nonlocal updated, failed
+        p       = pt.payload
+        img_url = p.get("image_url", "")
+        name    = p.get("name", "")
+        if not img_url:
+            return
+        async with semaphore:
+            try:
+                async with httpx.AsyncClient() as http:
+                    img_resp = await http.get(img_url, timeout=15.0, follow_redirects=True)
+                    img_resp.raise_for_status()
+                    idx_resp = await http.post(
+                        f"{VISUAL_URL}/index-image",
+                        files={"file": ("product.jpg", img_resp.content, "image/jpeg")},
+                        data={"title": name},
+                        timeout=90.0,
+                    )
+                    idx_resp.raise_for_status()
+                    idx_data = idx_resp.json()
+
+                if idx_data.get("skipped"):
+                    return
+
+                new_payload = dict(p)
+                new_payload["category_tag"] = idx_data.get("category", p.get("category_tag", ""))
+                new_payload["box_source"]   = idx_data.get("box_source", p.get("box_source", ""))
+                if idx_data.get("shoe_style"):
+                    new_payload["shoe_style"] = idx_data["shoe_style"]
+
+                client.upsert(
+                    collection_name=COLLECTION_NAME,
+                    points=[PointStruct(
+                        id      = pt.id,
+                        vector  = idx_data["vector_normal"],
+                        payload = new_payload,
+                    )]
+                )
+                updated += 1
+            except Exception as e:
+                failed += 1
+                print(f"[REINDEX] Failed '{name}': {e}")
+
+    await asyncio.gather(*[reembed_one(pt) for pt in all_products])
+    _reindex_running = False
+    print(f"[REINDEX] Done — updated={updated} failed={failed} total={len(all_products)}")
+
+
+@app.get("/reindex/status")
+async def reindex_status():
+    return {"running": _reindex_running}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /trigger-retrain — kick off the LoRA retraining pipeline on demand
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/trigger-retrain")
+async def trigger_retrain(background_tasks: BackgroundTasks, force: bool = False):
+    """
+    Trigger the LoRA retraining pipeline asynchronously via subprocess.
+    Pass ?force=true to skip threshold checks.
+    The pipeline logs progress to MLflow; monitor via Grafana.
+    """
+    background_tasks.add_task(_run_retrain_subprocess, force)
+    return {"status": "triggered", "force": force,
+            "message": "Retraining pipeline started — monitor progress in Grafana"}
+
+
+async def _run_retrain_subprocess(force: bool):
+    import sys
+    cmd = [sys.executable, "/mlops/retrain_clip.py"]
+    if force:
+        cmd.append("--force")
+    print(f"[RETRAIN] Triggering pipeline: {' '.join(cmd)}")
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    stdout, _ = await proc.communicate()
+    print(f"[RETRAIN] Pipeline finished (exit={proc.returncode}):\n{stdout.decode()[-2000:]}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# /trigger-link-check — force-run the link health monitor pipeline immediately
+# ══════════════════════════════════════════════════════════════════════════════
+
+_link_check_running = False
+
+
+@app.post("/trigger-link-check")
+@app.get("/trigger-link-check")
+async def trigger_link_check(background_tasks: BackgroundTasks):
+    """
+    Force-run the link health monitor (repair_broken_links.py) immediately.
+    Accessible via GET so a browser click works from the Grafana button.
+    """
+    global _link_check_running
+    if _link_check_running:
+        return {"status": "already_running",
+                "message": "Link health check is already in progress"}
+    background_tasks.add_task(_run_link_check_subprocess)
+    return {"status": "triggered",
+            "message": "Link health check started — report will appear at mlops/link_health_report.json"}
+
+
+async def _run_link_check_subprocess():
+    global _link_check_running
+    import sys
+    _link_check_running = True
+    try:
+        cmd = [sys.executable, "/app/repair_broken_links.py"]
+        print(f"[LINK CHECK] Triggering pipeline: {' '.join(cmd)}")
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await proc.communicate()
+        print(f"[LINK CHECK] Pipeline finished (exit={proc.returncode}):\n{stdout.decode()[-2000:]}")
+    finally:
+        _link_check_running = False

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -168,26 +168,6 @@ const GLOBAL_CSS = `
     transition: color 0.2s, background 0.2s;
   }
   .btn-ghost:hover { color: ${T.text}; background: ${T.surface}; }
-
-  .detection-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    padding: 14px 18px;
-    background: ${T.surface};
-    border: 1px solid ${T.border};
-    border-radius: 12px;
-    color: ${T.text};
-    cursor: pointer;
-    text-align: left;
-    font-family: 'DM Sans', sans-serif;
-    transition: border-color 0.2s, background 0.2s;
-  }
-  .detection-card:hover {
-    border-color: ${T.accent};
-    background: ${T.accentBg};
-  }
 
   .star-btn {
     background: none;
@@ -390,87 +370,321 @@ function LoadingView({ label }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// SELECT VIEW
+// CATEGORY LABELS  (mirrors clip_labels.py CANONICAL_LABELS)
 // ══════════════════════════════════════════════════════════════════
-function SelectView({ imageURL, detections, onSelect, onBack }) {
-  const imgRef = useRef(null);
-  const [hovered, setHovered] = useState(null);
-  const [imgNatural, setImgNatural] = useState({ w: 1, h: 1 });
+const CATEGORY_LABELS = {
+  top:        "Top",
+  sports_bra: "Sports Bra",
+  pants:      "Pants",
+  leggings:   "Leggings",
+  shorts:     "Shorts",
+  skirt:      "Skirt",
+  dress:      "Dress",
+  sweater:    "Sweater",
+  jacket:     "Jacket",
+  shoes:      "Shoes",
+  hat:        "Hat",
+  bag:        "Bag",
+  jumpsuit:   "Jumpsuit",
+};
+
+// ══════════════════════════════════════════════════════════════════
+// DRAW VIEW  — user drags a bbox around the item they want to find
+// ══════════════════════════════════════════════════════════════════
+function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
+  const containerRef = useRef(null);
+  const imgRef       = useRef(null);
+
+  const [imgNatural,  setImgNatural]  = useState({ w: 1, h: 1 });
   const [imgRendered, setImgRendered] = useState({ w: 0, h: 0, x: 0, y: 0 });
+  const [drawing,     setDrawing]     = useState(false);
+  const [startPt,     setStartPt]     = useState(null);
+  const [box,         setBox]         = useState(null); // rendered coords {x1,y1,x2,y2}
+  const [loading,     setLoading]     = useState(false);
+
+  const measureRendered = (el) => {
+    const { width: cw, height: ch } = el.getBoundingClientRect();
+    const s = Math.min(cw / el.naturalWidth, ch / el.naturalHeight);
+    setImgRendered({ w: el.naturalWidth * s, h: el.naturalHeight * s, x: (cw - el.naturalWidth * s) / 2, y: (ch - el.naturalHeight * s) / 2 });
+  };
 
   const onImgLoad = (e) => {
     const el = e.target;
     setImgNatural({ w: el.naturalWidth, h: el.naturalHeight });
-    const { width: cw, height: ch } = el.getBoundingClientRect();
-    const scale = Math.min(cw / el.naturalWidth, ch / el.naturalHeight);
-    setImgRendered({ w: el.naturalWidth * scale, h: el.naturalHeight * scale, x: (cw - el.naturalWidth * scale) / 2, y: (ch - el.naturalHeight * scale) / 2 });
+    measureRendered(el);
   };
 
   useEffect(() => {
-    const handleResize = () => {
-      const el = imgRef.current;
-      if (!el || !el.naturalWidth) return;
-      const { width: cw, height: ch } = el.getBoundingClientRect();
-      const scale = Math.min(cw / el.naturalWidth, ch / el.naturalHeight);
-      setImgRendered({ w: el.naturalWidth * scale, h: el.naturalHeight * scale, x: (cw - el.naturalWidth * scale) / 2, y: (ch - el.naturalHeight * scale) / 2 });
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    const onResize = () => { if (imgRef.current?.naturalWidth) measureRendered(imgRef.current); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const scale = (x, y, x2, y2) => {
-    const sw = imgRendered.w / imgNatural.w;
-    const sh = imgRendered.h / imgNatural.h;
-    return { x: imgRendered.x + x * sw, y: imgRendered.y + y * sh, w: (x2 - x) * sw, h: (y2 - y) * sh };
+  // Returns pointer position clamped to image bounds, relative to container
+  const getPoint = (e) => {
+    if (!containerRef.current) return { x: 0, y: 0 };
+    const rect  = containerRef.current.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: Math.max(imgRendered.x, Math.min(imgRendered.x + imgRendered.w, clientX - rect.left)),
+      y: Math.max(imgRendered.y, Math.min(imgRendered.y + imgRendered.h, clientY - rect.top)),
+    };
   };
 
-  const COLORS = ["#c9a96e", "#6eb5c9", "#c96e8a", "#6e9bc9", "#8ac96e"];
+  const onPointerDown = (e) => {
+    if (loading || imgRendered.w === 0) return;
+    e.preventDefault();
+    const pt = getPoint(e);
+    setStartPt(pt);
+    setBox(null);
+    setDrawing(true);
+  };
+
+  const onPointerMove = (e) => {
+    if (!drawing || !startPt) return;
+    e.preventDefault();
+    const pt = getPoint(e);
+    setBox({
+      x1: Math.min(startPt.x, pt.x), y1: Math.min(startPt.y, pt.y),
+      x2: Math.max(startPt.x, pt.x), y2: Math.max(startPt.y, pt.y),
+    });
+  };
+
+  const onPointerUp = (e) => {
+    if (!drawing) return;
+    e.preventDefault();
+    setDrawing(false);
+    // Discard boxes smaller than 10×10 rendered px (accidental tap)
+    setBox(prev => (prev && (prev.x2 - prev.x1) >= 10 && (prev.y2 - prev.y1) >= 10) ? prev : null);
+  };
+
+  // Convert rendered-space box → natural image pixel coords
+  const toNatural = (b) => {
+    const sx = imgNatural.w / imgRendered.w;
+    const sy = imgNatural.h / imgRendered.h;
+    return {
+      x1: Math.round((b.x1 - imgRendered.x) * sx),
+      y1: Math.round((b.y1 - imgRendered.y) * sy),
+      x2: Math.round((b.x2 - imgRendered.x) * sx),
+      y2: Math.round((b.y2 - imgRendered.y) * sy),
+    };
+  };
+
+  const handleFindItem = async () => {
+    if (!box || loading) return;
+    setLoading(true);
+    const natural = toNatural(box);
+
+    // Crop client-side for the confirm preview
+    let cropBlob = null;
+    try {
+      const bitmap = await createImageBitmap(imageFile);
+      const cw = Math.max(1, natural.x2 - natural.x1);
+      const ch = Math.max(1, natural.y2 - natural.y1);
+      const canvas = document.createElement("canvas");
+      canvas.width = cw; canvas.height = ch;
+      canvas.getContext("2d").drawImage(bitmap, natural.x1, natural.y1, cw, ch, 0, 0, cw, ch);
+      cropBlob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.9));
+    } catch { /* non-critical — confirm view will show placeholder */ }
+
+    // Ask CLIP for the category
+    const form = new FormData();
+    form.append("file", imageFile);
+    form.append("x1", natural.x1); form.append("y1", natural.y1);
+    form.append("x2", natural.x2); form.append("y2", natural.y2);
+    try {
+      const res  = await fetch(`${API}/classify-crop`, { method: "POST", body: form });
+      const data = res.ok ? await res.json() : {};
+      onConfirm({ bbox: natural, cropBlob, category: data.category || null, allScores: data.all_scores || {} });
+    } catch {
+      // Network error: still proceed, user can pick category manually
+      onConfirm({ bbox: natural, cropBlob, category: null, allScores: {} });
+    }
+  };
+
+  const hasBox = box && (box.x2 - box.x1) >= 10 && (box.y2 - box.y1) >= 10;
 
   return (
     <div className="fade-in" style={{ minHeight: "calc(100dvh - 61px)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 28px", borderBottom: `1px solid ${T.borderFaint}` }}>
         <button className="btn-ghost" onClick={onBack} style={{ fontSize: "1rem" }}>←</button>
-        <span style={{ fontSize: "0.75rem", color: T.textMuted, letterSpacing: "0.08em" }}>TAP A BOX TO SEARCH THAT ITEM</span>
+        <span style={{ fontSize: "0.75rem", color: T.textMuted, letterSpacing: "0.08em" }}>
+          {hasBox ? "LOOKS GOOD — HIT FIND OR REDRAW" : "DRAW A BOX AROUND THE ITEM"}
+        </span>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px", position: "relative" }}>
-        <div style={{ position: "relative", width: "100%", maxWidth: 640 }}>
-          <img ref={imgRef} src={imageURL} onLoad={onImgLoad} alt="uploaded" style={{ width: "100%", display: "block", borderRadius: 12 }} />
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px" }}>
+        <div
+          ref={containerRef}
+          style={{ position: "relative", width: "100%", maxWidth: 640, cursor: loading ? "wait" : "crosshair", touchAction: "none", userSelect: "none" }}
+          onMouseDown={onPointerDown}
+          onMouseMove={onPointerMove}
+          onMouseUp={onPointerUp}
+          onMouseLeave={onPointerUp}
+          onTouchStart={onPointerDown}
+          onTouchMove={onPointerMove}
+          onTouchEnd={onPointerUp}
+        >
+          <img
+            ref={imgRef}
+            src={imageURL}
+            onLoad={onImgLoad}
+            alt="uploaded"
+            draggable={false}
+            onContextMenu={(e) => e.preventDefault()}
+            style={{ width: "100%", display: "block", borderRadius: 12, pointerEvents: "none", userSelect: "none" }}
+          />
           {imgRendered.w > 0 && (
             <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
-              {detections.map((det, i) => {
-                const [x1, y1, x2, y2] = det.bbox;
-                const b = scale(x1, y1, x2, y2);
-                const color = COLORS[i % COLORS.length];
-                return (
-                  <g key={i}>
-                    <rect x={b.x} y={b.y} width={b.w} height={b.h} fill={hovered === i ? `${color}20` : "transparent"} stroke={color} strokeWidth={hovered === i ? 2.5 : 1.5} rx={4} style={{ pointerEvents: "all", cursor: "pointer" }} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)} onClick={() => onSelect(det)} />
-                    <rect x={b.x} y={b.y - 22} width={Math.min((det.search_label || "").length * 7 + 16, 120)} height={20} fill={color} rx={3} />
-                    <text x={b.x + 8} y={b.y - 8} fill={T.bg} fontSize={10} fontFamily="DM Sans, sans-serif" fontWeight={500}>{(det.search_label || "item").toUpperCase()}</text>
-                  </g>
-                );
-              })}
+              {/* Dim everything outside the drawn box */}
+              {hasBox && (
+                <>
+                  <defs>
+                    <mask id="crop-mask">
+                      <rect x="0" y="0" width="100%" height="100%" fill="white" />
+                      <rect x={box.x1} y={box.y1} width={box.x2 - box.x1} height={box.y2 - box.y1} fill="black" />
+                    </mask>
+                  </defs>
+                  <rect x="0" y="0" width="100%" height="100%" fill="rgba(0,0,0,0.45)" mask="url(#crop-mask)" rx="12" />
+                </>
+              )}
+              {/* The box itself */}
+              {box && (
+                <rect
+                  x={box.x1} y={box.y1} width={box.x2 - box.x1} height={box.y2 - box.y1}
+                  fill="rgba(201,169,110,0.08)"
+                  stroke={T.accent}
+                  strokeWidth={2}
+                  strokeDasharray={drawing ? "6 3" : "none"}
+                  rx={4}
+                />
+              )}
+              {/* Corner handles once drawing is done */}
+              {hasBox && !drawing && (
+                [[box.x1, box.y1], [box.x2, box.y1], [box.x1, box.y2], [box.x2, box.y2]].map(([cx, cy], i) => (
+                  <circle key={i} cx={cx} cy={cy} r={5} fill={T.accent} />
+                ))
+              )}
             </svg>
           )}
         </div>
 
-        <div style={{ width: "100%", maxWidth: 640, marginTop: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-          {detections.map((det, i) => {
-            const color = COLORS[i % COLORS.length];
-            return (
-              <button key={i} className="detection-card" style={{ borderColor: hovered === i ? color : T.border, background: hovered === i ? `${color}10` : T.surface }} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)} onClick={() => onSelect(det)}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "2px", background: color, flexShrink: 0 }} />
-                  <div>
-                    <div style={{ fontSize: "0.88rem", fontWeight: 500, textTransform: "capitalize" }}>{det.search_label || det.label || "Item"}</div>
-                    {det.score != null && <div style={{ fontSize: "0.68rem", color: T.textMuted, marginTop: "2px" }}>confidence {Math.round(det.score * 100)}%</div>}
-                  </div>
-                </div>
-                <span style={{ color: T.accent }}>→</span>
-              </button>
-            );
-          })}
+        <div style={{ width: "100%", maxWidth: 640, marginTop: 16, display: "flex", gap: 10 }}>
+          {hasBox && (
+            <button className="btn-ghost" style={{ flexShrink: 0 }} onClick={() => { setBox(null); setStartPt(null); }}>
+              Redraw
+            </button>
+          )}
+          <button
+            className="btn-primary"
+            style={{ flex: 1, opacity: hasBox && !loading ? 1 : 0.4, pointerEvents: hasBox && !loading ? "auto" : "none" }}
+            onClick={handleFindItem}
+          >
+            {loading
+              ? <><div style={{ width: 12, height: 12, border: `1.5px solid ${T.border}`, borderTop: `1.5px solid ${T.accent}`, borderRadius: "50%", animation: "spin 0.9s linear infinite" }} /> Identifying…</>
+              : <><span style={{ color: T.accent }}>✦</span> Find this item</>
+            }
+          </button>
         </div>
+
+        <p style={{ marginTop: 12, fontSize: "0.7rem", color: T.textFaint, textAlign: "center" }}>
+          Drag to draw a box · works on mobile too
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CONFIRM VIEW  — shows crop + CLIP category prediction for approval
+// ══════════════════════════════════════════════════════════════════
+function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack }) {
+  const cropURL = useMemo(() => {
+    if (!cropBlob) return null;
+    const url = URL.createObjectURL(cropBlob);
+    return url;
+  }, [cropBlob]);
+
+  // Revoke object URL when cropBlob changes or component unmounts
+  useEffect(() => {
+    return () => { if (cropURL) URL.revokeObjectURL(cropURL); };
+  }, [cropURL]);
+
+  const [category, setCategory] = useState(predictedCategory || Object.keys(CATEGORY_LABELS)[0]);
+
+  const conf      = (allScores && category) ? (allScores[category] ?? 0) : 0;
+  const confLabel = conf > 0.6 ? "high confidence" : conf > 0.35 ? "medium confidence" : "low confidence";
+  const confColor = conf > 0.6 ? T.green : conf > 0.35 ? T.yellow : T.textMuted;
+
+  return (
+    <div className="fade-in" style={{ minHeight: "calc(100dvh - 61px)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 28px", borderBottom: `1px solid ${T.borderFaint}` }}>
+        <button className="btn-ghost" onClick={onBack} style={{ fontSize: "1rem" }}>←</button>
+        <span style={{ fontSize: "0.75rem", color: T.textMuted, letterSpacing: "0.08em" }}>CONFIRM ITEM</span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "32px 24px", gap: 28 }}>
+
+        <div style={{ display: "flex", gap: 20, alignItems: "flex-start", width: "100%", maxWidth: 480 }}>
+          {/* Crop thumbnail */}
+          <div style={{ width: 100, height: 130, flexShrink: 0, background: T.surface, border: `1.5px solid ${T.accent}`, borderRadius: 10, overflow: "hidden" }}>
+            {cropURL
+              ? <img src={cropURL} alt="crop" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.4rem" }}>✦</div>
+            }
+          </div>
+
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Predicted category */}
+            <div>
+              <div style={{ fontSize: "0.6rem", color: T.textMuted, letterSpacing: "0.1em", marginBottom: 6 }}>DETECTED AS</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.4rem", fontWeight: 600, color: T.text }}>
+                  {CATEGORY_LABELS[category] ?? "Unknown"}
+                </span>
+                {conf > 0 && (
+                  <span style={{ fontSize: "0.62rem", color: confColor, border: `1px solid ${confColor}`, borderRadius: 20, padding: "2px 8px" }}>
+                    {confLabel}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Correction dropdown */}
+            <div>
+              <div style={{ fontSize: "0.6rem", color: T.textMuted, letterSpacing: "0.1em", marginBottom: 6 }}>NOT RIGHT? CHANGE IT</div>
+              <div style={{ position: "relative" }}>
+                <select
+                  value={category}
+                  onChange={e => setCategory(e.target.value)}
+                  style={{
+                    width: "100%", background: T.surface, color: T.text,
+                    border: `1px solid ${T.border}`, borderRadius: 8,
+                    padding: "7px 32px 7px 10px", fontSize: "0.82rem",
+                    fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
+                    appearance: "none", outline: "none",
+                  }}
+                >
+                  {Object.entries(CATEGORY_LABELS).map(([val, lbl]) => (
+                    <option key={val} value={val}>{lbl}</option>
+                  ))}
+                </select>
+                <svg style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="10" height="6" viewBox="0 0 10 6">
+                  <path d="M0 0l5 6 5-6z" fill={T.textMuted} />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          className="btn-primary"
+          style={{ width: "100%", maxWidth: 480 }}
+          onClick={() => onSearch(category)}
+        >
+          <span style={{ color: T.accent }}>✦</span> Search
+        </button>
       </div>
     </div>
   );
@@ -479,7 +693,7 @@ function SelectView({ imageURL, detections, onSelect, onBack }) {
 // ══════════════════════════════════════════════════════════════════
 // RESULT CARD
 // ══════════════════════════════════════════════════════════════════
-function ResultCard({ result, category, onFeedback, highlighted }) {
+function ResultCard({ result, category, onFeedback, highlighted, judgeScore }) {
   const [vote, setVote]       = useState(null);
   const [hoverStar, setHover] = useState(null);
 
@@ -488,7 +702,9 @@ function ResultCard({ result, category, onFeedback, highlighted }) {
   const raw      = payload.image_url ?? "";
   const imageURL = raw ? (raw.startsWith("http") ? raw : `${API}${raw}`) : null;
 
-  const scoreColor = score >= 0.80 ? T.green : score >= 0.60 ? T.yellow : T.red;
+  const displayScore = judgeScore ?? score;
+  const isJudged     = judgeScore !== null && judgeScore !== undefined;
+  const scoreColor   = displayScore >= 0.80 ? T.green : displayScore >= 0.60 ? T.yellow : T.red;
 
   const handleVote = async (stars) => {
     if (vote !== null) return;
@@ -516,11 +732,18 @@ function ResultCard({ result, category, onFeedback, highlighted }) {
       flexDirection: "column",
       transition: "border-color 0.2s",
     }}>
-      <div style={{ aspectRatio: "3/4", background: T.bgDeep, overflow: "hidden" }}>
+      <div style={{ aspectRatio: "3/4", background: T.bgDeep, overflow: "hidden", position: "relative" }}>
         {imageURL
           ? <img src={imageURL} alt={payload.item_name || "product"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.5rem" }}>✦</div>
         }
+        <span style={{ position: "absolute", top: 8, right: 8, display: "flex", alignItems: "center", gap: 3, background: "rgba(0,0,0,0.55)", borderRadius: 5, padding: "2px 6px" }}>
+          <span style={{ fontSize: "0.72rem", fontWeight: 600, color: scoreColor }}>{Math.round(displayScore * 100)}%</span>
+          {isJudged
+            ? <span style={{ fontSize: "0.52rem", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 3, padding: "0px 3px", lineHeight: 1.6 }}>AI</span>
+            : <span style={{ fontSize: "0.52rem", color: T.textFaint }}>~</span>
+          }
+        </span>
       </div>
 
       <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
@@ -529,7 +752,6 @@ function ResultCard({ result, category, onFeedback, highlighted }) {
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: "0.68rem", color: T.textMuted }}>{payload.store || ""}</span>
-          <span style={{ fontSize: "0.72rem", fontWeight: 600, color: scoreColor }}>{Math.round(score * 100)}%</span>
         </div>
 
         <div
@@ -562,7 +784,7 @@ function ResultCard({ result, category, onFeedback, highlighted }) {
 // ══════════════════════════════════════════════════════════════════
 // RESULTS VIEW
 // ══════════════════════════════════════════════════════════════════
-function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, radius, setRadius, userLocation, onFeedback, onReset }) {
+function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, radius, setRadius, userLocation, onFeedback, onReset }) {
   const [highlightedStore, setHighlightedStore] = useState(null);
   const userLL   = userLocation || [33.8869, 35.5131];
   const category = categoryInfo?.category || selectedItem?.search_label || "";
@@ -642,7 +864,7 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, radiu
           />
           <div style={{ fontSize: "0.72rem", color: T.textMuted, lineHeight: 1.6 }}>
             <div style={{ color: T.text, fontWeight: 500, textTransform: "capitalize", marginBottom: 2 }}>
-              {selectedItem?.search_label || selectedItem?.label || "item"}
+              {CATEGORY_LABELS[selectedItem?.search_label] || selectedItem?.label || "item"}
             </div>
             {categoryInfo?.confidence != null && (
               <div>{Math.round(categoryInfo.confidence * 100)}% confidence</div>
@@ -698,15 +920,20 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, radiu
           </div>
         ) : (
           <div className="results-grid">
-            {displayResults.map((result, i) => (
-              <ResultCard
-                key={i}
-                result={result}
-                category={category}
-                onFeedback={onFeedback}
-                highlighted={result.payload?.store === highlightedStore}
-              />
-            ))}
+            {displayResults.map((result, i) => {
+              const flat = result.payload ?? result;
+              const pid  = flat.product_id || flat.item_id || flat.image_url;
+              return (
+                <ResultCard
+                  key={i}
+                  result={result}
+                  category={category}
+                  onFeedback={onFeedback}
+                  highlighted={flat.store === highlightedStore}
+                  judgeScore={judgeScores[pid] ?? null}
+                />
+              );
+            })}
           </div>
         )}
       </div>
@@ -718,18 +945,23 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, radiu
 // ROOT
 // ══════════════════════════════════════════════════════════════════
 export default function App() {
-  const [view,          setView]          = useState("landing");
-  const [activeTab,     setActiveTab]     = useState("Discover");
-  const [imageFile,     setImageFile]     = useState(null);
-  const [imageURL,      setImageURL]      = useState(null);
-  const [detections,    setDetections]    = useState([]);
-  const [selectedItem,  setSelectedItem]  = useState(null);
-  const [results,       setResults]       = useState([]);
-  const [categoryInfo,  setCategoryInfo]  = useState(null);
-  const [queryImageURL, setQueryImageURL] = useState(null);  // cropped bbox shown in results
-  const [radius,        setRadius]        = useState(5);
-  const [userLocation,  setUserLocation]  = useState(null);
-  const [error,         setError]         = useState(null);
+  const [view,             setView]             = useState("landing");
+  const [activeTab,        setActiveTab]        = useState("Discover");
+  const [imageFile,        setImageFile]        = useState(null);
+  const [imageURL,         setImageURL]         = useState(null);
+  const [drawnBbox,        setDrawnBbox]        = useState(null);  // {x1,y1,x2,y2} natural px
+  const [cropBlob,         setCropBlob]         = useState(null);  // Blob from DrawView crop
+  const [predictedCategory,setPredictedCategory]= useState(null);
+  const [allScores,        setAllScores]        = useState({});
+  const [selectedItem,     setSelectedItem]     = useState(null);
+  const [results,          setResults]          = useState([]);
+  const [categoryInfo,     setCategoryInfo]     = useState(null);
+  const [queryImageURL,    setQueryImageURL]    = useState(null);
+  const [searchId,         setSearchId]         = useState(null);
+  const [judgeScores,      setJudgeScores]      = useState({});   // {product_id: float}
+  const [radius,           setRadius]           = useState(5);
+  const [userLocation,     setUserLocation]     = useState(null);
+  const [error,            setError]            = useState(null);
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
@@ -737,6 +969,26 @@ export default function App() {
       ()  => setUserLocation([33.8869, 35.5131])
     );
   }, []);
+
+  // Poll for Groq judge scores after results are shown.
+  // Judge runs in background on the server (~2.5s per result, top-5 only).
+  // We poll every 3s, stop when all 5 are scored or after 8 attempts (~24s).
+  useEffect(() => {
+    if (view !== "results" || !searchId) return;
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      if (attempts > 8) { clearInterval(interval); return; }
+      try {
+        const res = await fetch(`${API}/judge-scores/${searchId}`);
+        if (!res.ok) return;
+        const scores = await res.json();
+        if (Object.keys(scores).length > 0) setJudgeScores(scores);
+        if (Object.keys(scores).length >= 3) clearInterval(interval);
+      } catch { /* non-critical */ }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [view, searchId]);
 
   const prepareImage = (file) => new Promise((resolve, reject) => {
     const MAX = 800;
@@ -762,58 +1014,39 @@ export default function App() {
   });
 
   const handleUpload = useCallback(async (file) => {
-    setView("detecting");
     setError(null);
     let prepared;
     try { prepared = await prepareImage(file); } catch { prepared = file; }
     setImageFile(prepared);
     setImageURL(URL.createObjectURL(prepared));
-    const form = new FormData();
-    form.append("file", prepared);
-    try {
-      const res = await fetch(`${API}/detect`, { method: "POST", body: form });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setDetections(data.detections || []);
-      setView("selecting");
-    } catch (e) {
-      setError(`Detection failed: ${e.message}. Is the gateway running on port 8000?`);
-      setView("landing");
-    }
+    setView("drawing");
   }, []);
 
-  const handleSelect = useCallback(async (detection) => {
-    setSelectedItem(detection);
-    setView("searching");
-    const [x1, y1, x2, y2] = detection.bbox;
+  // Called by DrawView once the user has drawn a box and CLIP has classified it
+  const handleDrawConfirm = useCallback(({ bbox, cropBlob: blob, category, allScores: scores }) => {
+    setDrawnBbox(bbox);
+    setCropBlob(blob);
+    setPredictedCategory(category);
+    setAllScores(scores || {});
+    setView("confirming");
+  }, []);
 
-    // ── Crop query image for display in results ───────────────────────────
-    try {
-      const bitmap = await createImageBitmap(imageFile);
-      const cw = Math.max(1, Math.round(x2 - x1));
-      const ch = Math.max(1, Math.round(y2 - y1));
-      const canvas = document.createElement("canvas");
-      canvas.width  = cw;
-      canvas.height = ch;
-      canvas.getContext("2d").drawImage(bitmap, x1, y1, cw, ch, 0, 0, cw, ch);
-      canvas.toBlob(blob => {
-        if (blob) {
-          setQueryImageURL(prev => {
-            if (prev) URL.revokeObjectURL(prev);
-            return URL.createObjectURL(blob);
-          });
-        }
-      }, "image/jpeg", 0.9);
-    } catch { /* non-critical */ }
-    // ─────────────────────────────────────────────────────────────────────
+  // Called by ConfirmView once the user has approved / corrected the category
+  const handleConfirm = useCallback(async (confirmedCategory) => {
+    setView("searching");
+    const { x1, y1, x2, y2 } = drawnBbox;
+
+    // Turn the crop blob into an object URL for the results strip
+    if (cropBlob) {
+      setQueryImageURL(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(cropBlob); });
+    }
+    setSelectedItem({ search_label: confirmedCategory, label: CATEGORY_LABELS[confirmedCategory] || confirmedCategory, bbox: [x1, y1, x2, y2] });
 
     const form = new FormData();
     form.append("file", imageFile);
     form.append("x1", x1); form.append("y1", y1);
     form.append("x2", x2); form.append("y2", y2);
-    if (detection.search_label || detection.label) {
-      form.append("search_label", detection.search_label || detection.label);
-    }
+    form.append("search_label", confirmedCategory);
     try {
       const res = await fetch(`${API}/search`, { method: "POST", body: form });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -835,13 +1068,18 @@ export default function App() {
       }
       const deduped = Array.from(seen.values()).sort((a, b) => b.score - a.score);
       setResults(deduped);
-      setCategoryInfo({ category: data.detected_category, confidence: data.category_confidence });
+      const detCat  = data.detected_category;
+      const confMap = data.category_confidence;
+      const confVal = (confMap && typeof confMap === "object") ? (confMap[detCat] ?? 0) : 0;
+      setCategoryInfo({ category: detCat, confidence: confVal });
+      setSearchId(data.search_id || null);
+      setJudgeScores({});
       setView("results");
     } catch (e) {
       setError(`Search failed: ${e.message}`);
-      setView("selecting");
+      setView("confirming");
     }
-  }, [imageFile]);
+  }, [imageFile, drawnBbox, cropBlob]);
 
   const handleFeedback = useCallback(async (productId, rating, name, store, category, imageUrl) => {
     try {
@@ -867,10 +1105,15 @@ export default function App() {
     if (queryImageURL) URL.revokeObjectURL(queryImageURL);
     setImageURL(null);
     setQueryImageURL(null);
-    setDetections([]);
+    setDrawnBbox(null);
+    setCropBlob(null);
+    setPredictedCategory(null);
+    setAllScores({});
     setResults([]);
     setSelectedItem(null);
     setCategoryInfo(null);
+    setSearchId(null);
+    setJudgeScores({});
     setError(null);
   }, [imageURL, queryImageURL]);
 
@@ -883,18 +1126,17 @@ export default function App() {
         <StoreDashboardView />
       ) : (
         <>
-          {view === "landing"   && <LandingView onUpload={handleUpload} error={error} />}
-          {view === "detecting" && <LoadingView label="Analyzing image…" />}
-          {view === "selecting" && (
-            <SelectView imageURL={imageURL} detections={detections} onSelect={handleSelect} onBack={reset} />
-          )}
-          {view === "searching" && <LoadingView label="Finding matches…" />}
-          {view === "results"   && (
+          {view === "landing"    && <LandingView onUpload={handleUpload} error={error} />}
+          {view === "drawing"    && <DrawView imageURL={imageURL} imageFile={imageFile} onConfirm={handleDrawConfirm} onBack={reset} />}
+          {view === "confirming" && <ConfirmView cropBlob={cropBlob} predictedCategory={predictedCategory} allScores={allScores} onSearch={handleConfirm} onBack={() => setView("drawing")} />}
+          {view === "searching"  && <LoadingView label="Finding matches…" />}
+          {view === "results"    && (
             <ResultsView
               results={results}
               categoryInfo={categoryInfo}
               selectedItem={selectedItem}
               queryImageURL={queryImageURL}
+              judgeScores={judgeScores}
               radius={radius}
               setRadius={setRadius}
               userLocation={userLocation}

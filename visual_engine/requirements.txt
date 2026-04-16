@@ -7,3 +7,4 @@ python-multipart
 huggingface_hub
 prometheus-fastapi-instrumentator
 openai-clip
+peft>=0.10.0
