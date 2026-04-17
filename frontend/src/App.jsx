@@ -93,6 +93,10 @@ const GLOBAL_CSS = `
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
 
   .fade-up { animation: fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
   .fade-in { animation: fadeIn 0.35s ease forwards; }
@@ -243,6 +247,103 @@ function haversineKm([lat1, lon1], [lat2, lon2]) {
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HISTORY PERSISTENCE
+// ══════════════════════════════════════════════════════════════════
+const HISTORY_KEY = "locus_history";
+const HISTORY_MAX = 20;
+
+function loadHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function clearHistory() {
+  localStorage.removeItem(HISTORY_KEY);
+}
+
+function saveHistoryEntry(category, cropBlob, results) {
+  return new Promise((resolve) => {
+    const finish = (cropImageBase64) => {
+      const entry = {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        category,
+        cropImageBase64,
+        results: results.slice(0, 10),
+      };
+      const existing = loadHistory();
+      const updated = [entry, ...existing].slice(0, HISTORY_MAX);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+      resolve(updated);
+    };
+
+    if (!cropBlob) { finish(null); return; }
+
+    // Resize to 200×200 thumbnail before base64-encoding
+    const url = URL.createObjectURL(cropBlob);
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 200;
+      const scale = Math.min(MAX / img.width, MAX / img.height, 1);
+      const canvas = document.createElement("canvas");
+      canvas.width  = Math.round(img.width  * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      finish(canvas.toDataURL("image/jpeg", 0.75));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); finish(null); };
+    img.src = url;
+  });
+}
+
+function timeAgo(isoString) {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins  = Math.floor(diff / 60000);
+  if (mins < 1)   return "just now";
+  if (mins < 60)  return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs  < 24)  return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7)   return `${days}d ago`;
+  return new Date(isoString).toLocaleDateString();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SAVED PERSISTENCE
+// ══════════════════════════════════════════════════════════════════
+const SAVED_KEY = "locus_saved";
+
+function loadSaved() {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function isItemSaved(productId, saved) {
+  return saved.some(s => s.productId === productId);
+}
+
+function toggleSavedItem(result, saved) {
+  const payload    = result.payload ?? {};
+  const productId  = payload.product_id || payload.item_id || payload.image_url;
+  const alreadySaved = isItemSaved(productId, saved);
+  let updated;
+  if (alreadySaved) {
+    updated = saved.filter(s => s.productId !== productId);
+  } else {
+    updated = [{ productId, savedAt: new Date().toISOString(), result }, ...saved];
+  }
+  localStorage.setItem(SAVED_KEY, JSON.stringify(updated));
+  return updated;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -749,9 +850,240 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
 }
 
 // ══════════════════════════════════════════════════════════════════
+// PRODUCT DETAIL SHEET
+// ══════════════════════════════════════════════════════════════════
+function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose, saved, onToggleSave }) {
+  const [vote, setVote]       = useState(null);
+  const [hoverStar, setHover] = useState(null);
+
+  const payload      = result.payload ?? {};
+  const raw          = payload.image_url ?? "";
+  const imageURL     = raw ? (raw.startsWith("http") ? raw : `${API}${raw}`) : null;
+  const score        = result.score ?? 0;
+  const displayScore = judgeScore ?? score;
+  const isJudged     = judgeScore !== null && judgeScore !== undefined;
+  const scoreColor   = displayScore >= 0.80 ? T.green : displayScore >= 0.60 ? T.yellow : T.red;
+  const storeCoords  = STORE_COORDS[payload.store];
+  const catColor     = CATEGORY_COLORS[payload.category_tag || category] || T.accent;
+
+  const mapsQuery = payload.store
+    ? encodeURIComponent([payload.store, payload.mall_name].filter(Boolean).join(" "))
+    : null;
+
+  const handleVote = async (stars) => {
+    if (stars === vote) return;
+    setVote(stars);
+    setHover(null);
+    await onFeedback(
+      payload.product_id || payload.item_id || payload.image_url,
+      stars,
+      payload.item_name || "",
+      payload.store     || "",
+      category          || "",
+      payload.image_url || "",
+    );
+  };
+
+  const fillUpTo = vote !== null ? vote : (hoverStar ?? 0);
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0,
+          background: "rgba(0,0,0,0.65)",
+          zIndex: 500,
+          animation: "fadeIn 0.2s ease forwards",
+        }}
+      />
+
+      {/* Sheet */}
+      <div style={{
+        position: "fixed", bottom: 0, left: 0, right: 0,
+        maxHeight: "92dvh",
+        background: T.surface,
+        borderRadius: "20px 20px 0 0",
+        zIndex: 501,
+        display: "flex",
+        flexDirection: "column",
+        overflowY: "auto",
+        animation: "slideUp 0.32s cubic-bezier(0.16,1,0.3,1) forwards",
+        boxShadow: "0 -8px 40px rgba(0,0,0,0.6)",
+      }}>
+        {/* Drag handle */}
+        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 6px" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: T.border }} />
+        </div>
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute", top: 16, right: 16,
+            background: "rgba(0,0,0,0.4)", border: "none", borderRadius: "50%",
+            width: 32, height: 32, cursor: "pointer",
+            color: T.textMuted, fontSize: "1rem",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 1,
+          }}
+        >×</button>
+
+        {/* Product image */}
+        <div style={{ width: "100%", aspectRatio: "16/9", background: T.bgDeep, overflow: "hidden", flexShrink: 0 }}>
+          {imageURL
+            ? <img src={imageURL} alt={payload.item_name || "product"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "2rem" }}>✦</div>
+          }
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: "20px 22px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Name + price row */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+            <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.4rem", fontWeight: 600, color: T.text, lineHeight: 1.3, flex: 1 }}>
+              {payload.item_name || "Product"}
+            </h2>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, paddingTop: 2 }}>
+              {payload.price ? (
+                <span style={{ fontSize: "1rem", fontWeight: 600, color: T.accent }}>
+                  {payload.price}
+                </span>
+              ) : (
+                <span style={{ fontSize: "0.75rem", color: T.textFaint }}>—</span>
+              )}
+              <button
+                onClick={() => onToggleSave?.(result)}
+                style={{
+                  background: saved ? `${T.accent}22` : "transparent",
+                  border: `1px solid ${saved ? T.accent : T.border}`,
+                  borderRadius: 8,
+                  padding: "5px 10px",
+                  cursor: "pointer",
+                  color: saved ? T.accent : T.textMuted,
+                  fontSize: "0.78rem",
+                  fontFamily: "'DM Sans', sans-serif",
+                  display: "flex", alignItems: "center", gap: 5,
+                  transition: "all 0.2s",
+                }}
+                title={saved ? "Remove from saved" : "Save item"}
+              >
+                <span style={{ fontSize: "0.85rem" }}>{saved ? "♥" : "♡"}</span>
+                {saved ? "Saved" : "Save"}
+              </button>
+            </div>
+          </div>
+
+          {/* Store info */}
+          {payload.store && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <span style={{ fontSize: "0.82rem", color: T.text, fontWeight: 500 }}>{payload.store}</span>
+              {payload.mall_name && (
+                <span style={{ fontSize: "0.72rem", color: T.textMuted }}>inside {payload.mall_name}</span>
+              )}
+            </div>
+          )}
+
+          {/* Badges row */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            {(payload.category_tag || category) && (
+              <span style={{ fontSize: "0.65rem", fontWeight: 500, color: catColor, background: `${catColor}1a`, border: `1px solid ${catColor}40`, borderRadius: 20, padding: "3px 10px", textTransform: "capitalize" }}>
+                {(payload.category_tag || category).replace(/_/g, " ")}
+              </span>
+            )}
+            <span style={{ fontSize: "0.65rem", display: "flex", alignItems: "center", gap: 4, background: "rgba(0,0,0,0.3)", borderRadius: 20, padding: "3px 10px", color: scoreColor, fontWeight: 600 }}>
+              {Math.round(displayScore * 100)}% match
+              {isJudged && <span style={{ fontSize: "0.55rem", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 3, padding: "0px 3px", lineHeight: 1.6 }}>AI</span>}
+            </span>
+          </div>
+
+          <div style={{ height: 1, background: T.borderFaint }} />
+
+          {/* Location section */}
+          {storeCoords ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <span style={{ fontSize: "0.65rem", color: T.textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Find in store</span>
+              <div style={{ borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}`, height: 160 }}>
+                <MapContainer center={storeCoords} zoom={14} style={{ height: "100%", width: "100%" }} zoomControl={false} scrollWheelZoom={false} dragging={false}>
+                  <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
+                  <Marker position={storeCoords}>
+                    <Popup>
+                      <strong style={{ color: T.accent }}>{payload.store}</strong>
+                      {payload.mall_name && <><br />{payload.mall_name}</>}
+                    </Popup>
+                  </Marker>
+                </MapContainer>
+              </div>
+              <a
+                href={`https://maps.google.com/?q=${mapsQuery}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "block", textAlign: "center",
+                  padding: "10px", borderRadius: 10,
+                  background: T.accentBg, border: `1px solid ${T.accentRing}`,
+                  color: T.accent, fontSize: "0.78rem", fontWeight: 500,
+                  textDecoration: "none",
+                  transition: "background 0.2s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = T.accentRing}
+                onMouseLeave={e => e.currentTarget.style.background = T.accentBg}
+              >
+                Get directions →
+              </a>
+            </div>
+          ) : payload.store ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={{ fontSize: "0.65rem", color: T.textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Available at</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: T.bgDeep, borderRadius: 10, border: `1px solid ${T.borderFaint}` }}>
+                <span style={{ fontSize: "0.9rem" }}>🏪</span>
+                <div>
+                  <div style={{ fontSize: "0.82rem", color: T.text, fontWeight: 500 }}>{payload.store}</div>
+                  {payload.mall_name && <div style={{ fontSize: "0.7rem", color: T.textMuted }}>inside {payload.mall_name}</div>}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <div style={{ height: 1, background: T.borderFaint }} />
+
+          {/* Star rating */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <span style={{ fontSize: "0.65rem", color: T.textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Rate this match</span>
+            <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>
+              {[1, 2, 3, 4, 5].map(star => (
+                <button
+                  key={star}
+                  className={`star-btn ${star <= fillUpTo ? "filled" : ""}`}
+                  onMouseEnter={() => setHover(star)}
+                  onMouseLeave={() => setHover(null)}
+                  onClick={() => handleVote(star)}
+                  style={{ fontSize: "1.3rem" }}
+                  title={`Rate ${star} star${star > 1 ? "s" : ""}`}
+                >
+                  ★
+                </button>
+              ))}
+              {vote !== null && (
+                <span style={{ fontSize: "0.68rem", color: T.textMuted, marginLeft: 8 }}>
+                  {vote >= 4 ? "great find!" : vote === 3 ? "okay match" : "poor match"}
+                </span>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // RESULT CARD
 // ══════════════════════════════════════════════════════════════════
-function ResultCard({ result, category, onFeedback, highlighted, judgeScore }) {
+function ResultCard({ result, category, onFeedback, onCardClick, highlighted, judgeScore, saved, onToggleSave }) {
   const [vote, setVote]       = useState(null);
   const [hoverStar, setHover] = useState(null);
 
@@ -790,7 +1122,10 @@ function ResultCard({ result, category, onFeedback, highlighted, judgeScore }) {
       flexDirection: "column",
       transition: "border-color 0.2s",
     }}>
-      <div style={{ aspectRatio: "3/4", background: T.bgDeep, overflow: "hidden", position: "relative" }}>
+      <div
+        onClick={() => onCardClick?.(result)}
+        style={{ aspectRatio: "3/4", background: T.bgDeep, overflow: "hidden", position: "relative", cursor: "pointer" }}
+      >
         {imageURL
           ? <img src={imageURL} alt={payload.item_name || "product"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.5rem" }}>✦</div>
@@ -801,6 +1136,26 @@ function ResultCard({ result, category, onFeedback, highlighted, judgeScore }) {
             ? <span style={{ fontSize: "0.52rem", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 3, padding: "0px 3px", lineHeight: 1.6 }}>AI</span>
             : <span style={{ fontSize: "0.52rem", color: T.textFaint }}>~</span>
           }
+        </span>
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleSave?.(result); }}
+          style={{
+            position: "absolute", top: 8, left: 8,
+            background: "rgba(0,0,0,0.55)",
+            border: `1px solid ${saved ? T.accent : "transparent"}`,
+            borderRadius: "50%",
+            width: 28, height: 28, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: "0.9rem", lineHeight: 1,
+            color: saved ? T.accent : T.textMuted,
+            transition: "color 0.2s, border-color 0.2s",
+          }}
+          title={saved ? "Unsave" : "Save"}
+        >
+          {saved ? "♥" : "♡"}
+        </button>
+        <span style={{ position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", borderRadius: 4, padding: "2px 8px", fontSize: "0.6rem", color: T.textMuted, whiteSpace: "nowrap", pointerEvents: "none" }}>
+          tap to view
         </span>
       </div>
 
@@ -819,7 +1174,7 @@ function ResultCard({ result, category, onFeedback, highlighted, judgeScore }) {
               className={`star-btn ${star <= fillUpTo ? "filled" : ""}`}
               onMouseEnter={() => setHover(star)}
               onMouseLeave={() => setHover(null)}
-              onClick={() => handleVote(star)}
+              onClick={(e) => { e.stopPropagation(); handleVote(star); }}
               title={`Rate ${star} star${star > 1 ? "s" : ""}`}
             >
               ★
@@ -839,8 +1194,9 @@ function ResultCard({ result, category, onFeedback, highlighted, judgeScore }) {
 // ══════════════════════════════════════════════════════════════════
 // RESULTS VIEW
 // ══════════════════════════════════════════════════════════════════
-function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, radius, setRadius, userLocation, onFeedback, onReset }) {
+function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, radius, setRadius, userLocation, onFeedback, onReset, saved = [], onToggleSave }) {
   const [highlightedStore, setHighlightedStore] = useState(null);
+  const [activeDetail,     setActiveDetail]     = useState(null);
   const userLL   = userLocation || [33.8869, 35.5131];
   const category = categoryInfo?.category || selectedItem?.search_label || "";
 
@@ -998,14 +1354,240 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
                   result={result}
                   category={category}
                   onFeedback={onFeedback}
+                  onCardClick={setActiveDetail}
                   highlighted={flat.store === highlightedStore}
                   judgeScore={judgeScores[pid] ?? null}
+                  saved={isItemSaved(pid, saved)}
+                  onToggleSave={onToggleSave}
                 />
               );
             })}
           </div>
         )}
       </div>
+
+      {activeDetail && (() => {
+        const flat = activeDetail.payload ?? activeDetail;
+        const pid  = flat.product_id || flat.item_id || flat.image_url;
+        return (
+          <ProductDetailSheet
+            result={activeDetail}
+            category={category}
+            judgeScore={judgeScores[pid] ?? null}
+            onFeedback={onFeedback}
+            onClose={() => setActiveDetail(null)}
+            saved={isItemSaved(pid, saved)}
+            onToggleSave={onToggleSave}
+          />
+        );
+      })()}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CATEGORY COLOR MAP (shared by Saved + History views)
+// ══════════════════════════════════════════════════════════════════
+const CATEGORY_COLORS = {
+  top:        "#7a9eab",
+  pants:      "#8b7aab",
+  leggings:   "#8b7aab",
+  dress:      "#ab7a9e",
+  skirt:      "#ab7a9e",
+  shorts:     "#ab8b7a",
+  sweater:    "#7aab8a",
+  jacket:     "#7aab8a",
+  shoes:      "#c9a96e",
+  hat:        "#a8895a",
+  bag:        "#a8895a",
+  jumpsuit:   "#ab7a7a",
+  sports_bra: "#7a9eab",
+};
+
+// ══════════════════════════════════════════════════════════════════
+// SAVED VIEW
+// ══════════════════════════════════════════════════════════════════
+function SavedView({ saved, onOpenDetail, onToggleSave }) {
+  return (
+    <div style={{ minHeight: "calc(100dvh - 61px)", padding: "32px 24px", maxWidth: 640, margin: "0 auto" }}>
+      <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+        <div>
+          <div style={{ fontSize: "0.65rem", color: T.accent, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 6 }}>
+            ♥ Saved Items
+          </div>
+          <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.6rem", fontWeight: 500, color: T.text }}>
+            Your wishlist
+          </h2>
+        </div>
+        {saved.length > 0 && (
+          <span style={{ fontSize: "0.72rem", color: T.textMuted }}>{saved.length} item{saved.length !== 1 ? "s" : ""}</span>
+        )}
+      </div>
+
+      {saved.length === 0 ? (
+        <div className="fade-up" style={{ textAlign: "center", padding: "80px 0", color: T.textMuted }}>
+          <div style={{ fontSize: "2rem", marginBottom: 16, opacity: 0.3 }}>♡</div>
+          <p style={{ fontSize: "0.88rem" }}>No saved items yet</p>
+          <p style={{ fontSize: "0.75rem", marginTop: 8, color: T.textFaint }}>Tap ♡ on any result to save it here</p>
+        </div>
+      ) : (
+        <div className="results-grid">
+          {saved.map(({ productId, savedAt, result }) => {
+            const payload  = result.payload ?? {};
+            const raw      = payload.image_url ?? "";
+            const imageURL = raw ? (raw.startsWith("http") ? raw : `${API}${raw}`) : null;
+            const catColor = CATEGORY_COLORS[payload.category_tag] || T.accent;
+
+            return (
+              <div
+                key={productId}
+                style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", position: "relative", cursor: "pointer" }}
+                onClick={() => onOpenDetail(result)}
+              >
+                {/* Unsave button */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleSave(result); }}
+                  style={{ position: "absolute", top: 8, left: 8, background: `${T.accent}22`, border: `1px solid ${T.accent}`, borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.9rem", color: T.accent, zIndex: 1 }}
+                  title="Unsave"
+                >♥</button>
+
+                {/* Image */}
+                <div style={{ aspectRatio: "3/4", background: T.bgDeep, overflow: "hidden" }}>
+                  {imageURL
+                    ? <img src={imageURL} alt={payload.item_name || "product"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.5rem" }}>✦</div>
+                  }
+                </div>
+
+                {/* Info */}
+                <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ fontSize: "0.78rem", fontWeight: 500, color: T.text, lineHeight: 1.4 }}>
+                    {payload.item_name || "Product"}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.68rem", color: T.textMuted }}>{payload.store || ""}</span>
+                    {payload.price && <span style={{ fontSize: "0.72rem", color: T.accent, fontWeight: 600 }}>{payload.price}</span>}
+                  </div>
+                  {payload.category_tag && (
+                    <span style={{ fontSize: "0.6rem", color: catColor, background: `${catColor}18`, border: `1px solid ${catColor}35`, borderRadius: 20, padding: "1px 7px", alignSelf: "flex-start", textTransform: "capitalize" }}>
+                      {payload.category_tag.replace(/_/g, " ")}
+                    </span>
+                  )}
+                  <div style={{ fontSize: "0.6rem", color: T.textFaint, marginTop: 2 }}>
+                    Saved {timeAgo(savedAt)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HISTORY VIEW
+// ══════════════════════════════════════════════════════════════════
+function HistoryCard({ entry, onRestore }) {
+  const color = CATEGORY_COLORS[entry.category] || T.accent;
+  const thumbs = entry.results.slice(0, 3).map(r => r.payload?.image_url).filter(Boolean);
+
+  return (
+    <div
+      onClick={() => onRestore(entry)}
+      style={{
+        background: T.surface,
+        border: `1px solid ${T.border}`,
+        borderRadius: "12px",
+        padding: "14px",
+        display: "flex",
+        gap: "14px",
+        alignItems: "flex-start",
+        cursor: "pointer",
+        transition: "border-color 0.2s, background 0.2s",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = T.surfaceHov; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.background = T.surface; }}
+    >
+      {/* Crop thumbnail */}
+      <div style={{ width: 56, height: 56, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: T.bgDeep, border: `1px solid ${T.borderFaint}` }}>
+        {entry.cropImageBase64
+          ? <img src={entry.cropImageBase64} alt="search crop" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.2rem" }}>✦</div>
+        }
+      </div>
+
+      {/* Info */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: "0.65rem", fontWeight: 500, color, background: `${color}1a`, border: `1px solid ${color}40`, borderRadius: 20, padding: "2px 8px", textTransform: "capitalize", letterSpacing: "0.03em" }}>
+            {entry.category?.replace(/_/g, " ") || "unknown"}
+          </span>
+          <span style={{ fontSize: "0.65rem", color: T.textMuted }}>{timeAgo(entry.timestamp)}</span>
+        </div>
+
+        {/* Result mini-thumbnails */}
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          {thumbs.map((url, i) => (
+            <div key={i} style={{ width: 32, height: 40, borderRadius: 4, overflow: "hidden", background: T.bgDeep, flexShrink: 0 }}>
+              <img
+                src={url.startsWith("http") ? url : `${API}${url}`}
+                alt=""
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                onError={e => { e.target.style.display = "none"; }}
+              />
+            </div>
+          ))}
+          <span style={{ fontSize: "0.65rem", color: T.textMuted, marginLeft: 4 }}>
+            {entry.results.length} result{entry.results.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+      </div>
+
+      {/* Arrow */}
+      <span style={{ color: T.textFaint, fontSize: "0.9rem", flexShrink: 0, alignSelf: "center" }}>›</span>
+    </div>
+  );
+}
+
+function HistoryView({ history, onRestore, onClear }) {
+  return (
+    <div style={{ minHeight: "calc(100dvh - 61px)", padding: "32px 24px", maxWidth: 640, margin: "0 auto" }}>
+      <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+        <div>
+          <div style={{ fontSize: "0.65rem", color: T.accent, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 6 }}>
+            ✦ Search History
+          </div>
+          <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.6rem", fontWeight: 500, color: T.text }}>
+            Your searches
+          </h2>
+        </div>
+        {history.length > 0 && (
+          <button
+            onClick={onClear}
+            style={{ fontSize: "0.72rem", color: T.textMuted, background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "color 0.2s, border-color 0.2s" }}
+            onMouseEnter={e => { e.currentTarget.style.color = T.red; e.currentTarget.style.borderColor = T.red; }}
+            onMouseLeave={e => { e.currentTarget.style.color = T.textMuted; e.currentTarget.style.borderColor = T.border; }}
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+
+      {history.length === 0 ? (
+        <div className="fade-up" style={{ textAlign: "center", padding: "80px 0", color: T.textMuted }}>
+          <div style={{ fontSize: "2rem", marginBottom: 16, opacity: 0.3 }}>✦</div>
+          <p style={{ fontSize: "0.88rem" }}>No searches yet</p>
+          <p style={{ fontSize: "0.75rem", marginTop: 8, color: T.textFaint }}>Your search history will appear here</p>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {history.map(entry => (
+            <HistoryCard key={entry.id} entry={entry} onRestore={onRestore} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1031,6 +1613,8 @@ export default function App() {
   const [radius,           setRadius]           = useState(5);
   const [userLocation,     setUserLocation]     = useState(null);
   const [error,            setError]            = useState(null);
+  const [history,          setHistory]          = useState(() => loadHistory());
+  const [saved,            setSaved]            = useState(() => loadSaved());
 
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
@@ -1123,11 +1707,14 @@ export default function App() {
       const reshaped = (data.matches || data.results || []).map(m => ({
         score: m.score,
         payload: {
-          store:      m.store      || m.store_name,
-          image_url:  m.image_url  || m.image_filename,
-          item_name:  m.name,
-          product_id: m.product_id,
-          item_id:    m.item_id,
+          store:        m.store        || m.store_name,
+          image_url:    m.image_url    || m.image_filename,
+          item_name:    m.name,
+          product_id:   m.product_id,
+          item_id:      m.item_id,
+          price:        m.price        || "",
+          mall_name:    m.mall_name    || "",
+          category_tag: m.category_tag || "",
         }
       }));
       const seen = new Map();
@@ -1137,6 +1724,7 @@ export default function App() {
       }
       const deduped = Array.from(seen.values()).sort((a, b) => b.score - a.score);
       setResults(deduped);
+      saveHistoryEntry(confirmedCategory, cropBlob, deduped).then(updated => setHistory(updated));
       const detCat  = data.detected_category;
       const confMap = data.category_confidence;
       const confVal = (confMap && typeof confMap === "object") ? (confMap[detCat] ?? 0) : 0;
@@ -1167,6 +1755,27 @@ export default function App() {
     } catch { /* non-critical */ }
   }, []);
 
+  const handleRestoreHistory = useCallback((entry) => {
+    setResults(entry.results);
+    setPredictedCategory(entry.category);
+    setCategoryInfo({ category: entry.category, confidence: null });
+    setSelectedItem({ search_label: entry.category, label: CATEGORY_LABELS[entry.category] || entry.category });
+    setQueryImageURL(null);
+    setJudgeScores({});
+    setSearchId(null);
+    setView("results");
+    setActiveTab("Discover");
+  }, []);
+
+  const handleClearHistory = useCallback(() => {
+    clearHistory();
+    setHistory([]);
+  }, []);
+
+  const handleToggleSave = useCallback((result) => {
+    setSaved(prev => toggleSavedItem(result, prev));
+  }, []);
+
   const reset = useCallback(() => {
     setView("landing");
     setImageFile(null);
@@ -1193,6 +1802,24 @@ export default function App() {
 
       {activeTab === "Store" ? (
         <StoreDashboardView />
+      ) : activeTab === "History" ? (
+        <HistoryView history={history} onRestore={handleRestoreHistory} onClear={handleClearHistory} />
+      ) : activeTab === "Saved" ? (
+        <SavedView
+          saved={saved}
+          onOpenDetail={(result) => {
+            setResults([result]);
+            setPredictedCategory((result.payload ?? {}).category_tag || "");
+            setCategoryInfo({ category: (result.payload ?? {}).category_tag || "", confidence: null });
+            setSelectedItem({ search_label: (result.payload ?? {}).category_tag || "", label: CATEGORY_LABELS[(result.payload ?? {}).category_tag] || "item" });
+            setQueryImageURL(null);
+            setJudgeScores({});
+            setSearchId(null);
+            setView("results");
+            setActiveTab("Discover");
+          }}
+          onToggleSave={handleToggleSave}
+        />
       ) : (
         <>
           {view === "landing"    && <LandingView onUpload={handleUpload} error={error} />}
@@ -1211,6 +1838,8 @@ export default function App() {
               userLocation={userLocation}
               onFeedback={handleFeedback}
               onReset={reset}
+              saved={saved}
+              onToggleSave={handleToggleSave}
             />
           )}
         </>
