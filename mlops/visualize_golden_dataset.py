@@ -26,7 +26,10 @@ import io
 import json
 import os
 import pathlib
+import re
 import sys
+import time
+import threading
 
 try:
     from PIL import Image, ImageDraw
@@ -34,17 +37,84 @@ try:
 except ImportError:
     PIL_OK = False
 
+import httpx
 import requests
 
-HERE              = pathlib.Path(__file__).parent
-GOLDEN            = HERE / "golden_dataset.json"
-OUT_HTML          = HERE / "golden_dataset_report.html"
-GOLDEN_IMAGES_DIR = HERE / "golden_images"
+HERE                = pathlib.Path(__file__).parent
+GOLDEN              = HERE / "golden_dataset.json"
+OUT_HTML            = HERE / "golden_dataset_report.html"
+GOLDEN_IMAGES_DIR   = HERE / "golden_images"
+CALIBRATION_RESULTS = HERE / "calibration_results.json"
 
 CATEGORIES = [
     "top","pants","jacket","dress","shorts","skirt","sweater",
     "jumpsuit","leggings","sports_bra","shoes","bag","hat",
 ]
+
+
+# ── Judge (inline, same model/prompt as gateway/judge.py) ─────────────────────
+
+_JUDGE_MODEL   = "google/gemini-2.0-flash-001"
+_JUDGE_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+_JUDGE_PROMPT  = (
+    "You are a fashion visual similarity expert.\n"
+    "You will be shown two clothing images: first the QUERY image, then a RESULT image.\n"
+    "Rate how visually similar the result is to the query.\n"
+    "Give a score from 0.00 to 1.00 using exactly two decimal places.\n"
+    "Anchor points:\n"
+    "  1.00 = identical item\n"
+    "  0.80 = very similar (same style, colour, silhouette)\n"
+    "  0.60 = similar style (same category, close design)\n"
+    "  0.40 = same category only\n"
+    "  0.20 = loosely related\n"
+    "  0.00 = unrelated\n"
+    "Respond with ONLY the numeric score. No explanation."
+)
+
+_rate_lock = threading.Lock()
+_last_call  = [0.0]
+
+
+def _throttle():
+    with _rate_lock:
+        gap = 2.0 - (time.monotonic() - _last_call[0])
+        if gap > 0:
+            time.sleep(gap)
+        _last_call[0] = time.monotonic()
+
+
+def _score_pair(query_b64: str, result_b64: str, api_key: str) -> float | None:
+    payload = {
+        "model": _JUDGE_MODEL,
+        "messages": [{"role": "user", "content": [
+            {"type": "text", "text": _JUDGE_PROMPT},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{query_b64}"}},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{result_b64}"}},
+        ]}],
+        "max_tokens": 50,
+        "temperature": 0.0,
+    }
+    for attempt in range(3):
+        _throttle()
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                resp = client.post(_JUDGE_API_URL, json=payload,
+                                   headers={"Authorization": f"Bearer {api_key}"})
+            if resp.status_code == 429:
+                wait = float(resp.headers.get("retry-after", 60))
+                print(f"    [429] rate limited, waiting {wait:.0f}s …")
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"].strip()
+            m = re.search(r"\d+\.\d+|\d+", content)
+            return float(m.group()) if m else None
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(5.0 * (2 ** attempt))
+            else:
+                print(f"    [judge error] {e}")
+    return None
 
 
 # ── Image helpers ──────────────────────────────────────────────────────────────
@@ -309,10 +379,52 @@ tr:hover td { background: #1a1814; }
   display: inline-flex; align-items: center; gap: 5px;
   padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
 }
+
+.judge-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 6px;
+  border-radius: 10px; display: inline-block; line-height: 1.4;
+}
+.judge-pass  { background: #1a3a25; color: #7aab8a; border: 1px solid #2a4a35; }
+.judge-warn  { background: #3a2e10; color: #c9a96e; border: 1px solid #4a3e20; }
+.judge-fail  { background: #3a1010; color: #c97070; border: 1px solid #4a2020; }
+.judge-none  { background: #2a2620; color: #4a4540; border: 1px solid #3a3530; }
+.judge-avg-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+}
 """
 
 
+def _load_calibration() -> dict[str, dict]:
+    """Return {query_name: {product_id: score, ..., '_avg': float, '_label': str}}."""
+    if not CALIBRATION_RESULTS.exists():
+        return {}
+    try:
+        data = json.loads(CALIBRATION_RESULTS.read_text(encoding="utf-8"))
+        out = {}
+        for entry in data:
+            name = entry.get("query_name", "")
+            scores = dict(entry.get("scores_by_id", {}))
+            scores["_avg"]   = entry.get("avg_score")
+            scores["_label"] = entry.get("label", "")
+            out[name] = scores
+        return out
+    except Exception as e:
+        print(f"  [warn] Could not load calibration_results.json: {e}")
+        return {}
+
+
+def _judge_badge(score: float | None) -> str:
+    if score is None:
+        return '<span class="judge-badge judge-none">no score</span>'
+    cls = "judge-pass" if score >= 0.80 else ("judge-warn" if score >= 0.65 else "judge-fail")
+    return f'<span class="judge-badge {cls}">judge {score:.2f}</span>'
+
+
 def render(entries: list, results_map: dict, gateway_url: str = "http://localhost:8000") -> str:
+    calib = _load_calibration()
+    if calib:
+        print(f"  Loaded calibration scores for {len(calib)} queries.")
     n = len(entries)
     recalls = [results_map[e["query_name"]]["recall5"] for e in entries
                if e["query_name"] in results_map]
@@ -372,6 +484,7 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
         bbox         = r.get("bbox")
         gt_bbox_imgs = r.get("gt_bbox_imgs", {})
         result_records = r.get("results", [])
+        calib_entry  = calib.get(name, {})
 
         print(f"  [{i:2d}/{n}] rendering card: {name[:50]}")
 
@@ -382,6 +495,16 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
             cls = "green" if pct >= 60 else ("yellow" if pct >= 40 else "red")
             rec_html = (f'<span class="recall-pill badge {cls}">'
                         f'Recall@5: {hits5}/{gt_n} ({pct}%)</span>')
+
+        # ── judge avg pill ────────────────────────────────────────────────────
+        judge_avg_html = ""
+        if calib_entry:
+            avg_s = calib_entry.get("_avg")
+            lbl_s = calib_entry.get("_label", "")
+            if avg_s is not None:
+                jcls = "green" if lbl_s == "PASS" else ("yellow" if lbl_s == "WARN" else "red")
+                judge_avg_html = (f'<span class="judge-avg-pill badge {jcls}">'
+                                  f'Judge avg: {avg_s:.2f} [{lbl_s}]</span>')
 
         # ── left col: query + bbox ────────────────────────────────────────────
         full_src = query_url if query_url.startswith("data:") else query_url
@@ -410,14 +533,16 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
         # ── ground-truth items ────────────────────────────────────────────────
         gt_html = ""
         for p in gt_prods:
-            nm  = (p.get("name") or "")[:30]
-            pid = p.get("product_id", "")
-            img = gt_bbox_imgs.get(pid) or p.get("image_url", "")
+            nm    = (p.get("name") or "")[:30]
+            pid   = p.get("product_id", "")
+            img   = gt_bbox_imgs.get(pid) or p.get("image_url", "")
+            jscore = calib_entry.get(pid) if calib_entry else None
             gt_html += f"""
       <div class="ritem">
         {make_img(img, 118, 140, extra="outline:2px solid #7aab8a;outline-offset:2px;")}
         <span class="nm" title="{p.get('name','')}">{nm}</span>
         <span class="gt-lbl">ground truth</span>
+        {_judge_badge(jscore)}
       </div>"""
         if not gt_html:
             gt_html = '<span style="font-size:11px;color:#4a4540;">No GT images</span>'
@@ -425,19 +550,21 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
         # ── search results ────────────────────────────────────────────────────
         res_html = ""
         for rec in result_records[:5]:
-            rank     = rec.get("rank", "?")
-            img      = rec.get("bbox_img_src") or rec.get("image_url", "")
-            nm       = (rec.get("name") or "")[:30]
-            pid      = rec.get("product_id", "")
-            is_gt    = pid in gt_ids
-            border   = "outline:3px solid #7aab8a;outline-offset:2px;" if is_gt else ""
-            gt_lbl   = '<span class="gt-lbl">✓ GT match</span>' if is_gt else ""
+            rank      = rec.get("rank", "?")
+            img       = rec.get("bbox_img_src") or rec.get("image_url", "")
+            nm        = (rec.get("name") or "")[:30]
+            pid       = rec.get("product_id", "")
+            is_gt     = pid in gt_ids
+            border    = "outline:3px solid #7aab8a;outline-offset:2px;" if is_gt else ""
+            gt_lbl    = '<span class="gt-lbl">✓ GT match</span>' if is_gt else ""
+            jscore    = rec.get("judge_score")
             res_html += f"""
       <div class="ritem">
         <span class="rank">#{rank}</span>
         {make_img(img, 118, 140, extra=border)}
         {gt_lbl}
         <span class="nm" title="{rec.get('name','')}">{nm}</span>
+        {_judge_badge(jscore)}
       </div>"""
         if not res_html:
             res_html = '<span style="font-size:11px;color:#4a4540;">Run the script to populate results.</span>'
@@ -453,6 +580,7 @@ def render(entries: list, results_map: dict, gateway_url: str = "http://localhos
       <h3>{name}</h3>
       <span class="cat-pill">{cat}</span>
       {rec_html}
+      {judge_avg_html}
     </div>
     <div class="qcard-body">
       {left_col}
@@ -873,13 +1001,26 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--gateway", default="http://localhost:8000",
                         type=lambda s: s.strip())
+    parser.add_argument("--limit", type=int, default=None,
+                        help="Process only the first N golden-dataset entries")
     args = parser.parse_args()
+
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if api_key:
+        print("OPENROUTER_API_KEY found — judge scores will be shown on search results.")
+    else:
+        print("No OPENROUTER_API_KEY — search result judge scores will be skipped.")
+
+    if not CALIBRATION_RESULTS.exists():
+        print("⚠  calibration_results.json not found — run calibrate_judge.py first to see scores on GT images.")
 
     if not GOLDEN.exists():
         print(f"ERROR: {GOLDEN} not found"); sys.exit(1)
 
     with open(GOLDEN, encoding="utf-8") as f:
         golden = json.load(f)
+    if args.limit:
+        golden = golden[: args.limit]
     print(f"Loaded {len(golden)} entries from golden_dataset.json")
 
     results_map: dict = {}
@@ -938,14 +1079,26 @@ def main():
         recall5  = hits5 / len(gt_ids) if gt_ids else 0.0
         print(f"  Recall@5: {hits5}/{len(gt_ids)} ({recall5*100:.0f}%)")
 
+        query_b64 = base64.b64encode(img_bytes).decode("utf-8")
+
         result_records = []
         for rank, m in enumerate(matches[:5], 1):
+            judge_score = None
+            if api_key:
+                res_url   = m.get("image_url", "")
+                res_bytes = get_image_bytes(res_url) if res_url else None
+                if res_bytes:
+                    res_b64     = base64.b64encode(res_bytes).decode("utf-8")
+                    judge_score = _score_pair(query_b64, res_b64, api_key)
+                    lbl = f"{judge_score:.2f}" if judge_score is not None else "none"
+                    print(f"    rank #{rank} '{m.get('name','')[:30]}' → judge {lbl}")
             result_records.append({
                 "rank":        rank,
                 "image_url":   m.get("image_url", ""),
                 "name":        m.get("name", ""),
                 "product_id":  m.get("product_id", ""),
                 "store_name":  m.get("store_name", ""),
+                "judge_score": judge_score,
             })
 
         # Detect + draw bbox on ground-truth images

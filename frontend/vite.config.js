@@ -42,6 +42,8 @@ export default defineConfig({
       "/static":       { target: "http://localhost:8000", changeOrigin: true },
       "/judge-scores": { target: "http://localhost:8000", changeOrigin: true },
       "/classify-crop":{ target: "http://localhost:8000", changeOrigin: true },
+      "/refine":        { target: "http://localhost:8000", changeOrigin: true },
+      "/search/":       { target: "http://localhost:8000", changeOrigin: true },
     },
   },
 });

@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -20,7 +19,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 # ultralytics (pulls scipy ~38 MB) — own layer so torch cache is never busted
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install ultralytics
+    pip install ultralytics==8.3.2
 
 # App deps — only re-runs when requirements.txt changes
 COPY requirements.txt .

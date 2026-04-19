@@ -8,11 +8,18 @@
 #   - MIN_CONFIDENCE raised 0.30 → 0.50 to reduce over-detection
 # =============================================================================
 
+import torch
 from ultralytics import YOLO
+from ultralytics.nn.tasks import SegmentationModel
 from huggingface_hub import hf_hub_download
 from PIL import Image
 
 from clip_labels import YOLO_TO_CANONICAL
+
+# PyTorch 2.6 changed torch.load default to weights_only=True, which blocks
+# loading legacy ultralytics segmentation checkpoints. Allowlisting the class
+# is the fix recommended by the PyTorch error message itself.
+torch.serialization.add_safe_globals([SegmentationModel])
 
 # Raw DeepFashion2 class labels — fixed by model weights, do not reorder
 DEEPFASHION2_LABELS = {

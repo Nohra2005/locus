@@ -18,8 +18,12 @@
 #     zero-shot scores are inherently lower than trained-label scores
 # =============================================================================
 
+import torch
 from ultralytics import YOLOWorld
+from ultralytics.nn.tasks import WorldModel
 from PIL import Image
+
+torch.serialization.add_safe_globals([WorldModel])
 
 MIN_CONFIDENCE = 0.25   # YOLO-World zero-shot scores are lower than supervised; 0.25 filters ghost boxes while still catching small accessories
 MIN_AREA       = 800    # px² — smaller than DF2 to catch small accessories

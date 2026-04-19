@@ -309,7 +309,6 @@ UNAMBIGUOUS_TOKEN_MAP = {
     # ── not_fashion ────────────────────────────────────────────────────────
     "belt":         "not_fashion",
     "scarf":        "not_fashion",
-    "tie":          "not_fashion",
     "sarong":       "not_fashion",
     "kimono":       "not_fashion",
     "jibbitz":      "not_fashion",
@@ -336,6 +335,9 @@ UNAMBIGUOUS_TOKEN_MAP = {
     "underwear":    "not_fashion",
     "boxer":        "not_fashion",
     "briefs":       "not_fashion",
+    "hair":         "not_fashion",
+    "bottom":       "not_fashion",
+    "bottoms":      "not_fashion",
 }
 
 

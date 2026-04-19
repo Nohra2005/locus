@@ -599,9 +599,9 @@ class LocusVisualizer:
 
         tokens = title.lower().replace("-", " ").replace("/", " ").split()
 
-        fashion_hits     = {}
         not_fashion_hits = 0
-        last_seen        = {}  # category → index of last matching token
+        last_fashion_cat = None   # category of the last whitelist token seen
+        last_fashion_pos = -1     # position of that token
 
         for idx, token in enumerate(tokens):
             cat = self.token_map.get(token)
@@ -610,36 +610,27 @@ class LocusVisualizer:
             if cat == "not_fashion":
                 not_fashion_hits += 1
             else:
-                fashion_hits[cat] = fashion_hits.get(cat, 0) + 1
-                last_seen[cat]    = idx  # keep updating — we want the last hit
+                last_fashion_cat = cat
+                last_fashion_pos = idx
 
+        # Bigrams override single tokens at the same or earlier position
+        # (position is offset past all single tokens so bigrams always rank last)
         bigrams = [f"{tokens[i]} {tokens[i+1]}" for i in range(len(tokens) - 1)]
         for i, bigram in enumerate(bigrams):
             cat = self.token_map.get(bigram)
             if cat is None:
                 continue
+            pos = len(tokens) + i
             if cat == "not_fashion":
                 not_fashion_hits += 2
-            else:
-                fashion_hits[cat] = fashion_hits.get(cat, 0) + 2
-                # bigrams sort after all single tokens positionally
-                last_seen[cat] = len(tokens) + i
+            elif pos > last_fashion_pos:
+                last_fashion_cat = cat
+                last_fashion_pos = pos
 
-        if fashion_hits:
-            best_count = max(fashion_hits.values())
-            tied = [cat for cat, count in fashion_hits.items() if count == best_count]
-
-            if len(tied) == 1:
-                best_cat = tied[0]
-            else:
-                # Tie-break: last token position wins
-                best_cat = max(tied, key=lambda cat: last_seen.get(cat, 0))
-                print(f"[TITLE TIE] {tied} → '{best_cat}' "
-                      f"(last seen at index {last_seen.get(best_cat, 0)})")
-
-            if not_fashion_hits >= best_count:
+        if last_fashion_cat is not None:
+            if not_fashion_hits > 0:
                 return "not_fashion", "whitelist", 1.0
-            return best_cat, "whitelist", 1.0
+            return last_fashion_cat, "whitelist", 1.0
 
         if not_fashion_hits > 0:
             return "not_fashion", "whitelist", 1.0
@@ -714,6 +705,17 @@ class LocusVisualizer:
         _, label, scores = self._clip_embed(pil_image)
         best_conf = max(scores.values()) if scores else 0.0
         return label or "", best_conf, scores
+
+    # =========================================================================
+    # PUBLIC: encode_text() — CLIP text embedding for /refine queries
+    # =========================================================================
+    def encode_text(self, text: str) -> list[float]:
+        inputs = self.clip_processor(text=[text], return_tensors="pt", padding=True)
+        with torch.no_grad():
+            out      = self.clip_model.text_model(**inputs)
+            features = self.clip_model.text_projection(out.pooler_output)
+            features = features / features.norm(p=2, dim=-1, keepdim=True)
+        return features[0].tolist()
 
     # =========================================================================
     # PUBLIC: classify_text() — debug endpoint

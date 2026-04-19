@@ -156,6 +156,7 @@ async def audit_links() -> tuple[list[dict], list[dict], list[dict]]:
                 "shoe_style":     p.get("shoe_style"),
                 "is_golden":      p.get("is_golden", False),
                 "already_broken": p.get("broken", False),
+                "broken_count":   p.get("broken_count", 0),
             })
 
         print(f"  ... loaded {len(all_products)} items", end="\r")
@@ -186,30 +187,66 @@ async def audit_links() -> tuple[list[dict], list[dict], list[dict]]:
 # PHASE 2 — MARK / UNMARK
 # ══════════════════════════════════════════════════════════════════════════════
 
-def mark_items_broken(broken_items: list[dict]) -> None:
-    """Sets broken=True + broken_since on dead items. Hides them from search."""
-    new_items = [b for b in broken_items if not b["already_broken"]]
-    if not new_items:
-        return
+def mark_items_broken(broken_items: list[dict]) -> list[dict]:
+    """
+    First failure  → sets broken=True, broken_count=1, hidden from search.
+    Second failure → deletes the point (link is permanently dead).
+    Returns the list of items still alive (not deleted), for Phase 3 recovery.
+    """
+    new_items     = [b for b in broken_items if not b["already_broken"]]
+    repeat_items  = [b for b in broken_items if     b["already_broken"]]
+    to_delete     = [b for b in repeat_items if b["broken_count"] >= 1 and not b.get("is_golden")]
+    to_increment  = [b for b in repeat_items if b["broken_count"] < 1]
 
-    print(f"\nPhase 2 — Marking {len(new_items)} new broken items (hidden from search)...")
+    print(f"\nPhase 2 — {len(new_items)} new broken  |  {len(to_delete)} to delete  |  {len(to_increment)} incrementing...")
+
     if DRY_RUN:
         for b in new_items:
-            print(f"  [DRY]   would mark '{b['name']}'")
-        return
+            print(f"  [DRY]   would mark    '{b['name']}'")
+        for b in to_increment:
+            print(f"  [DRY]   would bump    '{b['name']}' broken_count={b['broken_count']+1}")
+        for b in to_delete:
+            print(f"  [DRY]   would DELETE  '{b['name']}' (broken_count={b['broken_count']+1})")
+        return broken_items
 
     now = datetime.utcnow().isoformat()
+
     for item in new_items:
         try:
             client.set_payload(
                 collection_name=COLLECTION_NAME,
-                payload={"broken": True, "broken_since": now},
+                payload={"broken": True, "broken_since": now, "broken_count": 1},
                 points=[item["point_id"]],
             )
         except Exception as exc:
             print(f"  [WARN]  Could not mark '{item['name']}': {exc}")
 
-    print("  Done.")
+    for item in to_increment:
+        try:
+            client.set_payload(
+                collection_name=COLLECTION_NAME,
+                payload={"broken_count": item["broken_count"] + 1},
+                points=[item["point_id"]],
+            )
+        except Exception as exc:
+            print(f"  [WARN]  Could not increment '{item['name']}': {exc}")
+
+    deleted = 0
+    for item in to_delete:
+        try:
+            client.delete(
+                collection_name=COLLECTION_NAME,
+                points_selector=models.PointIdsList(points=[item["point_id"]]),
+            )
+            print(f"  [DEL]   '{item['name']}' — dead for 2 runs, removed")
+            deleted += 1
+        except Exception as exc:
+            print(f"  [WARN]  Could not delete '{item['name']}': {exc}")
+
+    print(f"  Done — marked={len(new_items)} deleted={deleted}")
+
+    deleted_ids = {b["point_id"] for b in to_delete}
+    return [b for b in broken_items if b["point_id"] not in deleted_ids]
 
 
 def clear_broken_flags(recovered_flag_items: list[dict]) -> None:
@@ -466,14 +503,15 @@ async def main() -> None:
     healthy, broken, recovered_flags = await audit_links()
 
     # Phase 2 — mark / unmark
-    mark_items_broken(broken)
+    surviving_broken = mark_items_broken(broken)
     clear_broken_flags(recovered_flags)
 
-    # Phase 3 — recover
-    recovery_results = await recover_broken(broken)
+    # Phase 3 — recover (only items not already deleted)
+    recovery_results = await recover_broken(surviving_broken)
 
     recovered     = [r for r in recovery_results if r["status"] == "recovered"]
     unrecoverable = [r for r in recovery_results if r["status"] != "recovered"]
+    auto_deleted  = len(broken) - len(surviving_broken)
 
     # ── Report ────────────────────────────────────────────────────────────────
     end = datetime.utcnow()
@@ -484,6 +522,7 @@ async def main() -> None:
         "total_checked":      len(healthy) + len(broken),
         "healthy":            len(healthy),
         "broken_found":       len(broken),
+        "auto_deleted":       auto_deleted,
         "self_healed_flags":  len(recovered_flags),
         "recovered":          len(recovered),
         "unrecoverable":      len(unrecoverable),
@@ -510,6 +549,7 @@ async def main() -> None:
     print(f"  Total checked   : {report['total_checked']}")
     print(f"  Healthy         : {report['healthy']}")
     print(f"  Broken found    : {report['broken_found']}")
+    print(f"  Auto-deleted    : {report['auto_deleted']}")
     print(f"  Self-healed     : {report['self_healed_flags']}")
     print(f"  Recovered       : {report['recovered']}")
     print(f"  Unrecoverable   : {report['unrecoverable']}")

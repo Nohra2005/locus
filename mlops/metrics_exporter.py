@@ -6,18 +6,15 @@ Reads evaluation results from MLflow AND Gemini judge JSON files every 30s,
 then exposes all of them as Prometheus metrics on port 8003.
 
 MLflow-based metrics (LoRA retraining pipeline):
-  locus_recall_at_5               — latest Recall@5 from locus_search_accuracy
-  locus_recall_at_10              — latest Recall@10
-  locus_recall_at_25              — latest Recall@25
-  locus_baseline_hit5             — best hit@5 baseline (for promotion decisions)
-  locus_lora_delta_hit5           — delta hit@5 from latest retraining run
   locus_lora_promoted_total       — cumulative adapter promotions
   locus_lora_runs_total           — total retraining pipeline runs
-  locus_queries_evaluated_total   — number of golden queries in latest eval run
   locus_retrain_active            — 1 if a retrain run is currently RUNNING, else 0
   locus_retrain_step              — latest logged training step in the active run
   locus_lora_train_loss           — latest train_loss value in the active run
   locus_retrain_max_steps         — MAX_TRAIN_STEPS param from the active run
+  locus_judge_old_avg             — old model avg judge score in latest completed run
+  locus_judge_new_avg             — new model avg judge score in latest completed run
+  locus_judge_delta               — judge score delta (new - old); positive = improvement
 
 Gemini Judge metrics (from gemini_judge_results.json):
   locus_gemini_avg_vss5           — average VSS@5 across all evaluated queries
@@ -43,16 +40,8 @@ CACHE_PATH     = os.getenv("VSS_CACHE_PATH",       "/mlops/vss_cache.json")
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 
-recall_at_5  = Gauge("locus_recall_at_5",  "Latest Recall@5 on golden dataset")
-recall_at_10 = Gauge("locus_recall_at_10", "Latest Recall@10 on golden dataset")
-recall_at_25 = Gauge("locus_recall_at_25", "Latest Recall@25 on golden dataset")
-
-baseline_hit5    = Gauge("locus_baseline_hit5",    "Best hit@5 baseline used for promotion decisions")
-lora_delta_hit5  = Gauge("locus_lora_delta_hit5",  "hit@5 delta in latest retraining run (new - baseline)")
-
 lora_promoted = Gauge("locus_lora_promoted_total", "Cumulative adapter promotions")
 lora_runs     = Gauge("locus_lora_runs_total",      "Total retraining pipeline runs (promoted + rejected)")
-queries_eval  = Gauge("locus_queries_evaluated_total", "Golden queries evaluated in latest recall run")
 
 # Live training metrics — updated whenever a run is RUNNING
 retrain_active    = Gauge("locus_retrain_active",     "1 if a retrain run is currently active, else 0")
@@ -60,9 +49,10 @@ retrain_step      = Gauge("locus_retrain_step",       "Latest logged training st
 lora_train_loss   = Gauge("locus_lora_train_loss",    "Latest train_loss value logged by the active run")
 retrain_max_steps = Gauge("locus_retrain_max_steps",  "MAX_TRAIN_STEPS param of the active run")
 
-# Latest completed run evaluation results
-lora_new_hit5  = Gauge("locus_lora_new_hit5",  "hit@5 of the newly trained adapter in the last retrain run")
-lora_new_acs5  = Gauge("locus_lora_new_acs5",  "ACS@5 of the newly trained adapter in the last retrain run")
+# Judge benchmark metrics from the latest completed retrain run
+judge_old_avg = Gauge("locus_judge_old_avg", "Old model avg judge score in latest retrain run (20q × top-5)")
+judge_new_avg = Gauge("locus_judge_new_avg", "New model avg judge score in latest retrain run")
+judge_delta   = Gauge("locus_judge_delta",   "Judge score delta: new - old (positive = improvement)")
 
 # ── Gemini Judge metrics ──────────────────────────────────────────────────────
 gemini_avg_vss5      = Gauge("locus_gemini_avg_vss5",         "Average VSS@5 across all queries in latest eval run")
@@ -82,42 +72,6 @@ def _get_mlflow_client():
     mlflow.set_tracking_uri(MLFLOW_URI)
     return mlflow.tracking.MlflowClient()
 
-
-def _refresh_recall_metrics(client) -> None:
-    """Pull latest Recall@K from 'locus_search_accuracy' experiment."""
-    try:
-        exp = client.get_experiment_by_name("locus_search_accuracy")
-        if exp is None:
-            return
-
-        runs = client.search_runs(
-            experiment_ids = [exp.experiment_id],
-            order_by       = ["start_time DESC"],
-            max_results    = 1,
-        )
-        if not runs:
-            return
-
-        metrics = runs[0].data.metrics
-        if "recall_at_5" in metrics:
-            recall_at_5.set(round(metrics["recall_at_5"], 4))
-        if "recall_at_10" in metrics:
-            recall_at_10.set(round(metrics["recall_at_10"], 4))
-        if "recall_at_25" in metrics:
-            recall_at_25.set(round(metrics["recall_at_25"], 4))
-        if "queries_evaluated" in metrics:
-            queries_eval.set(int(metrics["queries_evaluated"]))
-
-        print(
-            f"[exporter] Recall — "
-            f"R@5={metrics.get('recall_at_5', '?'):.3f}  "
-            f"R@10={metrics.get('recall_at_10', '?'):.3f}  "
-            f"R@25={metrics.get('recall_at_25', '?'):.3f}  "
-            f"n={int(metrics.get('queries_evaluated', 0))}"
-        )
-
-    except Exception as e:
-        print(f"[exporter] Could not read locus_search_accuracy from MLflow: {e}")
 
 
 def _refresh_retrain_metrics(client) -> None:
@@ -143,28 +97,30 @@ def _refresh_retrain_metrics(client) -> None:
         )
         lora_promoted.set(promoted_count)
 
-        # Latest run for delta
-        latest = sorted(all_runs, key=lambda r: r.info.start_time, reverse=True)[0]
-        delta  = latest.data.metrics.get("delta_hit5")
-        bline  = latest.data.params.get("baseline_hit5")
+        # Latest completed run for judge metrics
+        finished = [r for r in all_runs if r.info.status == "FINISHED"]
+        if not finished:
+            print(f"[exporter] Retrain — runs={len(all_runs)} promoted={promoted_count} (no finished runs yet)")
+            return
 
-        if delta is not None:
-            lora_delta_hit5.set(round(float(delta), 4))
-        if bline is not None:
-            baseline_hit5.set(round(float(bline), 4))
-
-        new_h5 = latest.data.metrics.get("new_hit5")
-        new_a5 = latest.data.metrics.get("new_acs5")
-        if new_h5 is not None:
-            lora_new_hit5.set(round(float(new_h5), 4))
-        if new_a5 is not None:
-            lora_new_acs5.set(round(float(new_a5), 4))
-
+        latest  = sorted(finished, key=lambda r: r.info.start_time, reverse=True)[0]
         outcome = latest.data.params.get("outcome", "unknown")
+
+        j_old = latest.data.metrics.get("judge_old_avg")
+        j_new = latest.data.metrics.get("judge_new_avg")
+        j_d   = latest.data.metrics.get("judge_delta")
+
+        if j_old is not None:
+            judge_old_avg.set(round(float(j_old), 4))
+        if j_new is not None:
+            judge_new_avg.set(round(float(j_new), 4))
+        if j_d is not None:
+            judge_delta.set(round(float(j_d), 4))
+
         print(
             f"[exporter] Retrain — runs={len(all_runs)} promoted={promoted_count} "
-            f"latest_outcome={outcome} delta_hit5={delta} "
-            f"new_hit5={new_h5} new_acs5={new_a5}"
+            f"latest_outcome={outcome} "
+            f"judge_old={j_old} judge_new={j_new} judge_delta={j_d}"
         )
 
     except Exception as e:
@@ -295,7 +251,6 @@ def _refresh_gemini_metrics() -> None:
 def refresh() -> None:
     try:
         client = _get_mlflow_client()
-        _refresh_recall_metrics(client)
         _refresh_retrain_metrics(client)
         _refresh_live_training_metrics(client)
     except Exception as e:
