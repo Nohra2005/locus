@@ -36,8 +36,8 @@ QDRANT_PORT          = int(os.getenv("QDRANT_PORT", 6333))
 FEEDBACK_COL         = "locus_feedback"
 MLFLOW_URI           = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 GATEWAY_URL          = os.getenv("GATEWAY_URL", "http://localhost:8000")
+OPENROUTER_API_KEY   = os.getenv("OPENROUTER_API_KEY", "")
 EXPERIMENT_NAME      = "locus_lora_retraining"
-BASELINE_EXPERIMENT  = "locus_search_accuracy"
 
 # Trigger thresholds
 MIN_FEEDBACK_PAIRS   = int(os.getenv("MIN_FEEDBACK_PAIRS", 50))   # lower for dev/demo
@@ -82,29 +82,32 @@ def _count_feedback_pairs() -> int:
         return 0
 
 
-def _get_baseline_hit5() -> float:
+def _cleanup_stale_runs() -> None:
     """
-    Fetch the best hit@5 from MLflow 'locus_search_accuracy' experiment.
-    Returns 0.0 if no baseline exists yet (first run).
+    Mark any RUNNING runs in locus_lora_retraining as KILLED on startup.
+    These are zombies left by previous container crashes or Docker restarts —
+    MLflow never received an end signal when the process died.
     """
-    import mlflow
+    import mlflow, time as _time
     mlflow.set_tracking_uri(MLFLOW_URI)
     try:
-        client   = mlflow.tracking.MlflowClient()
-        exp      = client.get_experiment_by_name(BASELINE_EXPERIMENT)
+        client = mlflow.tracking.MlflowClient()
+        exp = client.get_experiment_by_name(EXPERIMENT_NAME)
         if exp is None:
-            return 0.0
-        runs = client.search_runs(
+            return
+        stale = client.search_runs(
             experiment_ids=[exp.experiment_id],
-            order_by=["metrics.hit_at_5 DESC"],
-            max_results=1,
+            filter_string="attributes.status = 'RUNNING'",
+            max_results=100,
         )
-        if not runs:
-            return 0.0
-        return runs[0].data.metrics.get("hit_at_5", 0.0)
+        if stale:
+            now_ms = int(_time.time() * 1000)
+            for r in stale:
+                client.set_terminated(r.info.run_id, status="KILLED", end_time=now_ms)
+            print(f"[RETRAIN] Cleaned up {len(stale)} stale RUNNING run(s) from previous crash/restart")
     except Exception as e:
-        print(f"[RETRAIN] Could not fetch baseline from MLflow: {e}")
-        return 0.0
+        print(f"[RETRAIN] Could not clean up stale runs: {e}")
+
 
 
 def _check_triggers(force: bool) -> tuple[bool, str]:
@@ -145,6 +148,9 @@ def run_pipeline(force: bool = False) -> dict:
     # Create experiment if it doesn't exist
     mlflow.set_experiment(EXPERIMENT_NAME)
 
+    # Kill any zombie runs left by previous crashes before starting a new one
+    _cleanup_stale_runs()
+
     run_name = f"lora_run_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
     print(f"\n{'='*60}")
     print(f"  Locus LoRA Retraining Pipeline")
@@ -159,17 +165,18 @@ def run_pipeline(force: bool = False) -> dict:
         print("[RETRAIN] Skipping — trigger conditions not met.")
         return {"outcome": "skipped", "reason": reason}
 
-    baseline_hit5 = _get_baseline_hit5()
-    print(f"[RETRAIN] Baseline hit@5: {baseline_hit5:.4f}")
+    if not OPENROUTER_API_KEY:
+        print("[RETRAIN] ERROR: OPENROUTER_API_KEY not set — cannot run judge evaluation.")
+        return {"outcome": "error", "reason": "OPENROUTER_API_KEY missing"}
 
     with mlflow.start_run(run_name=run_name) as run:
         mlflow_run_id = run.info.run_id
-        mlflow.log_param("trigger_reason",   reason)
-        mlflow.log_param("baseline_hit5",    baseline_hit5)
-        mlflow.log_param("lora_r",           4)
+        mlflow.log_param("trigger_reason",  reason)
+        mlflow.log_param("lora_r",          4)
         mlflow.log_param("lora_alpha",       8)
         mlflow.log_param("learning_rate",    1e-4)
         mlflow.log_param("model_name",       "patrickjohncyh/fashion-clip")
+        mlflow.log_param("eval_method",      "judge_avg_20q_top5")
         # Logged so the metrics_exporter can show a progress bar in Grafana
         mlflow.log_param("max_train_steps",  int(os.getenv("MAX_TRAIN_STEPS", 300)))
 
@@ -192,24 +199,25 @@ def run_pipeline(force: bool = False) -> dict:
             mlflow_run_id  = mlflow_run_id,
         )
 
-        # ── Step 4: Evaluate ──────────────────────────────────────────────
-        print("\n[RETRAIN] Step 4/5: Evaluating new adapter on golden dataset...")
-        from promote_model import evaluate_adapter
-        new_hit5, new_acs5 = evaluate_adapter(
-            adapter_dir             = adapter_path,
-            visual_projection_path  = str(run_dir / "visual_projection.pt"),
+        # ── Step 4: Evaluate via judge benchmark ──────────────────────────
+        print("\n[RETRAIN] Step 4/5: Judge benchmark — old vs new model (20 queries × top-5)...")
+        from promote_model import evaluate_with_judge, PROMOTION_DELTA
+        old_avg, new_avg = evaluate_with_judge(
+            new_adapter_dir            = adapter_path,
+            new_visual_projection_path = str(run_dir / "visual_projection.pt"),
+            api_key                    = OPENROUTER_API_KEY,
         )
-        print(f"[RETRAIN] New model  — hit@5={new_hit5:.4f}, ACS@5={new_acs5:.4f}")
-        print(f"[RETRAIN] Baseline   — hit@5={baseline_hit5:.4f}")
+        delta = new_avg - old_avg
+        print(f"[RETRAIN] OLD avg={old_avg:.4f}  NEW avg={new_avg:.4f}  delta={delta:+.4f}")
+        print(f"[RETRAIN] Promotion threshold: new_avg > old_avg + {PROMOTION_DELTA}")
 
-        mlflow.log_metric("new_hit5",  new_hit5)
-        mlflow.log_metric("new_acs5",  new_acs5)
-        mlflow.log_metric("delta_hit5", new_hit5 - baseline_hit5)
+        mlflow.log_metric("judge_old_avg", old_avg)
+        mlflow.log_metric("judge_new_avg", new_avg)
+        mlflow.log_metric("judge_delta",   delta)
 
         # ── Step 5: Promote or rollback ───────────────────────────────────
         print("\n[RETRAIN] Step 5/5: Promote / rollback decision...")
-        PROMOTION_TOLERANCE = 0.02
-        promoted = new_hit5 >= (baseline_hit5 - PROMOTION_TOLERANCE)
+        promoted = new_avg > old_avg + PROMOTION_DELTA
 
         if promoted:
             from promote_model import promote_adapter
@@ -220,22 +228,20 @@ def run_pipeline(force: bool = False) -> dict:
             )
             mlflow.log_param("outcome", "promoted")
             mlflow.set_tag("promoted", "true")
-            print(f"\n✅ PROMOTED — new adapter deployed to visual engine")
+            print(f"\n✅ PROMOTED — new adapter deployed (delta={delta:+.4f})")
         else:
             mlflow.log_param("outcome", "rejected")
             mlflow.set_tag("promoted", "false")
-            print(f"\n❌ REJECTED — new hit@5={new_hit5:.4f} is below "
-                  f"threshold {baseline_hit5 - PROMOTION_TOLERANCE:.4f}")
+            print(f"\n❌ REJECTED — delta={delta:+.4f} does not exceed threshold +{PROMOTION_DELTA}")
             print(f"   Keeping current model. Adapter saved for inspection at: {adapter_path}")
 
         result = {
-            "outcome":        "promoted" if promoted else "rejected",
-            "new_hit5":       new_hit5,
-            "new_acs5":       new_acs5,
-            "baseline_hit5":  baseline_hit5,
-            "delta_hit5":     new_hit5 - baseline_hit5,
-            "mlflow_run_id":  mlflow_run_id,
-            "adapter_path":   adapter_path,
+            "outcome":       "promoted" if promoted else "rejected",
+            "judge_old_avg": old_avg,
+            "judge_new_avg": new_avg,
+            "judge_delta":   delta,
+            "mlflow_run_id": mlflow_run_id,
+            "adapter_path":  adapter_path,
         }
 
     print(f"\n{'='*60}")

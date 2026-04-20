@@ -7,6 +7,7 @@ import os
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from PIL import Image, ImageDraw
 from pydantic import BaseModel
+
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Histogram
 from vectorizer import LocusVisualizer
@@ -80,6 +81,20 @@ async def vectorize(
         "category_confidence": confidence,
         "debug_image":         debug_img,
     }
+
+
+class TextQuery(BaseModel):
+    text: str
+
+
+@app.post("/vectorize-text")
+async def vectorize_text(body: TextQuery):
+    """Encode a text string with CLIP's text encoder. Used by /refine in the gateway."""
+    if not body.text or not body.text.strip():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="text cannot be empty")
+    embedding = await asyncio.to_thread(visualizer.encode_text, body.text.strip())
+    return {"embedding": embedding}
 
 
 # ── Index path ─────────────────────────────────────────────────────────────────

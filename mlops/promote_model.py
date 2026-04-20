@@ -1,12 +1,11 @@
 """
 promote_model.py — Evaluate a new LoRA adapter and promote/rollback.
 
-Evaluation runs entirely offline (no running service needed):
-  1. Load CLIPModel + new LoRA adapter in this process
-  2. Re-embed golden dataset query images with the new model
-  3. Search Qdrant directly with the new embeddings
-  4. Compute hit@5 and ACS@5 against golden dataset ground truth
-  5. Compare to MLflow baseline
+Evaluation uses a Gemini judge benchmark instead of hit@5:
+  1. Load old model (currently deployed adapter, or base fashion-clip if none)
+  2. Load new model (new LoRA adapter being evaluated)
+  3. Run both over 20 balanced golden queries → search Qdrant → judge top-5 results
+  4. Promote if new_avg_score > old_avg_score + 0.02
 
 Promotion:
   - Copies adapter to visual_engine/models/lora_adapter/
@@ -20,9 +19,12 @@ import base64
 import io
 import json
 import os
+import re
 import shutil
+import threading
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
@@ -39,6 +41,7 @@ COLLECTION_NAME      = "locus_items"
 MLFLOW_URI           = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 GATEWAY_URL          = os.getenv("GATEWAY_URL",   "http://localhost:8000")
 VISUAL_ENGINE_URL    = os.getenv("VISUAL_HOST",   "http://localhost:8001")
+OPENROUTER_API_KEY   = os.getenv("OPENROUTER_API_KEY", "")
 
 SCRIPT_DIR           = Path(__file__).parent
 GOLDEN_DATASET_PATH  = SCRIPT_DIR / "golden_dataset.json"
@@ -46,13 +49,50 @@ VISUAL_ENGINE_MODELS = Path(os.getenv(
     "VISUAL_ENGINE_MODELS",
     SCRIPT_DIR.parent / "visual_engine" / "models"
 ))
-# Path to the models dir as seen by the visual_engine container (different mount point)
 VISUAL_ENGINE_MODELS_INTERNAL = os.getenv(
     "VISUAL_ENGINE_MODELS_INTERNAL",
-    str(VISUAL_ENGINE_MODELS),  # fallback: same path (e.g. running locally)
+    str(VISUAL_ENGINE_MODELS),
 )
 MODEL_NAME           = "patrickjohncyh/fashion-clip"
-TOP_K                = 5
+EVAL_TOP_K           = 5
+PROMOTION_DELTA      = 0.02   # new_avg must exceed old_avg by this margin
+
+# ── 20 balanced evaluation queries (2 per major category, 1 for smaller ones) ─
+EVAL_QUERY_NAMES = [
+    # dress (2)
+    "white floral wrap midi dress",
+    "black satin slip midi dress",
+    # top (2)
+    "white ribbed halter neck crop top",
+    "black off shoulder ruched top",
+    # shoes (2)
+    "white leather chunky sneakers",
+    "tan suede ankle boots",
+    # pants (2)
+    "blue high waisted straight leg jeans",
+    "Beige Linen Wide leg trousers",
+    # jacket (2)
+    "camel longline wool coat",
+    "brown leather biker jacket",
+    # sweater (2)
+    "cream chunky knit oversized sweater",
+    "grey zip up sweater",
+    # bag (2)
+    "black shoulder bag",
+    "tan leather tote bag",
+    # skirt (1)
+    "Black satin midi bias skirt",
+    # hat (1)
+    "beige wide brim straw hat",
+    # leggings (1)
+    "blue high waisted seamless leggings",
+    # jumpsuit (1)
+    "black wide leg sleeveless jumpsuit",
+    # top extra
+    "white oversized shirt",
+    # skirt second entry
+    "brown mini skirt",
+]
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -74,13 +114,8 @@ def _fetch_image_bytes(url: str) -> bytes:
         return resp.read()
 
 
-def _embed_with_adapter(
-    model,
-    processor,
-    pil_image,
-) -> list[float]:
-    """Embed a single PIL image using the given model. Returns a list of floats."""
-    from PIL import Image
+def _embed_with_model(model, processor, pil_image) -> list[float]:
+    """Embed a single PIL image. Returns L2-normalised 512-dim list."""
     inputs = processor(images=pil_image, return_tensors="pt")
     with torch.no_grad():
         vision_out     = model.vision_model(**inputs)
@@ -89,109 +124,298 @@ def _embed_with_adapter(
     return image_features[0].tolist()
 
 
-def evaluate_adapter(
-    adapter_dir:            str,
-    visual_projection_path: Optional[str] = None,
-) -> tuple[float, float]:
-    """
-    Evaluate a LoRA adapter on the golden dataset.
+# ── Judge (self-contained, no import from gateway) ───────────────────────────
 
-    Loads the adapter into a fresh CLIPModel (does not touch the running
-    visual_engine), re-embeds all golden dataset queries, searches Qdrant,
-    and returns (hit@5, acs@5).
-    """
-    from peft import PeftModel
-    from transformers import CLIPModel, CLIPProcessor
-    from PIL import Image
+_JUDGE_PROMPT = (
+    "You are a fashion visual similarity expert.\n"
+    "You will be shown two clothing images: first the QUERY image, then a RESULT image.\n"
+    "Rate how visually similar the result is to the query on a continuous scale from 0.00 to 1.00.\n"
+    "Use the full range — do not snap to round values. Fine distinctions matter.\n"
+    "Reference points (interpolate freely between them):\n"
+    "  1.00 = identical item (same product, same photo)\n"
+    "  0.92 = near-identical: same garment type, same colour family, same silhouette and fit — only model pose, lighting, or minor brand details differ\n"
+    "  0.80 = very similar: same garment type and colour family, slightly different cut detail or wash\n"
+    "  0.65 = clearly similar: same category and colour family but noticeably different cut or silhouette\n"
+    "  0.50 = partially similar: same broad category but different colour OR clearly different cut\n"
+    "  0.30 = same category only, clearly different style or design\n"
+    "  0.10 = loosely related (e.g. both outerwear but very different garments)\n"
+    "  0.00 = completely unrelated\n"
+    "Important: when both images show the same garment type, same colour family, and same fit/silhouette, score at least 0.88 even if the model, background, or exact shade differs slightly.\n"
+    "For patterned garments (floral, striped, printed): if both items share the same base colour AND the same pattern type, treat pattern variation as a minor difference only.\n"
+    "Consider all visual attributes: category, colour, fabric texture, silhouette, length, fit, and detailing.\n"
+    "Respond with ONLY the numeric score. No explanation."
+)
 
-    print(f"[PROMOTE] Loading model with adapter from: {adapter_dir}")
-    model     = CLIPModel.from_pretrained(MODEL_NAME)
-    processor = CLIPProcessor.from_pretrained(MODEL_NAME)
+_OPENROUTER_MODEL   = "google/gemini-2.0-flash-001"
+_OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-    # Apply LoRA adapter
-    model.vision_model = PeftModel.from_pretrained(model.vision_model, adapter_dir)
+_rate_lock  = threading.Lock()
+_rate_state: dict = {"last_call": 0.0, "backoff_until": 0.0, "min_gap": 2.0}
 
-    # Load visual_projection if separately saved
-    if visual_projection_path and Path(visual_projection_path).exists():
-        proj_state = torch.load(visual_projection_path, map_location="cpu")
-        model.visual_projection.load_state_dict(proj_state)
 
-    model.eval()
+def _acquire_slot() -> bool:
+    with _rate_lock:
+        now = time.monotonic()
+        if now < _rate_state["backoff_until"]:
+            return False
+        wait = _rate_state["last_call"] + _rate_state["min_gap"] - now
+        if wait > 0:
+            time.sleep(wait)
+        _rate_state["last_call"] = time.monotonic()
+        return True
 
-    # Load golden dataset
+
+def _judge_pair(query_b64: str, result_url: str, api_key: str) -> float | None:
+    """Score one (query, result) pair via Gemini. Returns 0.0–1.0 or None on failure."""
+    import httpx
+
+    result_bytes = None
+    try:
+        with httpx.Client(timeout=15.0) as c:
+            r = c.get(result_url)
+            r.raise_for_status()
+            result_bytes = r.content
+    except Exception as e:
+        print(f"  [JUDGE] Could not fetch result image {result_url[:60]}: {e}")
+        return None
+
+    result_b64 = base64.b64encode(result_bytes).decode("utf-8")
+
+    payload = {
+        "model": _OPENROUTER_MODEL,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": _JUDGE_PROMPT},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{query_b64}"}},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{result_b64}"}},
+            ],
+        }],
+        "max_tokens": 50,
+        "temperature": 0.0,
+    }
+
+    for attempt in range(3):
+        if not _acquire_slot():
+            return None
+        try:
+            import httpx as _httpx
+            with _httpx.Client(timeout=60.0) as c:
+                resp = c.post(
+                    _OPENROUTER_API_URL,
+                    json=payload,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+            if resp.status_code == 429:
+                try:
+                    wait = float(resp.headers.get("retry-after", 60))
+                except (TypeError, ValueError):
+                    wait = 60.0
+                with _rate_lock:
+                    _rate_state["backoff_until"] = time.monotonic() + wait
+                return None
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"].strip()
+            match = re.search(r"\d+\.\d+|\d+", content)
+            if match is None:
+                return None
+            return float(match.group())
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(min(5.0 * (2 ** attempt), 30.0))
+                continue
+            print(f"  [JUDGE] Error after 3 attempts: {e}")
+            return None
+    return None
+
+
+# ── Evaluation helpers ────────────────────────────────────────────────────────
+
+def _load_eval_queries() -> list[dict]:
+    """Return the 20 selected balanced queries from the golden dataset."""
     with open(GOLDEN_DATASET_PATH) as f:
         golden = json.load(f)
-    print(f"[PROMOTE] Evaluating on {len(golden)} golden queries...")
 
-    qdrant_client = _get_qdrant_client()
+    name_to_entry = {e.get("query_name", ""): e for e in golden}
+    selected = []
+    missing  = []
+    for name in EVAL_QUERY_NAMES:
+        if name in name_to_entry:
+            selected.append(name_to_entry[name])
+        else:
+            missing.append(name)
 
-    hits      = []
-    acs_scores = []
+    if missing:
+        print(f"[EVAL] WARNING: {len(missing)} eval query name(s) not found in golden dataset: {missing}")
 
-    for entry in golden:
-        query_url     = entry.get("query_image_url", "")
-        relevant_ids  = set(entry.get("relevant_product_ids", []))
-        category_tag  = entry.get("query_category_tag", "")
+    print(f"[EVAL] Loaded {len(selected)} evaluation queries across "
+          f"{len(set(e.get('query_category_tag') for e in selected))} categories")
+    return selected
 
-        if not query_url or not relevant_ids:
-            continue
 
-        # Rewrite localhost URLs to the Docker service hostname so the mlops
-        # container can reach the gateway (localhost doesn't resolve inside Docker).
+def _run_judge_eval(
+    model,
+    processor,
+    queries: list[dict],
+    api_key: str,
+    top_k: int = EVAL_TOP_K,
+) -> float:
+    """
+    Embed each query with `model`, search Qdrant, judge top-k results.
+    Returns the mean judge score across all (query, result) pairs.
+    """
+    from PIL import Image
+    from qdrant_client.http import models as qmodels
+
+    qdrant = _get_qdrant_client()
+    all_scores: list[float] = []
+
+    for entry in queries:
+        query_name = entry.get("query_name", "?")
+        query_url  = entry.get("query_image_url", "")
+        category   = entry.get("query_category_tag", "")
+
         if query_url.startswith("http://localhost:"):
             query_url = query_url.replace("http://localhost:8000", GATEWAY_URL.rstrip("/"), 1)
 
-        # Embed query with new adapter
         try:
             img_bytes = _fetch_image_bytes(query_url)
             pil_img   = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-            vector    = _embed_with_adapter(model, processor, pil_img)
+            vector    = _embed_with_model(model, processor, pil_img)
+            query_b64 = base64.b64encode(img_bytes).decode("utf-8")
         except Exception as e:
-            print(f"  [SKIP] Could not embed query {query_url[:50]}: {e}")
+            print(f"  [EVAL] Skip '{query_name}': could not embed — {e}")
             continue
 
-        # Search Qdrant
-        from qdrant_client.http import models as qmodels
         query_filter = None
-        if category_tag:
+        if category:
             query_filter = qmodels.Filter(must=[
                 qmodels.FieldCondition(
                     key="category_tag",
-                    match=qmodels.MatchValue(value=category_tag)
+                    match=qmodels.MatchValue(value=category),
                 )
             ])
 
         try:
-            search_result = qdrant_client.query_points(
+            result = qdrant.query_points(
                 collection_name=COLLECTION_NAME,
                 query=vector,
                 query_filter=query_filter,
-                limit=TOP_K,
+                limit=top_k,
                 with_vectors=False,
+                search_params=qmodels.SearchParams(hnsw_ef=256),
             )
-            results = search_result.points
+            hits = result.points
         except Exception as e:
-            print(f"  [SKIP] Qdrant search failed: {e}")
+            print(f"  [EVAL] Skip '{query_name}': Qdrant error — {e}")
             continue
 
-        # hit@5
-        result_ids = [r.payload.get("product_id", str(r.id)) for r in results]
-        hit = int(any(pid in relevant_ids for pid in result_ids))
-        hits.append(hit)
+        result_urls = [
+            h.payload.get("image_url", "") for h in hits
+            if h.payload.get("image_url")
+        ]
 
-        # ACS@5 — average cosine similarity of top-5 (Qdrant scores are already cosine)
-        if results:
-            avg_score = sum(r.score for r in results) / len(results)
-            acs_scores.append(avg_score)
+        if not result_urls:
+            print(f"  [EVAL] Skip '{query_name}': no result image URLs")
+            continue
 
-        time.sleep(0.05)  # avoid overwhelming Qdrant
+        query_scores: list[float] = []
 
-    hit5 = sum(hits) / len(hits) if hits else 0.0
-    acs5 = sum(acs_scores) / len(acs_scores) if acs_scores else 0.0
+        def _judge_one(url):
+            return _judge_pair(query_b64, url, api_key)
 
-    print(f"[PROMOTE] Evaluation results: hit@5={hit5:.4f}, ACS@5={acs5:.4f} "
-          f"(n={len(hits)} queries)")
-    return hit5, acs5
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            futures = {pool.submit(_judge_one, url): url for url in result_urls}
+            for fut in as_completed(futures):
+                score = fut.result()
+                if score is not None:
+                    query_scores.append(score)
+
+        if query_scores:
+            avg = sum(query_scores) / len(query_scores)
+            print(f"  [EVAL] '{query_name}' ({category}): {len(query_scores)} scores, avg={avg:.3f}")
+            all_scores.extend(query_scores)
+        else:
+            print(f"  [EVAL] '{query_name}': all judge calls failed — skipped")
+
+        time.sleep(0.1)
+
+    if not all_scores:
+        print("[EVAL] WARNING: no scores collected — returning 0.0")
+        return 0.0
+
+    overall = sum(all_scores) / len(all_scores)
+    print(f"[EVAL] Overall: {len(all_scores)} judge scores from {len(queries)} queries, avg={overall:.4f}")
+    return overall
+
+
+def _load_model(adapter_dir: Optional[str] = None, visual_projection_path: Optional[str] = None):
+    """Load fashion-clip, optionally applying a LoRA adapter."""
+    from transformers import CLIPModel, CLIPProcessor
+
+    model     = CLIPModel.from_pretrained(MODEL_NAME)
+    processor = CLIPProcessor.from_pretrained(MODEL_NAME)
+
+    if adapter_dir and Path(adapter_dir).exists():
+        from peft import PeftModel
+        print(f"[EVAL] Applying LoRA adapter from {adapter_dir}")
+        model.vision_model = PeftModel.from_pretrained(model.vision_model, adapter_dir)
+        if visual_projection_path and Path(visual_projection_path).exists():
+            proj_state = torch.load(visual_projection_path, map_location="cpu")
+            model.visual_projection.load_state_dict(proj_state)
+    else:
+        print("[EVAL] No adapter — using base fashion-clip")
+
+    model.eval()
+    return model, processor
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def evaluate_with_judge(
+    new_adapter_dir:            str,
+    new_visual_projection_path: Optional[str] = None,
+    api_key:                    str = "",
+    top_k:                      int = EVAL_TOP_K,
+) -> tuple[float, float]:
+    """
+    Benchmark old model vs new LoRA adapter on 20 balanced golden queries.
+
+    Old model = currently deployed adapter in visual_engine/models/lora_adapter/
+                (falls back to base fashion-clip if no adapter is deployed).
+    New model = the adapter passed via new_adapter_dir.
+
+    Returns (old_avg_score, new_avg_score).
+    Caller should promote if new_avg_score > old_avg_score + PROMOTION_DELTA.
+    """
+    if not api_key:
+        raise ValueError("OPENROUTER_API_KEY is required for judge evaluation")
+
+    queries = _load_eval_queries()
+
+    # ── Old model ─────────────────────────────────────────────────────────────
+    deployed_adapter = VISUAL_ENGINE_MODELS / "lora_adapter"
+    deployed_proj    = VISUAL_ENGINE_MODELS / "visual_projection.pt"
+
+    print("\n[EVAL] === Evaluating OLD model ===")
+    old_model, old_processor = _load_model(
+        adapter_dir            = str(deployed_adapter) if deployed_adapter.exists() else None,
+        visual_projection_path = str(deployed_proj)    if deployed_proj.exists()    else None,
+    )
+    old_avg = _run_judge_eval(old_model, old_processor, queries, api_key, top_k)
+    del old_model  # free memory before loading new model
+
+    # ── New model ─────────────────────────────────────────────────────────────
+    print("\n[EVAL] === Evaluating NEW model ===")
+    new_model, new_processor = _load_model(
+        adapter_dir            = new_adapter_dir,
+        visual_projection_path = new_visual_projection_path,
+    )
+    new_avg = _run_judge_eval(new_model, new_processor, queries, api_key, top_k)
+    del new_model
+
+    print(f"\n[EVAL] OLD avg={old_avg:.4f}  NEW avg={new_avg:.4f}  delta={new_avg - old_avg:+.4f}")
+    return old_avg, new_avg
 
 
 def promote_adapter(
@@ -199,14 +423,11 @@ def promote_adapter(
     visual_projection_path: Optional[str],
     mlflow_run_id:          str,
 ) -> None:
-    """
-    Copy adapter to visual_engine/models/, trigger hot reload and re-indexing.
-    """
+    """Copy adapter to visual_engine/models/, trigger hot reload and re-indexing."""
     VISUAL_ENGINE_MODELS.mkdir(parents=True, exist_ok=True)
     dest_adapter = VISUAL_ENGINE_MODELS / "lora_adapter"
     dest_proj    = VISUAL_ENGINE_MODELS / "visual_projection.pt"
 
-    # Back up existing adapter if present
     if dest_adapter.exists():
         backup = VISUAL_ENGINE_MODELS / "lora_adapter_prev"
         if backup.exists():
@@ -214,20 +435,16 @@ def promote_adapter(
         shutil.copytree(dest_adapter, backup)
         print(f"[PROMOTE] Backed up previous adapter to {backup}")
 
-    # Copy new adapter
     if dest_adapter.exists():
         shutil.rmtree(dest_adapter)
     shutil.copytree(adapter_dir, dest_adapter)
     print(f"[PROMOTE] Copied adapter to {dest_adapter}")
 
-    # Copy visual_projection weights
     if visual_projection_path and Path(visual_projection_path).exists():
         shutil.copy2(visual_projection_path, dest_proj)
         print(f"[PROMOTE] Copied visual_projection to {dest_proj}")
 
-    # ── Hot reload visual engine ───────────────────────────────────────────
     print("[PROMOTE] Requesting visual engine adapter reload...")
-    # Translate paths from the mlops container's perspective to the visual_engine's perspective
     internal_adapter = Path(VISUAL_ENGINE_MODELS_INTERNAL) / "lora_adapter"
     internal_proj    = Path(VISUAL_ENGINE_MODELS_INTERNAL) / "visual_projection.pt"
     try:
@@ -245,29 +462,20 @@ def promote_adapter(
         print(f"[PROMOTE] WARNING: Could not hot-reload visual engine: {e}")
         print("          Restart visual_engine container to apply new adapter.")
 
-    # ── Trigger catalog re-indexing ───────────────────────────────────────
-    # All existing product vectors are now stale (different embedding space).
-    # The gateway's /reindex endpoint re-embeds all locus_items.
-    print("[PROMOTE] Triggering catalog re-indexing (this may take several minutes)...")
+    print("[PROMOTE] Triggering catalog re-indexing...")
     try:
-        resp = requests.post(
-            f"{GATEWAY_URL}/reindex",
-            timeout=10,  # fire-and-forget: re-indexing runs async in gateway
-        )
+        resp = requests.post(f"{GATEWAY_URL}/reindex", timeout=10)
         resp.raise_for_status()
         print(f"[PROMOTE] Re-indexing started: {resp.json()}")
     except Exception as e:
         print(f"[PROMOTE] WARNING: Could not trigger re-indexing: {e}")
         print("          Run POST /reindex manually to update catalog vectors.")
 
-    # ── Register in MLflow Model Registry ────────────────────────────────
     mlflow.set_tracking_uri(MLFLOW_URI)
     try:
-        client = mlflow.tracking.MlflowClient()
+        client    = mlflow.tracking.MlflowClient()
         model_uri = f"runs:/{mlflow_run_id}/lora_adapter"
-        # Log adapter as MLflow artifact
         mlflow.log_artifacts(str(dest_adapter), artifact_path="lora_adapter")
-        # Register
         mv = mlflow.register_model(model_uri=model_uri, name="locus_lora_adapter")
         client.set_registered_model_alias(
             name    = "locus_lora_adapter",

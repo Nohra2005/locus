@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import hashlib
 import io
 import json as _json
@@ -39,6 +40,39 @@ def _cleanup_judge_scores() -> None:
     for sid in stale:
         _judge_scores.pop(sid, None)
         _judge_timestamps.pop(sid, None)
+
+
+# ── Per-search attribute cache ────────────────────────────────────────────────
+# search_id → attribute dict (None while Gemini call is in-flight)
+# search_id → original matches list (stored immediately for /refine "visual" mode)
+_attribute_cache:   dict[str, dict | None] = {}
+_original_results:  dict[str, list]        = {}
+_attr_timestamps:   dict[str, float]       = {}
+_ATTR_TTL = 600  # 10 minutes
+
+
+def _cleanup_attribute_cache() -> None:
+    cutoff = _time_module.monotonic() - _ATTR_TTL
+    stale  = [sid for sid, ts in _attr_timestamps.items() if ts < cutoff]
+    for sid in stale:
+        _attribute_cache.pop(sid, None)
+        _original_results.pop(sid, None)
+        _attr_timestamps.pop(sid, None)
+
+
+async def _run_tagger(search_id: str, image_b64: str, category: str) -> None:
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as _tc:
+            resp = await _tc.post(
+                f"{TAGGER_HOST}/tag",
+                json={"image_b64": image_b64, "category": category},
+            )
+        _attribute_cache[search_id] = resp.json() if resp.status_code == 200 else {}
+    except Exception as _te:
+        print(f"[TAGGER] Failed for search_id={search_id}: {_te.__class__.__name__}: {_te}")
+        _attribute_cache[search_id] = {}
+    finally:
+        _attr_timestamps[search_id] = _time_module.monotonic()
 
 app = FastAPI()
 Instrumentator().instrument(app).expose(app)
@@ -84,10 +118,10 @@ app.add_middleware(
 )
 
 VISUAL_URL          = os.getenv("VISUAL_HOST",    "http://visual_engine:8001")
+TAGGER_HOST         = os.getenv("TAGGER_HOST",    "")
 QDRANT_URL          = os.getenv("QDRANT_URL")
 QDRANT_API_KEY      = os.getenv("QDRANT_API_KEY")
-GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")
-GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")
+OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
 GATEWAY_BASE_URL    = os.getenv("GATEWAY_BASE_URL", "http://localhost:8000")
 QDRANT_HOST         = os.getenv("QDRANT_HOST",    "qdrant")
 QDRANT_PORT         = int(os.getenv("QDRANT_PORT", 6333))
@@ -799,6 +833,7 @@ async def search_items(
                 query_vector=vector,
                 query_filter=query_filter,
                 limit=100,
+                search_params=models.SearchParams(hnsw_ef=256),
             )
             break
         except Exception as _e:
@@ -817,6 +852,7 @@ async def search_items(
             query_vector=vector,
             query_filter=fallback_filter,
             limit=100,
+            search_params=models.SearchParams(hnsw_ef=256),
         )
 
     best_per_product = {}
@@ -834,12 +870,22 @@ async def search_items(
                 "product_id": product_id,
             }
 
-    matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:25]
+    matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:15]
 
-    search_id    = str(uuid.uuid4())[:12]
+    search_id = str(uuid.uuid4())[:12]
+
+    # ── Attribute tagger: extract visual attributes in background ─────────────
+    _cleanup_attribute_cache()
+    _original_results[search_id]  = matches
+    _attribute_cache[search_id]   = None  # pending
+    _attr_timestamps[search_id]   = _time_module.monotonic()
+    if TAGGER_HOST and detected_category and matches:
+        crop_b64 = base64.b64encode(crop_bytes).decode("utf-8")
+        background_tasks.add_task(_run_tagger, search_id, crop_b64, detected_category)
+
     scores_dict  = {}
 
-    if (GROQ_API_KEY or GEMINI_API_KEY) and not skip_judge and not include_golden:
+    if OPENROUTER_API_KEY and not skip_judge and not include_golden:
         _cleanup_judge_scores()
         _judge_scores[search_id]     = scores_dict
         _judge_timestamps[search_id] = _time_module.monotonic()
@@ -848,9 +894,8 @@ async def search_items(
             crop_bytes,
             matches,
             GATEWAY_BASE_URL,
-            GROQ_API_KEY,
+            OPENROUTER_API_KEY,
             scores_dict,
-            GEMINI_API_KEY,
         )
 
     return {
@@ -873,6 +918,117 @@ async def get_judge_scores(search_id: str):
     Frontend polls this every 3s after receiving search results.
     """
     return _judge_scores.get(search_id, {})
+
+
+# ── Attribute polling ──────────────────────────────────────────────────────────
+
+@app.get("/search/{search_id}/attributes")
+async def get_attributes(search_id: str):
+    """
+    Returns the visual attributes extracted by the attribute_tagger for a search.
+    Frontend polls after receiving search results. Responds with status=pending
+    while Gemini is still running, status=ready once attributes arrive.
+    """
+    if search_id not in _attribute_cache:
+        return {"status": "not_found"}
+    attrs = _attribute_cache[search_id]
+    if attrs is None:
+        return {"status": "pending"}
+    return {"status": "ready", "attributes": attrs}
+
+
+# ── Result refinement ──────────────────────────────────────────────────────────
+
+class RefineRequest(BaseModel):
+    search_id: str
+    mode: str        # "style" | "color" | "visual"
+    attributes: dict
+    category: str
+
+
+@app.post("/refine")
+async def refine_results(body: RefineRequest):
+    """
+    Re-queries Qdrant using a CLIP text embedding derived from detected attributes.
+
+    mode="visual"  → returns the original CLIP-ranked results (no re-query)
+    mode="style"   → text = "{style} {silhouette} {category}" → text-guided Qdrant search
+    mode="color"   → text = "{primary_color} {category} clothing" → text-guided Qdrant search
+    """
+    if body.mode == "visual":
+        return {"results": _original_results.get(body.search_id, []), "mode": "visual"}
+
+    if body.mode == "style":
+        style     = body.attributes.get("style", "")
+        silhouette = body.attributes.get("silhouette", "")
+        text = " ".join(filter(None, [style, silhouette, body.category])).strip()
+    elif body.mode == "color":
+        colors = body.attributes.get("colors", [])
+        primary = colors[0] if colors else ""
+        text = " ".join(filter(None, [primary, body.category, "clothing"])).strip()
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown mode: {body.mode!r}")
+
+    if not text:
+        raise HTTPException(status_code=400, detail="Could not build text query from attributes")
+
+    # Get CLIP text embedding from visual_engine
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as _vc:
+            vec_resp = await _vc.post(
+                f"{VISUAL_URL}/vectorize-text",
+                json={"text": text},
+            )
+        vec_resp.raise_for_status()
+        text_vector = vec_resp.json()["embedding"]
+    except Exception as _ve:
+        raise HTTPException(status_code=502, detail=f"visual_engine /vectorize-text failed: {_ve}")
+
+    # Build category filter (same logic as /search)
+    must_conditions = []
+    if body.category:
+        if body.category in ("dress", "skirt"):
+            must_conditions.append(models.FieldCondition(
+                key="category_tag",
+                match=models.MatchAny(any=["dress", "skirt"]),
+            ))
+        else:
+            must_conditions.append(models.FieldCondition(
+                key="category_tag",
+                match=models.MatchValue(value=body.category),
+            ))
+
+    refine_filter = models.Filter(
+        must=must_conditions or None,
+        must_not=[
+            models.FieldCondition(key="broken",     match=models.MatchValue(value=True)),
+            models.FieldCondition(key="store_name", match=models.MatchValue(value="golden_dataset")),
+        ],
+    )
+
+    raw = client.search(
+        collection_name=COLLECTION_NAME,
+        query_vector=text_vector,
+        query_filter=refine_filter,
+        limit=50,
+    )
+
+    best_per_product: dict = {}
+    for hit in raw:
+        pid = hit.payload.get("product_id") or hit.payload.get("image_url") or str(hit.id)
+        if pid not in best_per_product or hit.score > best_per_product[pid]["score"]:
+            best_per_product[pid] = {
+                "name":       hit.payload.get("name", "Unknown"),
+                "store_name": hit.payload.get("store_name", "Unknown"),
+                "mall_name":  hit.payload.get("mall_name", "Unknown"),
+                "price":      hit.payload.get("price", ""),
+                "score":      round(hit.score, 3),
+                "image_url":  hit.payload.get("image_url", ""),
+                "product_id": pid,
+            }
+
+    results = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:25]
+    return {"results": results, "mode": body.mode, "query_text": text}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2022,13 +2178,31 @@ async def reindex_catalog(background_tasks: BackgroundTasks):
     return {"status": "started", "message": "Re-indexing catalog in background"}
 
 
+_REINDEX_CHECKPOINT = pathlib.Path(__file__).parent / "reindex_checkpoint.json"
+
+
+def _load_checkpoint() -> set:
+    if _REINDEX_CHECKPOINT.exists():
+        try:
+            return set(_json.loads(_REINDEX_CHECKPOINT.read_text()))
+        except Exception:
+            pass
+    return set()
+
+
+def _save_checkpoint(done_ids: set) -> None:
+    _REINDEX_CHECKPOINT.write_text(_json.dumps(list(done_ids)))
+
+
 async def _run_full_reindex():
     global _reindex_running
     _reindex_running = True
-    print("[REINDEX] Starting full catalog re-index...")
-    updated = 0
-    failed  = 0
-    semaphore = asyncio.Semaphore(3)  # limit concurrent visual engine calls
+
+    done_ids  = _load_checkpoint()
+    resumed   = len(done_ids)
+    updated   = 0
+    failed    = 0
+    semaphore = asyncio.Semaphore(15)
 
     # Scroll all products from locus_items
     all_products = []
@@ -2048,7 +2222,8 @@ async def _run_full_reindex():
             break
         offset = next_offset
 
-    print(f"[REINDEX] {len(all_products)} products to re-embed")
+    pending = [pt for pt in all_products if str(pt.id) not in done_ids]
+    print(f"[REINDEX] Starting — {len(all_products)} total, {resumed} already done, {len(pending)} remaining")
 
     async def reembed_one(pt):
         nonlocal updated, failed
@@ -2061,6 +2236,12 @@ async def _run_full_reindex():
             try:
                 async with httpx.AsyncClient() as http:
                     img_resp = await http.get(img_url, timeout=15.0, follow_redirects=True)
+                    if img_resp.status_code == 404:
+                        client.delete(collection_name=COLLECTION_NAME, points_selector=[pt.id])
+                        print(f"[REINDEX] Deleted 404 '{name}' ({img_url[:80]})")
+                        failed += 1
+                        done_ids.add(str(pt.id))
+                        return
                     img_resp.raise_for_status()
                     idx_resp = await http.post(
                         f"{VISUAL_URL}/index-image",
@@ -2072,6 +2253,7 @@ async def _run_full_reindex():
                     idx_data = idx_resp.json()
 
                 if idx_data.get("skipped"):
+                    done_ids.add(str(pt.id))
                     return
 
                 new_payload = dict(p)
@@ -2089,12 +2271,18 @@ async def _run_full_reindex():
                     )]
                 )
                 updated += 1
+                done_ids.add(str(pt.id))
+                done = updated + failed
+                if done % 100 == 0:
+                    _save_checkpoint(done_ids)
+                    print(f"[REINDEX] {done + resumed}/{len(all_products)} processed — updated={updated} failed={failed}")
             except Exception as e:
                 failed += 1
                 print(f"[REINDEX] Failed '{name}': {e}")
 
-    await asyncio.gather(*[reembed_one(pt) for pt in all_products])
+    await asyncio.gather(*[reembed_one(pt) for pt in pending])
     _reindex_running = False
+    _REINDEX_CHECKPOINT.unlink(missing_ok=True)
     print(f"[REINDEX] Done — updated={updated} failed={failed} total={len(all_products)}")
 
 

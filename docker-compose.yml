@@ -26,21 +26,18 @@ services:
     depends_on:
       visual_engine:
         condition: service_started
-      # ranking_engine dependency removed — gateway uses Qdrant directly for search.
-      # Re-enable when ranking_engine is repurposed as a cross-encoder re-ranker (Phase 3).
+      attribute_tagger:
+        condition: service_started
     environment:
       - VISUAL_HOST=http://visual_engine:8001
-      # RANKING_HOST reserved for Phase 3 cross-encoder re-ranking
-      # - RANKING_HOST=http://ranking_engine:8002
+      - TAGGER_HOST=http://attribute_tagger:8004
       # CLOUD mode (active) — requires .env file
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_API_KEY=${QDRANT_API_KEY}
       # LOCAL mode (commented out)
       # - QDRANT_HOST=qdrant
       # - QDRANT_PORT=6333
-      # Dual-provider async judge (Groq + Gemini) — leave either blank to disable that provider
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - GATEWAY_BASE_URL=${GATEWAY_BASE_URL:-http://localhost:8000}
       - GOLDEN_DATASET_PATH=/mlops/golden_dataset.json
     volumes:
@@ -62,19 +59,23 @@ services:
       - ${USERPROFILE}/.cache/clip:/root/.cache/clip
     environment:
       - TRANSFORMERS_CACHE=/root/.cache/huggingface
+      - TRANSFORMERS_OFFLINE=1
+      - HF_DATASETS_OFFLINE=1
     dns:
       - 8.8.8.8
       - 1.1.1.1
 
-  # ── 3. Ranking Engine ─────────────────────────────────────────────
-  # CURRENTLY DISABLED — gateway ranks via Qdrant cosine similarity directly.
-  # Re-enable in Phase 3 when implementing BLIP ensemble cross-encoder re-ranking.
-  # ranking_engine:
-  #   build: ./ranking_engine
-  #   ports:
-  #     - "8002:8002"
-  #   volumes:
-  #     - ./ranking_engine:/app
+  # ── 3. Attribute Tagger ───────────────────────────────────────────────────────
+  # Calls Gemini 2.0 Flash (VLM) via OpenRouter to extract rich visual attributes
+  # from the query crop: colors, style, silhouette, occasion, pattern, material,
+  # trend tags. Runs as a background task — zero latency impact on /search.
+  # Enables /refine: style-guided or color-guided CLIP text re-query.
+  attribute_tagger:
+    build: ./attribute_tagger
+    ports:
+      - "8004:8004"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
 
   # ── 4. Local Qdrant (commented out — using cloud instead) ─────────
   # qdrant:
@@ -162,6 +163,7 @@ services:
       - MAX_TRAIN_STEPS=${MAX_TRAIN_STEPS:-300}
       - LOG_EVERY_STEPS=${LOG_EVERY_STEPS:-20}
       - GIT_PYTHON_REFRESH=quiet
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
     depends_on:
       - gateway
       - mlflow
@@ -169,10 +171,10 @@ services:
 
   # ── 7. MLops Metrics Exporter ────────────────────────────────────
   mlops_exporter:
-    image: python:3.11-slim
+    build:
+      context: .
+      dockerfile: mlops/Dockerfile.exporter
     working_dir: /mlops
-    command: >
-      sh -c "pip install prometheus_client mlflow --quiet && python metrics_exporter.py"
     ports:
       - "8003:8003"
     volumes:

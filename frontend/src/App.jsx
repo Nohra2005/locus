@@ -783,7 +783,7 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "32px 24px", gap: 28, display: isNotFashion ? "none" : "flex" }}>
+      <div style={{ flexDirection: "column", alignItems: "center", padding: "32px 24px", gap: 28, display: isNotFashion ? "none" : "flex" }}>
 
         <div style={{ display: "flex", gap: 20, alignItems: "flex-start", width: "100%", maxWidth: 480 }}>
           {/* Crop thumbnail */}
@@ -1192,9 +1192,92 @@ function ResultCard({ result, category, onFeedback, onCardClick, highlighted, ju
 }
 
 // ══════════════════════════════════════════════════════════════════
+// ATTRIBUTE PANEL
+// ══════════════════════════════════════════════════════════════════
+function AttributePanel({ attributes, refineMode, onRefine }) {
+  const isLoading = attributes === null;
+  const hasAttrs  = attributes && Object.keys(attributes).length > 0;
+
+  const chips = [];
+  if (hasAttrs) {
+    const a = attributes;
+    if (a.colors?.length)       chips.push(...a.colors.slice(0, 2).map(c => ({ label: c, key: "color" })));
+    if (a.style)                chips.push({ label: a.style, key: "style" });
+    if (a.silhouette)           chips.push({ label: a.silhouette, key: "silhouette" });
+    if (a.pattern && a.pattern !== "solid") chips.push({ label: a.pattern, key: "pattern" });
+    if (a.trend_tags?.length)   chips.push(...a.trend_tags.slice(0, 1).map(t => ({ label: t, key: "trend" })));
+  }
+
+  const modes = [
+    { id: "visual", label: "Visual Match" },
+    { id: "style",  label: "Same Style, Any Color" },
+    { id: "color",  label: "Same Color, Any Style" },
+  ];
+
+  return (
+    <div style={{
+      padding: "12px 28px",
+      borderBottom: `1px solid ${T.borderFaint}`,
+      background: T.bgDeep,
+    }}>
+      {isLoading ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{
+            width: 6, height: 6, borderRadius: "50%", background: T.accent,
+            animation: "spin 1.2s linear infinite",
+          }} />
+          <span style={{ fontSize: "0.65rem", color: T.textMuted, letterSpacing: "0.08em" }}>
+            ANALYSING STYLE…
+          </span>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {chips.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {chips.map((c, i) => (
+                <span key={i} style={{
+                  fontSize: "0.62rem", color: T.textMuted,
+                  background: T.surface, border: `1px solid ${T.border}`,
+                  borderRadius: 20, padding: "3px 10px",
+                  letterSpacing: "0.04em", textTransform: "capitalize",
+                }}>
+                  {c.label}
+                </span>
+              ))}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+            {modes.map(m => {
+              const active = refineMode === m.id || (refineMode === null && m.id === "visual");
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => onRefine(m.id)}
+                  style={{
+                    fontSize: "0.65rem", padding: "5px 14px",
+                    borderRadius: 20, cursor: "pointer",
+                    border: `1px solid ${active ? T.accent : T.border}`,
+                    background: active ? T.accentBg : "transparent",
+                    color: active ? T.accent : T.textMuted,
+                    fontFamily: "'DM Sans', sans-serif",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // RESULTS VIEW
 // ══════════════════════════════════════════════════════════════════
-function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, radius, setRadius, userLocation, onFeedback, onReset, saved = [], onToggleSave }) {
+function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, attributes, refineMode, onRefine, onRefineCrop, radius, setRadius, userLocation, onFeedback, onReset, saved = [], onToggleSave }) {
   const [highlightedStore, setHighlightedStore] = useState(null);
   const [activeDetail,     setActiveDetail]     = useState(null);
   const userLL   = userLocation || [33.8869, 35.5131];
@@ -1295,7 +1378,26 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
               <div>{Math.round(categoryInfo.confidence * 100)}% confidence</div>
             )}
           </div>
+          {onRefineCrop && (
+            <button
+              onClick={onRefineCrop}
+              style={{
+                marginLeft: "auto", fontSize: "0.65rem", padding: "5px 12px",
+                border: `1px solid ${T.border}`, borderRadius: 20,
+                background: "transparent", color: T.textMuted,
+                cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                flexShrink: 0,
+              }}
+            >
+              Adjust crop
+            </button>
+          )}
         </div>
+      )}
+
+      {/* ── Attribute panel ── */}
+      {attributes !== undefined && (
+        <AttributePanel attributes={attributes} refineMode={refineMode} onRefine={onRefine} />
       )}
 
       <div style={{ padding: "24px 28px" }}>
@@ -1610,6 +1712,8 @@ export default function App() {
   const [queryImageURL,    setQueryImageURL]    = useState(null);
   const [searchId,         setSearchId]         = useState(null);
   const [judgeScores,      setJudgeScores]      = useState({});   // {product_id: float}
+  const [attributes,       setAttributes]       = useState(null); // null=loading, {}=failed/empty, obj=ready
+  const [refineMode,       setRefineMode]       = useState(null); // "visual"|"style"|"color"|null
   const [radius,           setRadius]           = useState(5);
   const [userLocation,     setUserLocation]     = useState(null);
   const [error,            setError]            = useState(null);
@@ -1623,23 +1727,41 @@ export default function App() {
     );
   }, []);
 
-  // Poll for Groq judge scores after results are shown.
-  // Judge runs in background on the server (~2.5s per result, top-5 only).
-  // We poll every 3s, stop when all 5 are scored or after 8 attempts (~24s).
+  // Poll for OpenRouter judge scores after results are shown.
+  // Judge runs in background scoring all 25 results; poll every 4s for up to 5 min.
   useEffect(() => {
     if (view !== "results" || !searchId) return;
     let attempts = 0;
     const interval = setInterval(async () => {
       attempts++;
-      if (attempts > 8) { clearInterval(interval); return; }
+      if (attempts > 75) { clearInterval(interval); return; }
       try {
         const res = await fetch(`${API}/judge-scores/${searchId}`);
         if (!res.ok) return;
         const scores = await res.json();
         if (Object.keys(scores).length > 0) setJudgeScores(scores);
-        if (Object.keys(scores).length >= 3) clearInterval(interval);
+        if (Object.keys(scores).length >= 25) clearInterval(interval);
       } catch { /* non-critical */ }
-    }, 3000);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [view, searchId]);
+
+  // Poll for attribute tagger results after search; populates the attribute panel.
+  useEffect(() => {
+    if (view !== "results" || !searchId) return;
+    setAttributes(null);
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      if (attempts > 30) { clearInterval(interval); setAttributes({}); return; }
+      try {
+        const res = await fetch(`${API}/search/${searchId}/attributes`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === "ready")     { setAttributes(data.attributes || {}); clearInterval(interval); }
+        else if (data.status === "not_found") { setAttributes({}); clearInterval(interval); }
+      } catch { /* non-critical */ }
+    }, 800);
     return () => clearInterval(interval);
   }, [view, searchId]);
 
@@ -1731,6 +1853,8 @@ export default function App() {
       setCategoryInfo({ category: detCat, confidence: confVal });
       setSearchId(data.search_id || null);
       setJudgeScores({});
+      setAttributes(null);
+      setRefineMode(null);
       setView("results");
     } catch (e) {
       setError(`Search failed: ${e.message}`);
@@ -1755,6 +1879,43 @@ export default function App() {
     } catch { /* non-critical */ }
   }, []);
 
+  const handleRefine = useCallback(async (mode) => {
+    console.log("[REFINE] clicked mode=", mode, "searchId=", searchId, "attributes=", attributes);
+    if (!searchId) { console.warn("[REFINE] aborted — searchId is null"); return; }
+    setRefineMode(mode);
+    try {
+      const res = await fetch(`${API}/refine`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          search_id: searchId,
+          mode,
+          attributes: attributes || {},
+          category:   categoryInfo?.category || selectedItem?.search_label || "",
+        }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("[REFINE] HTTP error", res.status, txt);
+        return;
+      }
+      const data = await res.json();
+      console.log("[REFINE] response:", data.mode, "results:", data.results?.length, "query:", data.query_text);
+      const reshaped = (data.results || []).map(m => ({
+        score:   m.score,
+        payload: {
+          store:      m.store      || m.store_name,
+          image_url:  m.image_url  || m.image_filename,
+          item_name:  m.name,
+          product_id: m.product_id,
+          price:      m.price      || "",
+          mall_name:  m.mall_name  || "",
+        },
+      }));
+      setResults(reshaped);
+    } catch (err) { console.error("[REFINE] fetch threw:", err); }
+  }, [searchId, attributes, categoryInfo, selectedItem]);
+
   const handleRestoreHistory = useCallback((entry) => {
     setResults(entry.results);
     setPredictedCategory(entry.category);
@@ -1774,6 +1935,15 @@ export default function App() {
 
   const handleToggleSave = useCallback((result) => {
     setSaved(prev => toggleSavedItem(result, prev));
+  }, []);
+
+  const handleRefineCrop = useCallback(() => {
+    setResults([]);
+    setSearchId(null);
+    setAttributes(null);
+    setRefineMode(null);
+    setJudgeScores({});
+    setView("drawing");
   }, []);
 
   const reset = useCallback(() => {
@@ -1833,11 +2003,15 @@ export default function App() {
               selectedItem={selectedItem}
               queryImageURL={queryImageURL}
               judgeScores={judgeScores}
+              attributes={attributes}
+              refineMode={refineMode}
+              onRefine={handleRefine}
               radius={radius}
               setRadius={setRadius}
               userLocation={userLocation}
               onFeedback={handleFeedback}
               onReset={reset}
+              onRefineCrop={handleRefineCrop}
               saved={saved}
               onToggleSave={handleToggleSave}
             />
