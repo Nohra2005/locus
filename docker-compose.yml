@@ -150,6 +150,7 @@ services:
     volumes:
       - ./mlops:/mlops
       - ./visual_engine:/visual_engine
+      - ${USERPROFILE}/.cache/huggingface:/root/.cache/huggingface
     environment:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_API_KEY=${QDRANT_API_KEY}
@@ -160,14 +161,18 @@ services:
       - VISUAL_ENGINE_MODELS_INTERNAL=/app/models
       - MIN_FEEDBACK_PAIRS=50
       - MIN_ACS_THRESHOLD=0.70
-      - MAX_TRAIN_STEPS=${MAX_TRAIN_STEPS:-300}
+      - MAX_TRAIN_STEPS=${MAX_TRAIN_STEPS:-150}
       - LOG_EVERY_STEPS=${LOG_EVERY_STEPS:-20}
       - GIT_PYTHON_REFRESH=quiet
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - TRANSFORMERS_CACHE=/root/.cache/huggingface
     depends_on:
       - gateway
       - mlflow
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
   # ── 7. MLops Metrics Exporter ────────────────────────────────────
   mlops_exporter:
