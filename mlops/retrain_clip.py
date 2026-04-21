@@ -250,18 +250,41 @@ def run_pipeline(force: bool = False) -> dict:
     return result
 
 
+_LAST_RUN_FILE = SCRIPT_DIR / ".last_retrain_ts"
+
+
 def _schedule_loop(interval_hours: float = 48.0):
-    """Run the pipeline on a schedule. Runs once immediately, then every interval_hours."""
+    """Run the pipeline on a schedule, respecting the interval across container restarts."""
+    interval_secs = interval_hours * 3600
     print(f"[RETRAIN] Scheduler started — running every {interval_hours}h")
+
     while True:
+        # Check how long ago the last run finished (survives container restarts)
+        now = time.time()
+        if _LAST_RUN_FILE.exists():
+            try:
+                last_ts = float(_LAST_RUN_FILE.read_text().strip())
+                elapsed = now - last_ts
+                if elapsed < interval_secs:
+                    wait = interval_secs - elapsed
+                    print(
+                        f"[RETRAIN] Last run was {elapsed/3600:.1f}h ago — "
+                        f"next run in {wait/3600:.1f}h. Sleeping..."
+                    )
+                    time.sleep(wait)
+                    continue
+            except Exception:
+                pass  # corrupt file — just run now
+
         try:
             result = run_pipeline(force=False)
             print(f"[RETRAIN] Scheduled run complete: {result['outcome']}")
         except Exception as e:
             print(f"[RETRAIN] Pipeline error: {e}")
-        sleep_secs = interval_hours * 3600
+
+        _LAST_RUN_FILE.write_text(str(time.time()))
         print(f"[RETRAIN] Next run in {interval_hours}h. Sleeping...")
-        time.sleep(sleep_secs)
+        time.sleep(interval_secs)
 
 
 if __name__ == "__main__":

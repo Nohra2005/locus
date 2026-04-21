@@ -162,14 +162,28 @@ def _nms(detections, iou_threshold=0.3):
 # =============================================================================
 
 class LocusVisualizer:
+    @staticmethod
+    def _load_clip_with_retry(model_id: str, retries: int = 3, delay: float = 5.0):
+        last_err = None
+        for attempt in range(1, retries + 1):
+            try:
+                model     = CLIPModel.from_pretrained(model_id)
+                processor = CLIPProcessor.from_pretrained(model_id)
+                return model, processor
+            except Exception as e:
+                last_err = e
+                print(f"[CLIP] Load attempt {attempt}/{retries} failed: {e}")
+                if attempt < retries:
+                    time.sleep(delay)
+        raise RuntimeError(f"Failed to load CLIP model '{model_id}' after {retries} attempts: {last_err}")
+
     def __init__(self):
 
         self.clothing_detector  = ClothingDetector()
         self.accessory_detector = AccessoryDetector()
 
         print("Loading CLIP ViT-B/16...")
-        self.clip_model     = CLIPModel.from_pretrained("patrickjohncyh/fashion-clip")
-        self.clip_processor = CLIPProcessor.from_pretrained("patrickjohncyh/fashion-clip")
+        self.clip_model, self.clip_processor = self._load_clip_with_retry("patrickjohncyh/fashion-clip")
         self.clip_labels    = CANONICAL_LABELS
 
         # Pre-compute CLIP text embeddings for canonical labels.

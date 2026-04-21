@@ -310,10 +310,14 @@ def _run_judge_eval(
             print(f"  [EVAL] Skip '{query_name}': Qdrant error — {e}")
             continue
 
-        result_urls = [
-            h.payload.get("image_url", "") for h in hits
-            if h.payload.get("image_url")
-        ]
+        result_urls = []
+        for h in hits:
+            url = h.payload.get("image_url", "")
+            if not url:
+                continue
+            if url.startswith("http://localhost:"):
+                url = url.replace("http://localhost:8000", GATEWAY_URL.rstrip("/"), 1)
+            result_urls.append(url)
 
         if not result_urls:
             print(f"  [EVAL] Skip '{query_name}': no result image URLs")

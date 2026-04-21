@@ -22,6 +22,11 @@ logger = logging.getLogger(__name__)
 OPENROUTER_MODEL   = "google/gemini-2.0-flash-001"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+GEMINI_API_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    "gemini-2.0-flash-001:generateContent"
+)
+
 # ── Rate limiter ───────────────────────────────────────────────────────────────
 # 2s minimum gap → ~30 RPM, well within OpenRouter's free-tier ceiling.
 
@@ -168,6 +173,40 @@ def _judge_pair_openrouter(query_image_b64: str, result_image_url: str, api_key:
     return None
 
 
+# ── Fallback provider: Google Gemini REST ─────────────────────────────────────
+
+def _judge_pair_gemini_direct(query_b64: str, result_image_url: str, api_key: str) -> float | None:
+    """Call Gemini 2.0 Flash directly via Google's REST API (no OpenRouter)."""
+    result_b64 = fetch_image_as_base64(result_image_url)
+    if result_b64 is None:
+        return None
+
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": JUDGE_PROMPT},
+                {"inline_data": {"mime_type": "image/jpeg", "data": query_b64}},
+                {"inline_data": {"mime_type": "image/jpeg", "data": result_b64}},
+            ]
+        }],
+        "generationConfig": {"maxOutputTokens": 50, "temperature": 0.0},
+    }
+
+    try:
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.post(f"{GEMINI_API_URL}?key={api_key}", json=payload)
+        resp.raise_for_status()
+        content = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+        match = re.search(r"\d+\.\d+|\d+", content)
+        if match is None:
+            logger.warning(f"judge: [gemini-direct] could not parse score: {content!r}")
+            return None
+        return float(match.group())
+    except Exception as e:
+        logger.warning(f"judge: [gemini-direct] error: {e}")
+        return None
+
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 def run_judge(
@@ -176,9 +215,10 @@ def run_judge(
     gateway_base_url: str,
     openrouter_api_key: str,
     scores_out: dict | None = None,
+    google_api_key: str = "",
 ) -> None:
-    if not openrouter_api_key:
-        logger.warning("judge: no OPENROUTER_API_KEY configured, skipping")
+    if not openrouter_api_key and not google_api_key:
+        logger.warning("judge: no OPENROUTER_API_KEY or GOOGLE_API_KEY configured, skipping")
         return
 
     query_b64 = base64.b64encode(query_image_bytes).decode("utf-8")
@@ -194,15 +234,31 @@ def run_judge(
             logger.info(f"judge: skipping '{result_name}' — no image_url")
             return
 
-        logger.info(f"judge: [openrouter] scoring '{result_name}' ({result_image_url[:80]})")
-        score = _judge_pair_openrouter(query_b64, result_image_url, openrouter_api_key)
+        score    = None
+        provider = "none"
 
+        # Primary: OpenRouter
+        if openrouter_api_key:
+            logger.info(f"judge: [openrouter] scoring '{result_name}' ({result_image_url[:80]})")
+            score = _judge_pair_openrouter(query_b64, result_image_url, openrouter_api_key)
+            if score is not None:
+                provider = "openrouter"
+
+        # Fallback 1: Google Gemini REST
+        if score is None and google_api_key:
+            logger.info(f"judge: [gemini-direct] scoring '{result_name}' (openrouter unavailable)")
+            score = _judge_pair_gemini_direct(query_b64, result_image_url, google_api_key)
+            if score is not None:
+                provider = "gemini-direct"
+
+        # Fallback 2: CLIP cosine score (always available, zero cost)
         if score is None:
-            logger.info(f"judge: no score for '{result_name}'")
-            return
+            score    = round(result.get("score", 0.0), 3)
+            provider = "clip-fallback"
+            logger.info(f"judge: [clip-fallback] using CLIP score={score:.3f} for '{result_name}'")
 
         stars = score_to_stars(score)
-        logger.info(f"judge: [openrouter] '{result_name}' → score={score:.2f} stars={stars} key={key[:60]}")
+        logger.info(f"judge: [{provider}] '{result_name}' → score={score:.2f} stars={stars} key={key[:60]}")
 
         if scores_out is not None and key:
             scores_out[key] = round(score, 3)
@@ -214,7 +270,7 @@ def run_judge(
             "store_name":        result.get("store_name", ""),
             "category":          result.get("category_tag", ""),
             "rating":            stars,
-            "source":            "auto_judge",
+            "source":            f"auto_judge_{provider}",
         }
 
         try:
