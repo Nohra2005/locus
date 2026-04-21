@@ -60,6 +60,96 @@ def _cleanup_attribute_cache() -> None:
         _attr_timestamps.pop(sid, None)
 
 
+async def _audit_corrupt_items(
+    suspicious_pids: dict,
+    pid_counts: dict,
+    top3_matches: list,
+    scores_dict: dict,
+) -> None:
+    """
+    Waits for judge scores then checks if a product that occupies ≥2 slots in the
+    top 3 raw CLIP results also scores low (< 40% of the best top-3 judge score AND
+    < 0.35 absolute). If so, increments corrupt_flag_count in Qdrant. A second flag
+    triggers deletion of all Qdrant points for that product.
+    """
+    top3_pids   = [m["product_id"] for m in top3_matches]
+    suspect_set = set(suspicious_pids)
+
+    deadline = _time_module.monotonic() + 90
+    while _time_module.monotonic() < deadline:
+        if all(pid in scores_dict for pid in suspect_set):
+            break
+        await asyncio.sleep(5)
+
+    top3_scores = [scores_dict[pid] for pid in top3_pids if pid in scores_dict]
+    if not top3_scores:
+        print("[CORRUPT] No judge scores returned for top 3 — skipping corrupt audit")
+        return
+
+    max_top3 = max(top3_scores)
+
+    for pid, raw_point_ids in suspicious_pids.items():
+        count       = pid_counts[pid]
+        judge_score = scores_dict.get(pid)
+
+        if judge_score is None:
+            print(f"[CORRUPT] {pid[:60]} appeared {count}x in top-3 raw but was not scored — skipping")
+            continue
+
+        if not (judge_score < max_top3 * 0.4 and judge_score < 0.35):
+            print(f"[CORRUPT] {pid[:60]} appeared {count}x in top-3 raw, "
+                  f"judge={judge_score:.3f} vs max={max_top3:.3f} — score not low enough, no action")
+            continue
+
+        print(f"[CORRUPT] SUSPICIOUS — {pid[:60]} appeared {count}x in top-3 raw, "
+              f"judge={judge_score:.3f} vs max={max_top3:.3f}")
+
+        try:
+            scroll_hits, _ = await asyncio.to_thread(
+                client.scroll,
+                collection_name=COLLECTION_NAME,
+                scroll_filter=models.Filter(must=[
+                    models.FieldCondition(key="product_id", match=models.MatchValue(value=pid))
+                ]),
+                limit=50,
+                with_payload=True,
+            )
+        except Exception as exc:
+            print(f"[CORRUPT] Scroll failed for {pid[:60]}: {exc}")
+            continue
+
+        if not scroll_hits:
+            continue
+
+        current_flags = max((p.payload.get("corrupt_flag_count", 0) for p in scroll_hits), default=0)
+        new_flags     = current_flags + 1
+        all_ids       = [p.id for p in scroll_hits]
+
+        if new_flags >= 2:
+            try:
+                await asyncio.to_thread(
+                    client.delete,
+                    collection_name=COLLECTION_NAME,
+                    points_selector=models.PointIdsList(points=all_ids),
+                )
+                print(f"[CORRUPT] DELETED {len(all_ids)} point(s) for {pid[:60]} "
+                      f"(flag #{new_flags} — second offense)")
+            except Exception as exc:
+                print(f"[CORRUPT] Delete failed for {pid[:60]}: {exc}")
+        else:
+            try:
+                await asyncio.to_thread(
+                    client.set_payload,
+                    collection_name=COLLECTION_NAME,
+                    payload={"corrupt_flag_count": new_flags},
+                    points=all_ids,
+                )
+                print(f"[CORRUPT] FLAGGED {len(all_ids)} point(s) for {pid[:60]} "
+                      f"(corrupt_flag_count → {new_flags}; will delete on next occurrence)")
+            except Exception as exc:
+                print(f"[CORRUPT] Set payload failed for {pid[:60]}: {exc}")
+
+
 async def _run_tagger(search_id: str, image_b64: str, category: str) -> None:
     try:
         async with httpx.AsyncClient(timeout=20.0) as _tc:
@@ -122,6 +212,7 @@ TAGGER_HOST         = os.getenv("TAGGER_HOST",    "")
 QDRANT_URL          = os.getenv("QDRANT_URL")
 QDRANT_API_KEY      = os.getenv("QDRANT_API_KEY")
 OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
+GOOGLE_API_KEY      = os.getenv("GOOGLE_API_KEY", "")
 GATEWAY_BASE_URL    = os.getenv("GATEWAY_BASE_URL", "http://localhost:8000")
 QDRANT_HOST         = os.getenv("QDRANT_HOST",    "qdrant")
 QDRANT_PORT         = int(os.getenv("QDRANT_PORT", 6333))
@@ -189,6 +280,9 @@ async def startup_metrics():
 
 @app.on_event("startup")
 def startup_event():
+    if not TAGGER_HOST:
+        print("[WARNING] TAGGER_HOST is not set — attribute tagging will be silently disabled. "
+              "Set TAGGER_HOST=http://attribute_tagger:8004 to enable it.")
     # ── Main collection ───────────────────────────────────────────────────────
     if not client.collection_exists(collection_name=COLLECTION_NAME):
         client.create_collection(
@@ -855,6 +949,26 @@ async def search_items(
             search_params=models.SearchParams(hnsw_ef=256),
         )
 
+    # ── Corrupt image detection ───────────────────────────────────────────────
+    # Count how many times each product_id appears in the top 3 raw CLIP hits.
+    # A product taking ≥2 of those slots has duplicate vectors in Qdrant and is
+    # a candidate for flagging. Confirmation via judge score happens in background.
+    _top3_raw      = raw_results[:3]
+    _pid_counts: dict    = {}
+    _pid_raw_points: dict = {}
+    for _hit in _top3_raw:
+        _pid = (_hit.payload.get("product_id")
+                or _hit.payload.get("image_url")
+                or str(_hit.id))
+        _pid_counts[_pid]  = _pid_counts.get(_pid, 0) + 1
+        _pid_raw_points.setdefault(_pid, []).append(_hit.id)
+    _suspicious_pids = {
+        pid: pts for pid, pts in _pid_raw_points.items() if _pid_counts[pid] >= 2
+    }
+    if _suspicious_pids:
+        print(f"[CORRUPT] Detected {len(_suspicious_pids)} suspicious product(s) in top-3 raw hits — "
+              f"will confirm with judge scores: {list(_suspicious_pids)[:2]}")
+
     best_per_product = {}
     for hit in raw_results:
         product_id = hit.payload.get("product_id") or hit.payload.get("image_url") or str(hit.id)
@@ -885,7 +999,7 @@ async def search_items(
 
     scores_dict  = {}
 
-    if OPENROUTER_API_KEY and not skip_judge and not include_golden:
+    if (OPENROUTER_API_KEY or GOOGLE_API_KEY) and not skip_judge and not include_golden:
         _cleanup_judge_scores()
         _judge_scores[search_id]     = scores_dict
         _judge_timestamps[search_id] = _time_module.monotonic()
@@ -896,7 +1010,16 @@ async def search_items(
             GATEWAY_BASE_URL,
             OPENROUTER_API_KEY,
             scores_dict,
+            GOOGLE_API_KEY,
         )
+        if _suspicious_pids:
+            background_tasks.add_task(
+                _audit_corrupt_items,
+                _suspicious_pids,
+                _pid_counts,
+                matches[:3],
+                scores_dict,
+            )
 
     return {
         "matches":                   matches,

@@ -80,6 +80,7 @@ def tag_image(image_b64: str, category: str) -> dict:
         "temperature": 0.0,
     }
 
+    content = None
     try:
         with httpx.Client(timeout=20.0) as client:
             resp = client.post(
@@ -88,7 +89,13 @@ def tag_image(image_b64: str, category: str) -> dict:
                 headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
             )
         resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"].strip()
+
+        body = resp.json()
+        choices = body.get("choices")
+        if not choices:
+            logger.warning(f"tagger: unexpected response shape — no 'choices': {body}")
+            return {}
+        content = choices[0]["message"]["content"].strip()
 
         # Strip markdown code fences if Gemini added them despite instructions
         content = re.sub(r"^```(?:json)?\s*", "", content)

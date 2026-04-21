@@ -27,7 +27,7 @@ services:
       visual_engine:
         condition: service_started
       attribute_tagger:
-        condition: service_started
+        condition: service_healthy
     environment:
       - VISUAL_HOST=http://visual_engine:8001
       - TAGGER_HOST=http://attribute_tagger:8004
@@ -38,6 +38,7 @@ services:
       # - QDRANT_HOST=qdrant
       # - QDRANT_PORT=6333
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - GATEWAY_BASE_URL=${GATEWAY_BASE_URL:-http://localhost:8000}
       - GOLDEN_DATASET_PATH=/mlops/golden_dataset.json
     volumes:
@@ -76,6 +77,12 @@ services:
       - "8004:8004"
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8004/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   # ── 4. Local Qdrant (commented out — using cloud instead) ─────────
   # qdrant:
