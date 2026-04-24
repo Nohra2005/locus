@@ -3870,7 +3870,7 @@
       "id": 605,
       "type": "stat",
       "title": "Stores Indexed",
-      "description": "Distinct store names that have at least one product in locus_items.",
+      "description": "Distinct store names with at least one product in locus_items (counted directly from Qdrant every 60s).",
       "gridPos": {
         "x": 16,
         "y": 91,
@@ -3883,7 +3883,7 @@
       },
       "targets": [
         {
-          "expr": "count(count by (store) (locus_store_impressions_total))",
+          "expr": "count(locus_store_items_total)",
           "legendFormat": "Stores"
         }
       ],
@@ -5194,6 +5194,153 @@
         "tooltip": {
           "mode": "multi"
         }
+      }
+    },
+    {
+      "id": 1010,
+      "type": "bargauge",
+      "title": "Total Items Indexed per Store",
+      "description": "How many products from each store are currently indexed in locus_items. Sourced directly from Qdrant every 60s.",
+      "gridPos": {
+        "x": 0,
+        "y": 184,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(locus_store_items_total)",
+          "legendFormat": "{{store}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": 0   },
+              { "color": "yellow", "value": 10  },
+              { "color": "green",  "value": 50  }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 1011,
+      "type": "table",
+      "title": "Store Inventory — Items by Store & Category",
+      "description": "All stores currently in the system with a breakdown of indexed items per category. Refreshed every 60s from Qdrant.",
+      "gridPos": {
+        "x": 0,
+        "y": 192,
+        "w": 24,
+        "h": 12
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(locus_store_category_items_total)",
+          "legendFormat": "{{store}} / {{category}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time":     true,
+              "__name__": true,
+              "instance": true,
+              "job":      true
+            },
+            "renameByName": {
+              "store":    "Store",
+              "category": "Category",
+              "Value":    "Items Indexed"
+            },
+            "indexByName": {
+              "store":    0,
+              "category": 1,
+              "Value":    2
+            }
+          }
+        }
+      ],
+      "options": {
+        "sortBy": [
+          { "displayName": "Store",         "desc": false },
+          { "displayName": "Items Indexed", "desc": true  }
+        ],
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Items Indexed" },
+            "properties": [
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "red",    "value": 0  },
+                    { "color": "yellow", "value": 10 },
+                    { "color": "green",  "value": 50 }
+                  ]
+                }
+              },
+              {
+                "id": "color",
+                "value": { "mode": "thresholds" }
+              }
+            ]
+          }
+        ]
       }
     }
   ],

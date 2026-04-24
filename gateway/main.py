@@ -378,6 +378,19 @@ locus_store_directions_clicks = Counter(
     ["store"],
 )
 
+# Per-store inventory gauges — refreshed every 60s from Qdrant (not from impressions)
+locus_store_items = Gauge(
+    "locus_store_items_total",
+    "Number of indexed items per store in locus_items",
+    ["store"],
+)
+locus_store_category_items = Gauge(
+    "locus_store_category_items_total",
+    "Number of indexed items per store per category in locus_items",
+    ["store", "category"],
+)
+
+_cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -469,6 +482,37 @@ def _compute_rating_gauges():
     locus_rating_by_source.labels(source="auto_judge").set(judge_count)
 
 
+def _compute_store_gauges():
+    """Synchronous helper: count items per store and per store+category directly from Qdrant."""
+    store_counts: dict[str, int] = {}
+    store_cat_counts: dict[tuple[str, str], int] = {}
+    cursor = None
+    while True:
+        batch, next_cursor = client.scroll(
+            collection_name=COLLECTION_NAME,
+            limit=500,
+            offset=cursor,
+            with_payload=["store_name", "category_tag"],
+            with_vectors=False,
+        )
+        if not batch:
+            break
+        for pt in batch:
+            store = (pt.payload.get("store_name") or "").strip()
+            cat   = (pt.payload.get("category_tag") or "uncategorized").strip() or "uncategorized"
+            if not store or store == "golden_dataset":
+                continue
+            store_counts[store] = store_counts.get(store, 0) + 1
+            store_cat_counts[(store, cat)] = store_cat_counts.get((store, cat), 0) + 1
+        if next_cursor is None:
+            break
+        cursor = next_cursor
+    for store, count in store_counts.items():
+        locus_store_items.labels(store=store).set(count)
+    for (store, cat), count in store_cat_counts.items():
+        locus_store_category_items.labels(store=store, category=cat).set(count)
+
+
 async def _refresh_qdrant_metrics():
     """Background task: refresh Qdrant collection counts + rating gauges every 60s."""
     while True:
@@ -482,6 +526,10 @@ async def _refresh_qdrant_metrics():
             await asyncio.to_thread(_compute_rating_gauges)
         except Exception as e:
             print(f"[METRICS] Could not refresh rating gauges: {e}")
+        try:
+            await asyncio.to_thread(_compute_store_gauges)
+        except Exception as e:
+            print(f"[METRICS] Could not refresh store gauges: {e}")
         await asyncio.sleep(60)
 
 
