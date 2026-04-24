@@ -11,8 +11,11 @@ from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
@@ -264,7 +267,10 @@ async def _run_tagger(search_id: str, image_b64: str, category: str) -> None:
     finally:
         _attr_timestamps[search_id] = _time_module.monotonic()
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 Instrumentator().instrument(app).expose(app)
 
 # ── Custom Prometheus metrics ─────────────────────────────────────────────────
@@ -378,12 +384,27 @@ locus_store_directions_clicks = Counter(
     ["store"],
 )
 
+_cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+@app.middleware("http")
+async def limit_upload_size(request: Request, call_next):
+    if request.method in ("POST", "PUT", "PATCH"):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > _MAX_UPLOAD_BYTES:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Payload too large. Maximum upload size is 10 MB."},
+            )
+    return await call_next(request)
 
 VISUAL_URL          = os.getenv("VISUAL_HOST",    "http://visual_engine:8001")
 TAGGER_HOST         = os.getenv("TAGGER_HOST",    "")
@@ -987,7 +1008,8 @@ async def track_event(req: TrackEventRequest):
 # ── Detect ─────────────────────────────────────────────────────────────────────
 
 @app.post("/detect")
-async def detect_items(file: UploadFile = File(...)):
+@limiter.limit("5/minute")
+async def detect_items(request: Request, file: UploadFile = File(...)):
     image_bytes = await file.read()
     async with httpx.AsyncClient() as http:
         resp = await http.post(
@@ -1167,7 +1189,9 @@ async def classify_crop(
 # ── Search ─────────────────────────────────────────────────────────────────────
 
 @app.post("/search")
+@limiter.limit("10/minute")
 async def search_items(
+    request:            Request,
     background_tasks:   BackgroundTasks,
     file:               UploadFile = File(...),
     x1:                 float      = Form(0),
@@ -1180,6 +1204,11 @@ async def search_items(
     skip_judge:         bool       = Form(False),
 ):
     image_bytes = await file.read()
+
+    try:
+        Image.open(io.BytesIO(image_bytes)).verify()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or corrupt image file")
 
     has_bbox = x2 > x1 and y2 > y1
     if has_bbox:
