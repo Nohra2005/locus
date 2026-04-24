@@ -23,27 +23,25 @@ const STORE_COORDS = {
 };
 
 const T = {
-  bg:          "#0d0c0a",
-  bgDeep:      "#090807",
-  surface:     "#161410",
-  surfaceHov:  "#1c1a16",
-  border:      "#2a2620",
-  borderFaint: "#1a1814",
-  text:        "#e8e2d9",
-  textMuted:   "#6b6458",
-  textFaint:   "#3d3830",
-  accent:      "#c9a96e",
-  accentBg:    "rgba(201,169,110,0.08)",
-  accentRing:  "rgba(201,169,110,0.2)",
-  accentDeep:  "#a8895a",
-  green:       "#7aab8a",
-  yellow:      "#c9a96e",
-  red:         "#c97070",
+  bg:          "#F2F2F7",
+  bgDeep:      "#E5E5EA",
+  surface:     "#FFFFFF",
+  surfaceHov:  "#F9F9F9",
+  border:      "rgba(60,60,67,0.18)",
+  borderFaint: "rgba(60,60,67,0.08)",
+  text:        "#000000",
+  textMuted:   "rgba(60,60,67,0.6)",
+  textFaint:   "rgba(60,60,67,0.28)",
+  accent:      "#007AFF",
+  accentBg:    "rgba(0,122,255,0.08)",
+  accentRing:  "rgba(0,122,255,0.2)",
+  accentDeep:  "#0062CC",
+  green:       "#34C759",
+  yellow:      "#FF9500",
+  red:         "#FF3B30",
 };
 
 const GLOBAL_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap');
-
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   html, body, #root {
@@ -51,31 +49,31 @@ const GLOBAL_CSS = `
     width: 100%;
     background: ${T.bg};
     color: ${T.text};
-    font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 16px;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
 
   ::-webkit-scrollbar { width: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: ${T.border}; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb { background: rgba(60,60,67,0.2); border-radius: 2px; }
 
   .leaflet-container {
     background: ${T.bgDeep} !important;
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif !important;
   }
   .leaflet-popup-content-wrapper {
     background: ${T.surface} !important;
     color: ${T.text} !important;
     border: 1px solid ${T.border} !important;
-    border-radius: 8px !important;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 0.75rem !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif !important;
+    font-size: 0.85rem !important;
   }
   .leaflet-popup-tip { background: ${T.surface} !important; }
-  .leaflet-popup-close-button { color: ${T.textMuted} !important; top: 6px !important; right: 6px !important; }
+  .leaflet-popup-close-button { color: ${T.textMuted} !important; top: 8px !important; right: 8px !important; }
   .leaflet-control-zoom a {
     background: ${T.surface} !important;
     color: ${T.textMuted} !important;
@@ -98,8 +96,8 @@ const GLOBAL_CSS = `
     to   { transform: translateY(0); }
   }
 
-  .fade-up { animation: fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
-  .fade-in { animation: fadeIn 0.35s ease forwards; }
+  .fade-up { animation: fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
+  .fade-in { animation: fadeIn 0.3s ease forwards; }
 
   .results-grid {
     display: grid;
@@ -109,29 +107,11 @@ const GLOBAL_CSS = `
   @media (min-width: 640px)  { .results-grid { grid-template-columns: repeat(3, 1fr); } }
   @media (min-width: 1024px) { .results-grid { grid-template-columns: repeat(4, 1fr); } }
 
-  .nav-link {
-    font-size: 0.8rem;
-    color: ${T.textMuted};
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-family: 'DM Sans', sans-serif;
-    transition: color 0.2s, background 0.2s;
-  }
-  .nav-link:hover { color: ${T.text}; }
-  .nav-link.active {
-    background: ${T.surface};
-    color: ${T.text};
-    border: 1px solid ${T.border};
-  }
-
   .upload-zone {
-    border: 1.5px dashed ${T.border};
-    border-radius: 16px;
+    border: 2px dashed rgba(60,60,67,0.2);
+    border-radius: 20px;
     background: ${T.surface};
-    transition: border-color 0.25s, background 0.25s;
+    transition: border-color 0.2s, background 0.2s;
     cursor: pointer;
   }
   .upload-zone:hover, .upload-zone.drag-over {
@@ -142,67 +122,99 @@ const GLOBAL_CSS = `
   .btn-primary {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
-    padding: 10px 24px;
-    background: ${T.surface};
-    color: ${T.text};
-    border: 1px solid ${T.border};
-    border-radius: 24px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.82rem;
-    font-weight: 500;
+    padding: 15px 28px;
+    background: ${T.accent};
+    color: #FFFFFF;
+    border: none;
+    border-radius: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: border-color 0.2s, background 0.2s, color 0.2s;
+    transition: opacity 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
   }
-  .btn-primary:hover {
-    border-color: ${T.accent};
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-primary:active { transform: scale(0.97); }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 15px 28px;
+    background: ${T.surface};
     color: ${T.accent};
-    background: ${T.accentBg};
+    border: none;
+    border-radius: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    -webkit-tap-highlight-color: transparent;
   }
+  .btn-secondary:hover { opacity: 0.8; }
 
   .btn-ghost {
     background: none;
     border: none;
-    color: ${T.textMuted};
+    color: ${T.accent};
     cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.8rem;
-    padding: 6px 10px;
-    border-radius: 6px;
-    transition: color 0.2s, background 0.2s;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 1rem;
+    font-weight: 400;
+    padding: 8px 14px;
+    border-radius: 10px;
+    transition: background 0.15s;
+    -webkit-tap-highlight-color: transparent;
   }
-  .btn-ghost:hover { color: ${T.text}; background: ${T.surface}; }
+  .btn-ghost:hover { background: ${T.accentBg}; }
 
   .star-btn {
     background: none;
     border: none;
-    padding: 2px 1px;
+    padding: 2px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 1rem;
     line-height: 1;
-    transition: transform 0.1s, color 0.15s;
-    color: ${T.textFaint};
+    transition: transform 0.1s;
+    color: rgba(60,60,67,0.22);
+    -webkit-tap-highlight-color: transparent;
   }
   .star-btn:hover:not(:disabled) { transform: scale(1.2); }
   .star-btn:disabled { cursor: default; }
-  .star-btn.filled { color: ${T.accent}; }
-  .star-btn.dimmed { color: ${T.borderFaint}; }
+  .star-btn.filled { color: ${T.yellow}; }
+  .star-btn.dimmed { color: rgba(60,60,67,0.1); }
 
   input[type=range] {
     -webkit-appearance: none;
     appearance: none;
-    height: 2px;
-    background: ${T.border};
+    height: 4px;
+    background: rgba(60,60,67,0.15);
     border-radius: 2px;
     outline: none;
     cursor: pointer;
   }
   input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 12px; height: 12px;
+    width: 20px; height: 20px;
     border-radius: 50%;
-    background: ${T.accent};
+    background: #FFFFFF;
     cursor: pointer;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.2);
+    border: 2px solid ${T.accent};
+  }
+
+  select {
+    background: ${T.surface};
+    color: ${T.text};
+    border: 1px solid ${T.border};
+    border-radius: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   }
 `;
 
@@ -349,58 +361,73 @@ function toggleSavedItem(result, saved) {
 // ══════════════════════════════════════════════════════════════════
 // NAVBAR
 // ══════════════════════════════════════════════════════════════════
-function Navbar({ activeTab, onTab, onLogoClick }) {
+// ── iOS bottom tab bar ────────────────────────────────────────────
+const TAB_ICONS = {
+  Discover: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+      stroke={active ? T.accent : T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+  ),
+  Saved: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24"
+      fill={active ? T.accent : "none"}
+      stroke={active ? T.accent : T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+    </svg>
+  ),
+  History: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+      stroke={active ? T.accent : T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+  ),
+  Store: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+      stroke={active ? T.accent : T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <path d="M16 10a4 4 0 0 1-8 0"/>
+    </svg>
+  ),
+};
+
+function Navbar({ activeTab, onTab }) {
   return (
     <nav style={{
-      position: "sticky", top: 0, zIndex: 200,
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "14px 28px",
-      background: `${T.bg}ee`,
-      backdropFilter: "blur(12px)",
-      borderBottom: `1px solid ${T.borderFaint}`,
+      position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 200,
+      background: "rgba(249,249,249,0.94)",
+      backdropFilter: "saturate(180%) blur(20px)",
+      WebkitBackdropFilter: "saturate(180%) blur(20px)",
+      borderTop: `1px solid ${T.border}`,
+      display: "flex",
+      paddingBottom: "env(safe-area-inset-bottom, 0px)",
     }}>
-      <button
-        onClick={onLogoClick}
-        style={{ display: "flex", alignItems: "center", gap: "10px", background: "none", border: "none", cursor: "pointer" }}
-      >
-        <div style={{
-          width: 32, height: 32,
-          background: `linear-gradient(135deg, ${T.accent}, ${T.accentDeep})`,
-          borderRadius: "8px",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: "0.75rem",
-          boxShadow: `0 2px 12px ${T.accentRing}`,
-        }}>✦</div>
-        <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.25rem", fontWeight: 600, color: T.text, letterSpacing: "0.02em" }}>
-          locus
-        </span>
-        <span style={{ fontSize: "0.65rem", color: T.textMuted, letterSpacing: "0.12em", textTransform: "uppercase", paddingLeft: "2px" }}>
-          shopping made easier
-        </span>
-      </button>
-
-      <div style={{ display: "flex", gap: "4px" }}>
-        {["Discover", "Saved", "History", "Store"].map(tab => (
+      {["Discover", "Saved", "History", "Store"].map(tab => {
+        const active = activeTab === tab;
+        const label = tab === "Discover" ? "Search" : tab;
+        return (
           <button
             key={tab}
-            className={`nav-link ${activeTab === tab ? "active" : ""}`}
             onClick={() => onTab(tab)}
-            style={{ position: "relative" }}
+            style={{
+              flex: 1, padding: "10px 0 12px",
+              background: "none", border: "none", cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+              color: active ? T.accent : T.textMuted,
+              transition: "color 0.15s",
+              WebkitTapHighlightColor: "transparent",
+            }}
           >
-            {tab}
-            {false && (
-              <span style={{
-                position: "absolute", top: 1, right: 1,
-                background: T.red, color: "#fff",
-                borderRadius: "50%", fontSize: "0.55rem", fontWeight: 700,
-                width: 14, height: 14,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                lineHeight: 1,
-              }}>{flagCount > 9 ? "9+" : flagCount}</span>
-            )}
+            {TAB_ICONS[tab](active)}
+            <span style={{ fontSize: "0.65rem", fontWeight: active ? 600 : 400, letterSpacing: "-0.01em" }}>
+              {label}
+            </span>
           </button>
-        ))}
-      </div>
+        );
+      })}
     </nav>
   );
 }
@@ -409,7 +436,8 @@ function Navbar({ activeTab, onTab, onLogoClick }) {
 // LANDING
 // ══════════════════════════════════════════════════════════════════
 function LandingView({ onUpload, error }) {
-  const inputRef = useRef(null);
+  const inputRef  = useRef(null);
+  const cameraRef = useRef(null);
   const [dragging, setDragging] = useState(false);
 
   const handleFile = (file) => {
@@ -417,52 +445,80 @@ function LandingView({ onUpload, error }) {
   };
 
   return (
-    <div style={{ minHeight: "calc(100dvh - 61px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
-      <div className="fade-up" style={{ textAlign: "center", marginBottom: "48px" }}>
-        <div style={{ fontSize: "0.7rem", color: T.accent, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "20px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-          <span style={{ fontSize: "0.6rem" }}>✦</span>
-          AI-powered visual search
+    <div className="fade-in" style={{
+      minHeight: "100svh",
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      padding: "32px 24px",
+      paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 20px)",
+    }}>
+      {/* App icon + branding */}
+      <div className="fade-up" style={{ textAlign: "center", marginBottom: 52 }}>
+        <div style={{
+          width: 80, height: 80, borderRadius: 20,
+          background: `linear-gradient(145deg, ${T.accent}, #5856D6)`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          margin: "0 auto 20px",
+          boxShadow: `0 8px 32px ${T.accentRing}`,
+        }}>
+          <svg width="38" height="38" viewBox="0 0 38 38" fill="none">
+            <circle cx="17" cy="17" r="9" stroke="#fff" strokeWidth="2.5"/>
+            <line x1="23.5" y1="23.5" x2="32" y2="32" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+          </svg>
         </div>
-        <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "clamp(2.8rem, 8vw, 4.5rem)", fontWeight: 500, lineHeight: 1.1, color: T.text, letterSpacing: "-0.01em" }}>
-          Find what you{" "}<em style={{ color: T.accent, fontStyle: "italic" }}>see</em>
+        <h1 style={{ fontSize: "2.6rem", fontWeight: 700, letterSpacing: "-0.03em", color: T.text, marginBottom: 10 }}>
+          locus
         </h1>
-        <p style={{ marginTop: "18px", fontSize: "0.88rem", color: T.textMuted, lineHeight: 1.7, maxWidth: "400px", margin: "18px auto 0" }}>
-          Upload any photo and we'll match it against thousands of products across top stores.
+        <p style={{ fontSize: "1.05rem", color: T.textMuted, lineHeight: 1.5, maxWidth: 280, margin: "0 auto" }}>
+          Photograph any fashion item to find it nearby
         </p>
       </div>
 
-      <div
-        className={`upload-zone fade-up ${dragging ? "drag-over" : ""}`}
-        style={{ animationDelay: "0.1s", width: "100%", maxWidth: "540px", padding: "56px 32px", textAlign: "center" }}
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
-      >
-        <div style={{ width: 56, height: 56, borderRadius: "50%", background: T.surfaceHov, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: "1.2rem" }}>↑</div>
-        <div style={{ fontSize: "0.95rem", fontWeight: 500, color: T.text, marginBottom: "8px" }}>Drop your photo here</div>
-        <div style={{ fontSize: "0.75rem", color: T.textMuted, marginBottom: "24px" }}>PNG · JPG · WEBP — we'll find matching products instantly</div>
-        <button className="btn-primary" onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}>
-          <span style={{ color: T.accent }}>✦</span>
-          Start searching
+      {/* Upload buttons */}
+      <div className="fade-up" style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 12 }}>
+        <button
+          className="btn-primary"
+          style={{ width: "100%" }}
+          onClick={() => cameraRef.current?.click()}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          Take a photo
         </button>
+
+        <button
+          className="btn-secondary"
+          style={{ width: "100%" }}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
+        >
+          {dragging ? "Drop it!" : "Choose from library"}
+        </button>
+
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: "none" }}
+          onChange={(e) => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = null; } }}
+        />
         <input
           ref={inputRef}
           type="file"
           accept="image/jpeg, image/png, image/webp, image/heic, image/*"
-          style={{ position: "absolute", width: "1px", height: "1px", opacity: 0, pointerEvents: "none" }}
-          onChange={(e) => {
-            if (e.target.files && e.target.files[0]) {
-              handleFile(e.target.files[0]);
-              e.target.value = null;
-            }
-          }}
+          style={{ display: "none" }}
+          onChange={(e) => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = null; } }}
         />
       </div>
 
       {error && (
-        <div className="fade-up" style={{ marginTop: "20px", padding: "12px 18px", background: "rgba(201,112,112,0.08)", border: `1px solid rgba(201,112,112,0.2)`, borderRadius: "10px", fontSize: "0.75rem", color: T.red, maxWidth: "540px", width: "100%" }}>
-          ⚠ {error}
+        <div className="fade-up" style={{ marginTop: 20, padding: "14px 18px", background: "rgba(255,59,48,0.08)", border: "1px solid rgba(255,59,48,0.2)", borderRadius: 12, fontSize: "0.9rem", color: T.red, maxWidth: 340, width: "100%", textAlign: "center" }}>
+          {error}
         </div>
       )}
     </div>
@@ -474,9 +530,13 @@ function LandingView({ onUpload, error }) {
 // ══════════════════════════════════════════════════════════════════
 function LoadingView({ label }) {
   return (
-    <div style={{ minHeight: "calc(100dvh - 61px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px" }}>
-      <div style={{ width: 28, height: 28, border: `1.5px solid ${T.border}`, borderTop: `1.5px solid ${T.accent}`, borderRadius: "50%", animation: "spin 0.9s linear infinite" }} />
-      <span style={{ fontSize: "0.75rem", color: T.textMuted, letterSpacing: "0.05em" }}>{label}</span>
+    <div style={{
+      minHeight: "100svh", display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center", gap: 16,
+      paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px))",
+    }}>
+      <div style={{ width: 40, height: 40, border: "3px solid rgba(60,60,67,0.12)", borderTop: `3px solid ${T.accent}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+      <span style={{ fontSize: "1rem", color: T.textMuted }}>{label}</span>
     </div>
   );
 }
@@ -642,11 +702,11 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
   const hasBox = box && (box.x2 - box.x1) >= 10 && (box.y2 - box.y1) >= 10;
 
   return (
-    <div className="fade-in" style={{ minHeight: "calc(100dvh - 61px)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 28px", borderBottom: `1px solid ${T.borderFaint}` }}>
-        <button className="btn-ghost" onClick={onBack} style={{ fontSize: "1rem" }}>←</button>
-        <span style={{ fontSize: "0.75rem", color: T.textMuted, letterSpacing: "0.08em" }}>
-          {hasBox ? "LOOKS GOOD — HIT FIND OR REDRAW" : "DRAW A BOX AROUND THE ITEM"}
+    <div className="fade-in" style={{ minHeight: "100svh", background: T.bg }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 20px", borderBottom: `1px solid ${T.borderFaint}`, background: T.surface }}>
+        <button className="btn-ghost" onClick={onBack} style={{ padding: "6px 10px" }}>← Back</button>
+        <span style={{ fontSize: "0.85rem", fontWeight: 500, color: T.textMuted }}>
+          {hasBox ? "Looks good — tap Find or redraw" : "Draw a box around the item"}
         </span>
       </div>
 
@@ -682,14 +742,14 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
                       <rect x={box.x1} y={box.y1} width={box.x2 - box.x1} height={box.y2 - box.y1} fill="black" />
                     </mask>
                   </defs>
-                  <rect x="0" y="0" width="100%" height="100%" fill="rgba(0,0,0,0.45)" mask="url(#crop-mask)" rx="12" />
+                  <rect x="0" y="0" width="100%" height="100%" fill="rgba(0,0,0,0.38)" mask="url(#crop-mask)" rx="12" />
                 </>
               )}
               {/* The box itself */}
               {box && (
                 <rect
                   x={box.x1} y={box.y1} width={box.x2 - box.x1} height={box.y2 - box.y1}
-                  fill="rgba(201,169,110,0.08)"
+                  fill="rgba(0,122,255,0.08)"
                   stroke={T.accent}
                   strokeWidth={2}
                   strokeDasharray={drawing ? "6 3" : "none"}
@@ -738,8 +798,8 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
             onClick={handleFindItem}
           >
             {loading
-              ? <><div style={{ width: 12, height: 12, border: `1.5px solid ${T.border}`, borderTop: `1.5px solid ${T.accent}`, borderRadius: "50%", animation: "spin 0.9s linear infinite" }} /> Identifying…</>
-              : <><span style={{ color: T.accent }}>✦</span> Find this item</>
+              ? <><div style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.4)", borderTop: "2px solid #fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /> Identifying…</>
+              : <>Find this item</>}
             }
           </button>
         </div>
@@ -777,14 +837,14 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
   const confColor = conf > 0.6 ? T.green : conf > 0.35 ? T.yellow : T.textMuted;
 
   return (
-    <div className="fade-in" style={{ minHeight: "calc(100dvh - 61px)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 28px", borderBottom: `1px solid ${T.borderFaint}` }}>
-        <button className="btn-ghost" onClick={onBack} style={{ fontSize: "1rem" }}>←</button>
-        <span style={{ fontSize: "0.75rem", color: T.textMuted, letterSpacing: "0.08em" }}>CONFIRM ITEM</span>
+    <div className="fade-in" style={{ minHeight: "100svh", background: T.bg }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 20px", borderBottom: `1px solid ${T.borderFaint}`, background: T.surface }}>
+        <button className="btn-ghost" onClick={onBack} style={{ padding: "6px 10px" }}>← Back</button>
+        <span style={{ fontSize: "0.9rem", fontWeight: 600, color: T.text }}>Confirm item</span>
       </div>
 
       {isNotFashion && (
-        <div style={{ margin: "24px 24px 0", padding: "18px 20px", background: "rgba(220,60,60,0.08)", border: "1px solid rgba(220,60,60,0.35)", borderRadius: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ margin: "24px 24px 0", padding: "18px 20px", background: "rgba(255,59,48,0.07)", border: "1px solid rgba(255,59,48,0.25)", borderRadius: 14, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#e05a5a" }}>Not a fashion item</div>
           <div style={{ fontSize: "0.75rem", color: T.textMuted, lineHeight: 1.6 }}>
             The selected area doesn't look like a clothing item or accessory (socks, underwear, belts, etc. aren't searchable).<br />
@@ -794,7 +854,7 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
         </div>
       )}
 
-      <div style={{ flexDirection: "column", alignItems: "center", padding: "32px 24px", gap: 28, display: isNotFashion ? "none" : "flex" }}>
+      <div style={{ flexDirection: "column", alignItems: "center", padding: "28px 20px", paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 12px)", gap: 24, display: isNotFashion ? "none" : "flex" }}>
 
         <div style={{ display: "flex", gap: 20, alignItems: "flex-start", width: "100%", maxWidth: 480 }}>
           {/* Crop thumbnail */}
@@ -810,7 +870,7 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
             <div>
               <div style={{ fontSize: "0.6rem", color: T.textMuted, letterSpacing: "0.1em", marginBottom: 6 }}>DETECTED AS</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.4rem", fontWeight: 600, color: T.text }}>
+                <span style={{ fontSize: "1.4rem", fontWeight: 700, color: T.text, letterSpacing: "-0.02em" }}>
                   {CATEGORY_LABELS[category] ?? "Unknown"}
                 </span>
                 {conf > 0 && (
@@ -832,7 +892,7 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
                     width: "100%", background: T.surface, color: T.text,
                     border: `1px solid ${T.border}`, borderRadius: 8,
                     padding: "7px 32px 7px 10px", fontSize: "0.82rem",
-                    fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
+                     cursor: "pointer",
                     appearance: "none", outline: "none",
                   }}
                 >
@@ -934,7 +994,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
         onClick={onClose}
         style={{
           position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.72)",
+          background: "rgba(0,0,0,0.5)",
           backdropFilter: "blur(3px)",
           WebkitBackdropFilter: "blur(3px)",
           zIndex: 500,
@@ -1019,7 +1079,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
             aria-label="Close"
             style={{
               position: "absolute", top: 12, right: 12,
-              background: "rgba(13,12,10,0.72)",
+              background: "rgba(0,0,0,0.55)",
               backdropFilter: "blur(6px)",
               WebkitBackdropFilter: "blur(6px)",
               border: `1px solid ${T.border}`,
@@ -1031,14 +1091,14 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
               transition: "transform 0.15s, background 0.15s",
             }}
             onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,0,0,0.9)"; e.currentTarget.style.transform = "scale(1.06)"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "rgba(13,12,10,0.72)"; e.currentTarget.style.transform = "scale(1)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,0,0,0.55)"; e.currentTarget.style.transform = "scale(1)"; }}
           >×</button>
 
           {/* Match badge — floats top-left on image */}
           <div style={{
             position: "absolute", top: 12, left: 12,
             display: "flex", alignItems: "center", gap: 5,
-            background: "rgba(13,12,10,0.72)",
+            background: "rgba(0,0,0,0.55)",
             backdropFilter: "blur(6px)",
             WebkitBackdropFilter: "blur(6px)",
             border: `1px solid ${scoreColor}55`,
@@ -1069,11 +1129,11 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
             )}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
               <h2 style={{
-                fontFamily: "'Cormorant Garamond', serif",
-                fontSize: "1.55rem",
-                fontWeight: 600,
+                fontSize: "1.35rem",
+                fontWeight: 700,
                 color: T.text,
                 lineHeight: 1.25,
+                letterSpacing: "-0.02em",
                 flex: 1,
                 margin: 0,
               }}>
@@ -1135,7 +1195,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                 cursor: "pointer",
                 color: saved ? T.accent : T.text,
                 fontSize: "0.82rem", fontWeight: 500,
-                fontFamily: "'DM Sans', sans-serif",
+                
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                 transition: "all 0.2s",
               }}
@@ -1156,7 +1216,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                 cursor: "pointer",
                 color: copied ? T.green : T.text,
                 fontSize: "0.82rem", fontWeight: 500,
-                fontFamily: "'DM Sans', sans-serif",
+                
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                 transition: "all 0.2s",
               }}
@@ -1187,7 +1247,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                   textDecoration: "none",
                   color: T.bgDeep,
                   fontSize: "0.85rem", fontWeight: 600,
-                  fontFamily: "'DM Sans', sans-serif",
+                  
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                   transition: "filter 0.2s",
                 }}
@@ -1217,7 +1277,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                   doubleClickZoom={true}
                   touchZoom={true}
                 >
-                  <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
+                  <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
                   <Marker position={storeCoords}>
                     <Popup>
                       <strong style={{ color: T.accent }}>{payload.store}</strong>
@@ -1500,7 +1560,7 @@ function AttributePanel({ attributes, refineMode, onRefine }) {
                     border: `1px solid ${active ? T.accent : T.border}`,
                     background: active ? T.accentBg : "transparent",
                     color: active ? T.accent : T.textMuted,
-                    fontFamily: "'DM Sans', sans-serif",
+                    
                     transition: "all 0.15s",
                   }}
                 >
@@ -1574,20 +1634,20 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
   });
 
   return (
-    <div className="fade-in" style={{ minHeight: "calc(100dvh - 61px)", paddingBottom: "48px" }}>
+    <div className="fade-in" style={{ minHeight: "100svh", paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 24px)" }}>
 
       {/* ── Sticky header bar ── */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "14px 28px",
         borderBottom: `1px solid ${T.borderFaint}`,
-        position: "sticky", top: "61px", zIndex: 100,
-        background: `${T.bg}f0`, backdropFilter: "blur(10px)",
+        position: "sticky", top: 0, zIndex: 100,
+        background: "rgba(242,242,247,0.92)", backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          <button className="btn-ghost" onClick={onReset} style={{ fontSize: "1rem" }}>←</button>
+          <button className="btn-ghost" onClick={onReset} style={{ padding: "6px 10px" }}>← Back</button>
           <div>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1rem", fontWeight: 600, color: T.text, textTransform: "capitalize" }}>
+            <div style={{ fontSize: "1rem", fontWeight: 700, color: T.text, letterSpacing: "-0.02em", textTransform: "capitalize" }}>
               {selectedItem?.label || category || "Results"}
             </div>
             <div style={{ fontSize: "0.68rem", color: T.textMuted }}>
@@ -1642,7 +1702,7 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
                 marginLeft: "auto", fontSize: "0.65rem", padding: "5px 12px",
                 border: `1px solid ${T.border}`, borderRadius: 20,
                 background: "transparent", color: T.textMuted,
-                cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                cursor: "pointer", 
                 flexShrink: 0,
               }}
             >
@@ -1661,7 +1721,7 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
         {/* Map */}
         <div style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${T.border}`, marginBottom: 28, height: 220 }}>
           <MapContainer center={userLL} zoom={11} style={{ height: "100%", width: "100%" }} zoomControl={false}>
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
+            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
             <MapRecenter center={userLL} />
             {storesInRadius.map(store => {
               const coords = STORE_COORDS[store] ?? userLL;
@@ -1763,19 +1823,19 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
 // CATEGORY COLOR MAP (shared by Saved + History views)
 // ══════════════════════════════════════════════════════════════════
 const CATEGORY_COLORS = {
-  top:        "#7a9eab",
-  pants:      "#8b7aab",
-  leggings:   "#8b7aab",
-  dress:      "#ab7a9e",
-  skirt:      "#ab7a9e",
-  shorts:     "#ab8b7a",
-  sweater:    "#7aab8a",
-  jacket:     "#7aab8a",
-  shoes:      "#c9a96e",
-  hat:        "#a8895a",
-  bag:        "#a8895a",
-  jumpsuit:   "#ab7a7a",
-  sports_bra: "#7a9eab",
+  top:        "#007AFF",
+  pants:      "#5856D6",
+  leggings:   "#5856D6",
+  dress:      "#FF2D55",
+  skirt:      "#FF2D55",
+  shorts:     "#FF9500",
+  sweater:    "#34C759",
+  jacket:     "#30D158",
+  shoes:      "#FF9500",
+  hat:        "#FFCC00",
+  bag:        "#FF6B00",
+  jumpsuit:   "#FF3B30",
+  sports_bra: "#5AC8FA",
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -1783,14 +1843,11 @@ const CATEGORY_COLORS = {
 // ══════════════════════════════════════════════════════════════════
 function SavedView({ saved, onOpenDetail, onToggleSave }) {
   return (
-    <div style={{ minHeight: "calc(100dvh - 61px)", padding: "32px 24px", maxWidth: 640, margin: "0 auto" }}>
+    <div style={{ minHeight: "100svh", padding: "24px 20px", paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 24px)", maxWidth: 640, margin: "0 auto" }}>
       <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: "0.65rem", color: T.accent, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 6 }}>
-            ♥ Saved Items
-          </div>
-          <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.6rem", fontWeight: 500, color: T.text }}>
-            Your wishlist
+          <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: T.text, letterSpacing: "-0.03em" }}>
+            Saved
           </h2>
         </div>
         {saved.length > 0 && (
@@ -1927,22 +1984,17 @@ function HistoryCard({ entry, onRestore }) {
 
 function HistoryView({ history, onRestore, onClear }) {
   return (
-    <div style={{ minHeight: "calc(100dvh - 61px)", padding: "32px 24px", maxWidth: 640, margin: "0 auto" }}>
+    <div style={{ minHeight: "100svh", padding: "24px 20px", paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 24px)", maxWidth: 640, margin: "0 auto" }}>
       <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: "0.65rem", color: T.accent, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 6 }}>
-            ✦ Search History
-          </div>
-          <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.6rem", fontWeight: 500, color: T.text }}>
-            Your searches
+          <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: T.text, letterSpacing: "-0.03em" }}>
+            History
           </h2>
         </div>
         {history.length > 0 && (
           <button
             onClick={onClear}
-            style={{ fontSize: "0.72rem", color: T.textMuted, background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "color 0.2s, border-color 0.2s" }}
-            onMouseEnter={e => { e.currentTarget.style.color = T.red; e.currentTarget.style.borderColor = T.red; }}
-            onMouseLeave={e => { e.currentTarget.style.color = T.textMuted; e.currentTarget.style.borderColor = T.border; }}
+            style={{ fontSize: "0.9rem", color: T.red, background: "none", border: "none", cursor: "pointer", fontWeight: 400 }}
           >
             Clear all
           </button>
@@ -2050,7 +2102,7 @@ function RatingStatsPanel() {
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 24 }}>
         <h2 style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontWeight: 700, letterSpacing: "-0.02em",
           fontSize: "1.6rem", fontWeight: 600, color: T.text,
         }}>
           Ratings Overview
@@ -2307,7 +2359,7 @@ function AdminFlagsView({ onFlagsChange }) {
             </span>
           )}
           <h2 style={{
-            fontFamily: "'Cormorant Garamond', serif",
+            fontWeight: 700, letterSpacing: "-0.02em",
             fontSize: "1.6rem", fontWeight: 600, color: T.text,
           }}>
             Low-Quality Match Flags
@@ -2406,7 +2458,7 @@ function AdminFlagsView({ onFlagsChange }) {
                         background: T.accentBg, border: `1px solid ${T.accentRing}`,
                         color: T.accent, borderRadius: 6, fontSize: "0.7rem",
                         cursor: isBusy ? "default" : "pointer",
-                        fontFamily: "'DM Sans', sans-serif",
+                        
                       }}
                     >
                       Dismiss
@@ -2420,7 +2472,7 @@ function AdminFlagsView({ onFlagsChange }) {
                         border: "1px solid rgba(201,112,112,0.25)",
                         color: T.red, borderRadius: 6, fontSize: "0.7rem",
                         cursor: isBusy ? "default" : "pointer",
-                        fontFamily: "'DM Sans', sans-serif",
+                        
                       }}
                     >
                       Delete
@@ -2734,7 +2786,8 @@ export default function App() {
   return (
     <>
       <StyleInjector />
-      <Navbar activeTab={activeTab} onTab={setActiveTab} onLogoClick={reset} />
+      {/* Content sits above the fixed bottom tab bar */}
+      <div style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
 
       {activeTab === "Store" ? (
         <StoreDashboardView />
@@ -2785,6 +2838,8 @@ export default function App() {
           )}
         </>
       )}
+      </div>
+      <Navbar activeTab={activeTab} onTab={setActiveTab} />
     </>
   );
 }
