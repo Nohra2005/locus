@@ -11,8 +11,11 @@ from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
@@ -150,6 +153,82 @@ async def _audit_corrupt_items(
                 print(f"[CORRUPT] Set payload failed for {pid[:60]}: {exc}")
 
 
+LOW_JUDGE_THRESHOLD = 0.30  # top-1 CLIP results scoring below this get flagged for review
+
+
+async def _audit_low_judge_top1(
+    top1_product_id: str,
+    scores_dict: dict,
+) -> None:
+    """
+    If the #1 CLIP result scores below LOW_JUDGE_THRESHOLD from the AI judge,
+    increment low_judge_flag_count on its Qdrant points.
+    Two low-judge flags → broken=True (hidden from all future searches immediately).
+    """
+    deadline = _time_module.monotonic() + 90
+    while _time_module.monotonic() < deadline:
+        if top1_product_id in scores_dict:
+            break
+        await asyncio.sleep(5)
+
+    judge_score = scores_dict.get(top1_product_id)
+    if judge_score is None:
+        print("[LOW_JUDGE] Top-1 product was not scored by judge — skipping audit")
+        return
+
+    if judge_score >= LOW_JUDGE_THRESHOLD:
+        return
+
+    print(f"[LOW_JUDGE] Top-1 CLIP result scored {judge_score:.3f} (< {LOW_JUDGE_THRESHOLD}) "
+          f"— flagging {top1_product_id[:60]}")
+
+    try:
+        scroll_hits, _ = await asyncio.to_thread(
+            client.scroll,
+            collection_name=COLLECTION_NAME,
+            scroll_filter=models.Filter(must=[
+                models.FieldCondition(key="product_id", match=models.MatchValue(value=top1_product_id))
+            ]),
+            limit=50,
+            with_payload=True,
+        )
+    except Exception as exc:
+        print(f"[LOW_JUDGE] Scroll failed for {top1_product_id[:60]}: {exc}")
+        return
+
+    if not scroll_hits:
+        return
+
+    current_flags = max((p.payload.get("low_judge_flag_count", 0) for p in scroll_hits), default=0)
+    new_flags = current_flags + 1
+    all_ids = [p.id for p in scroll_hits]
+
+    if new_flags >= 2:
+        try:
+            await asyncio.to_thread(
+                client.set_payload,
+                collection_name=COLLECTION_NAME,
+                payload={"broken": True, "low_judge_flag_count": new_flags},
+                points=all_ids,
+            )
+            print(f"[LOW_JUDGE] HIDDEN {len(all_ids)} point(s) for {top1_product_id[:60]} "
+                  f"(low_judge_flag_count → {new_flags}; broken=True — excluded from search)")
+        except Exception as exc:
+            print(f"[LOW_JUDGE] Set payload failed for {top1_product_id[:60]}: {exc}")
+    else:
+        try:
+            await asyncio.to_thread(
+                client.set_payload,
+                collection_name=COLLECTION_NAME,
+                payload={"low_judge_flag_count": new_flags},
+                points=all_ids,
+            )
+            print(f"[LOW_JUDGE] FLAGGED {len(all_ids)} point(s) for {top1_product_id[:60]} "
+                  f"(low_judge_flag_count → {new_flags}; will hide on next low-judge occurrence)")
+        except Exception as exc:
+            print(f"[LOW_JUDGE] Set payload failed for {top1_product_id[:60]}: {exc}")
+
+
 async def _run_tagger(search_id: str, image_b64: str, category: str) -> None:
     try:
         async with httpx.AsyncClient(timeout=20.0) as _tc:
@@ -164,7 +243,10 @@ async def _run_tagger(search_id: str, image_b64: str, category: str) -> None:
     finally:
         _attr_timestamps[search_id] = _time_module.monotonic()
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 Instrumentator().instrument(app).expose(app)
 
 # ── Custom Prometheus metrics ─────────────────────────────────────────────────
@@ -200,12 +282,27 @@ locus_link_monitor_next_run = Gauge(
     "Unix timestamp of the next scheduled link health check run",
 )
 
+_cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+@app.middleware("http")
+async def limit_upload_size(request: Request, call_next):
+    if request.method in ("POST", "PUT", "PATCH"):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > _MAX_UPLOAD_BYTES:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Payload too large. Maximum upload size is 10 MB."},
+            )
+    return await call_next(request)
 
 VISUAL_URL          = os.getenv("VISUAL_HOST",    "http://visual_engine:8001")
 TAGGER_HOST         = os.getenv("TAGGER_HOST",    "")
@@ -589,7 +686,8 @@ async def get_feedback(
 # ── Detect ─────────────────────────────────────────────────────────────────────
 
 @app.post("/detect")
-async def detect_items(file: UploadFile = File(...)):
+@limiter.limit("5/minute")
+async def detect_items(request: Request, file: UploadFile = File(...)):
     image_bytes = await file.read()
     async with httpx.AsyncClient() as http:
         resp = await http.post(
@@ -769,7 +867,9 @@ async def classify_crop(
 # ── Search ─────────────────────────────────────────────────────────────────────
 
 @app.post("/search")
+@limiter.limit("10/minute")
 async def search_items(
+    request:            Request,
     background_tasks:   BackgroundTasks,
     file:               UploadFile = File(...),
     x1:                 float      = Form(0),
@@ -782,6 +882,11 @@ async def search_items(
     skip_judge:         bool       = Form(False),
 ):
     image_bytes = await file.read()
+
+    try:
+        Image.open(io.BytesIO(image_bytes)).verify()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or corrupt image file")
 
     has_bbox = x2 > x1 and y2 > y1
     if has_bbox:
@@ -1018,6 +1123,12 @@ async def search_items(
                 _suspicious_pids,
                 _pid_counts,
                 matches[:3],
+                scores_dict,
+            )
+        if matches:
+            background_tasks.add_task(
+                _audit_low_judge_top1,
+                matches[0]["product_id"],
                 scores_dict,
             )
 

@@ -40,6 +40,7 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - GATEWAY_BASE_URL=${GATEWAY_BASE_URL:-http://localhost:8000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - GOLDEN_DATASET_PATH=/mlops/golden_dataset.json
     volumes:
       - ./gateway:/app

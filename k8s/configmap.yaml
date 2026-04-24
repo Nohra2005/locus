@@ -1,0 +1,15 @@
+# LOCUS: configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: locus-config
+data:
+  QDRANT_URL: "https://your-cluster.qdrant.io:6333"
+  GATEWAY_BASE_URL: "https://your-gateway-domain"
+  CORS_ORIGINS: "https://your-gateway-domain"
+  VISUAL_HOST: "http://visual-engine:8001"
+  TAGGER_HOST: "http://attribute-tagger:8004"
+  MLFLOW_TRACKING_URI: "http://mlflow:5000"
+  GOLDEN_DATASET_PATH: "/mlops/golden_dataset.json"
+  METRICS_PORT: "8003"
+  REFRESH_SECS: "30"

@@ -1,0 +1,83 @@
+name: Retrain LoRA Adapter
+
+on:
+  workflow_dispatch:       # manual trigger from GitHub UI
+  schedule:
+    - cron: "0 3 */2 * *" # every 2 days at 3am UTC
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install \
+            transformers peft sentence-transformers \
+            qdrant-client mlflow httpx pillow requests \
+            ultralytics openai-clip
+
+      - name: Train LoRA adapter
+        env:
+          QDRANT_URL:          ${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY:      ${{ secrets.QDRANT_API_KEY }}
+          OPENROUTER_API_KEY:  ${{ secrets.OPENROUTER_API_KEY }}
+          GATEWAY_URL:         http://${{ secrets.VM_HOST }}:8000
+          VISUAL_HOST:         http://${{ secrets.VM_HOST }}:8001
+          # Skip MLflow + promotion — GH runner can't reach VM's internal MLflow.
+          # We handle promotion via SCP + SSH below.
+          MLFLOW_TRACKING_URI: ""
+          SKIP_PROMOTE:        "true"
+        run: |
+          cd mlops
+          python retrain_clip.py --no-promote
+
+      - name: Find trained adapter
+        id: find_adapter
+        run: |
+          ADAPTER=$(ls -td mlops/lora_runs/*/ | head -1)
+          echo "adapter_dir=$ADAPTER" >> $GITHUB_OUTPUT
+          echo "Found adapter at: $ADAPTER"
+
+      - name: Deploy adapter to VM
+        env:
+          SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+        run: |
+          echo "$SSH_KEY" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+
+          ADAPTER="${{ steps.find_adapter.outputs.adapter_dir }}"
+          VM="${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}"
+          SSH="ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no"
+          SCP="scp -i /tmp/deploy_key -o StrictHostKeyChecking=no"
+
+          # Copy adapter weights
+          $SSH $VM "mkdir -p ~/locus/visual_engine/models/lora_adapter_new"
+          $SCP -r ${ADAPTER}lora_adapter/ $VM:~/locus/visual_engine/models/lora_adapter_new/
+          $SCP ${ADAPTER}visual_projection.pt $VM:~/locus/visual_engine/models/ 2>/dev/null || true
+
+          # Atomically swap old → new
+          $SSH $VM "
+            cd ~/locus/visual_engine/models
+            [ -d lora_adapter ] && mv lora_adapter lora_adapter_prev || true
+            mv lora_adapter_new lora_adapter
+          "
+
+          # Hot reload (no container restart needed)
+          $SSH $VM "curl -sf -X POST http://localhost:8001/reload-adapter \
+            -H 'Content-Type: application/json' \
+            -d '{\"adapter_path\": \"/app/models/lora_adapter\", \"visual_projection_path\": \"/app/models/visual_projection.pt\"}'"
+
+          # Re-embed the catalog with new model
+          $SSH $VM "curl -sf -X POST http://localhost:8000/reindex" || true
+
+          echo "Adapter deployed and visual engine reloaded."

@@ -84,9 +84,9 @@ def _count_feedback_pairs() -> int:
 
 def _cleanup_stale_runs() -> None:
     """
-    Mark any RUNNING runs in locus_lora_retraining as KILLED on startup.
-    These are zombies left by previous container crashes or Docker restarts —
-    MLflow never received an end signal when the process died.
+    On startup: terminate any zombie RUNNING runs, then delete all KILLED runs.
+    Zombies are left by container crashes — MLflow never received an end signal.
+    Deleting KILLED runs keeps the experiment view clean for inspection.
     """
     import mlflow, time as _time
     mlflow.set_tracking_uri(MLFLOW_URI)
@@ -95,6 +95,8 @@ def _cleanup_stale_runs() -> None:
         exp = client.get_experiment_by_name(EXPERIMENT_NAME)
         if exp is None:
             return
+
+        # 1. Terminate zombie RUNNING runs
         stale = client.search_runs(
             experiment_ids=[exp.experiment_id],
             filter_string="attributes.status = 'RUNNING'",
@@ -104,7 +106,18 @@ def _cleanup_stale_runs() -> None:
             now_ms = int(_time.time() * 1000)
             for r in stale:
                 client.set_terminated(r.info.run_id, status="KILLED", end_time=now_ms)
-            print(f"[RETRAIN] Cleaned up {len(stale)} stale RUNNING run(s) from previous crash/restart")
+            print(f"[RETRAIN] Terminated {len(stale)} zombie RUNNING run(s)")
+
+        # 2. Delete all KILLED runs (includes the ones we just terminated)
+        killed = client.search_runs(
+            experiment_ids=[exp.experiment_id],
+            filter_string="attributes.status = 'KILLED'",
+            max_results=100,
+        )
+        for r in killed:
+            client.delete_run(r.info.run_id)
+        if killed:
+            print(f"[RETRAIN] Deleted {len(killed)} KILLED run(s)")
     except Exception as e:
         print(f"[RETRAIN] Could not clean up stale runs: {e}")
 
@@ -138,7 +151,7 @@ def _check_triggers(force: bool) -> tuple[bool, str]:
     return False, f"no trigger condition met (pairs={n_pairs}, threshold={MIN_FEEDBACK_PAIRS})"
 
 
-def run_pipeline(force: bool = False) -> dict:
+def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
     """
     Full retraining pipeline. Returns a results dict with outcome and metrics.
     """
@@ -219,7 +232,7 @@ def run_pipeline(force: bool = False) -> dict:
         print("\n[RETRAIN] Step 5/5: Promote / rollback decision...")
         promoted = new_avg > old_avg + PROMOTION_DELTA
 
-        if promoted:
+        if promoted and not skip_promote:
             from promote_model import promote_adapter
             promote_adapter(
                 adapter_dir             = adapter_path,
@@ -229,6 +242,11 @@ def run_pipeline(force: bool = False) -> dict:
             mlflow.log_param("outcome", "promoted")
             mlflow.set_tag("promoted", "true")
             print(f"\n✅ PROMOTED — new adapter deployed (delta={delta:+.4f})")
+        elif promoted and skip_promote:
+            mlflow.log_param("outcome", "promoted-pending-deploy")
+            mlflow.set_tag("promoted", "pending")
+            print(f"\n✅ WOULD PROMOTE — adapter ready for deployment (delta={delta:+.4f})")
+            print(f"   Adapter saved at: {adapter_path}")
         else:
             mlflow.log_param("outcome", "rejected")
             mlflow.set_tag("promoted", "false")
@@ -289,13 +307,14 @@ def _schedule_loop(interval_hours: float = 48.0):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Locus LoRA retraining pipeline")
-    parser.add_argument("--force",    action="store_true", help="Skip trigger checks")
-    parser.add_argument("--schedule", type=float, default=0,
+    parser.add_argument("--force",      action="store_true", help="Skip trigger checks")
+    parser.add_argument("--no-promote", action="store_true", help="Train and evaluate but skip promotion (for CI use)")
+    parser.add_argument("--schedule",   type=float, default=0,
                         help="Run on schedule every N hours (0 = run once and exit)")
     args = parser.parse_args()
 
     if args.schedule > 0:
         _schedule_loop(interval_hours=args.schedule)
     else:
-        result = run_pipeline(force=args.force)
+        result = run_pipeline(force=args.force, skip_promote=args.no_promote)
         sys.exit(0 if result["outcome"] != "error" else 1)

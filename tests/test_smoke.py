@@ -15,7 +15,6 @@ import requests
 
 GATEWAY_URL      = "http://localhost:8000"
 VISUAL_URL       = "http://localhost:8001"
-RANKING_URL      = "http://localhost:8002"
 MLFLOW_URL       = "http://localhost:5000"
 TIMEOUT          = 10
 
@@ -131,8 +130,8 @@ class TestMLflow:
         data = r.json()
         experiments = data.get("experiments", [])
         names = [e["name"] for e in experiments]
-        assert "locus_search_accuracy" in names, (
-            f"Expected 'locus_search_accuracy' in experiments, got: {names}"
+        assert "locus_lora_retraining" in names, (
+            f"Expected 'locus_lora_retraining' in experiments, got: {names}"
         )
 
 
@@ -140,14 +139,14 @@ class TestMLflow:
 
 class TestIntegration:
     def test_category_labels_complete(self):
-        """Visual engine exposes all 13 canonical categories."""
+        """Visual engine exposes all fashion categories including not_fashion sentinel."""
         import sys, os
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "visual_engine"))
         from clip_labels import CANONICAL_LABELS
         expected = {
             "top", "sports_bra", "pants", "leggings", "shorts",
             "skirt", "dress", "sweater", "jacket", "shoes",
-            "hat", "bag", "jumpsuit",
+            "hat", "bag", "jumpsuit", "not_fashion",
         }
         assert set(CANONICAL_LABELS) == expected, (
             f"Label mismatch. Got: {set(CANONICAL_LABELS)}"

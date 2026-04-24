@@ -1,1 +1,143 @@
 # LOCUS: deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+        - name: gateway
+          image: locus/gateway:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: locus-config
+          env:
+            - name: QDRANT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: locus-secrets
+                  key: QDRANT_API_KEY
+            - name: OPENROUTER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: locus-secrets
+                  key: OPENROUTER_API_KEY
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: locus-secrets
+                  key: GOOGLE_API_KEY
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: visual-engine
+  labels:
+    app: visual-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: visual-engine
+  template:
+    metadata:
+      labels:
+        app: visual-engine
+    spec:
+      containers:
+        - name: visual-engine
+          image: locus/visual-engine:latest
+          ports:
+            - containerPort: 8001
+          env:
+            - name: TRANSFORMERS_CACHE
+              value: /root/.cache/huggingface
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: attribute-tagger
+  labels:
+    app: attribute-tagger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: attribute-tagger
+  template:
+    metadata:
+      labels:
+        app: attribute-tagger
+    spec:
+      containers:
+        - name: attribute-tagger
+          image: locus/attribute-tagger:latest
+          ports:
+            - containerPort: 8004
+          env:
+            - name: OPENROUTER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: locus-secrets
+                  key: OPENROUTER_API_KEY
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlops-exporter
+  labels:
+    app: mlops-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlops-exporter
+  template:
+    metadata:
+      labels:
+        app: mlops-exporter
+    spec:
+      containers:
+        - name: mlops-exporter
+          image: locus/mlops-exporter:latest
+          ports:
+            - containerPort: 8003
+          envFrom:
+            - configMapRef:
+                name: locus-config
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: 8003
+            initialDelaySeconds: 10
+            periodSeconds: 15
