@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker exec *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(curl -s http://localhost:5000/api/2.0/mlflow/runs/search -d '{\"experiment_ids\":[\"1\"],\"max_results\":3}' -H \"Content-Type: application/json\")",
+      "Bash(curl -s \"http://localhost:5000/api/2.0/mlflow/experiments/list\")",
+      "Bash(python3.11 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(e['experiment_id'], e['name']\\) for e in d.get\\('experiments',[]\\)]\")",
+      "Bash(curl -s \"http://localhost:5000/api/2.0/mlflow/experiments/search\")",
+      "Bash(curl -s \"http://localhost:5000/api/2.0/mlflow/experiments/search?max_results=10\")",
+      "Bash(curl -s -X POST \"http://localhost:5000/api/2.0/mlflow/runs/search\" -H \"Content-Type: application/json\" -d '{\"experiment_ids\":[\"319301714643163518\"],\"max_results\":5,\"order_by\":[\"start_time DESC\"]}')",
+      "Bash(grep -E \"\\\\.\\(py|js|ts\\)$\")",
+      "Bash(node -e ' *)",
+      "Bash(git checkout *)",
+      "Bash(git push *)",
+      "Bash(docker-compose ps *)",
+      "Bash(docker compose *)",
+      "Bash(curl -s http://localhost:9090/api/v1/targets)",
+      "Bash(curl -s \"http://localhost:9090/api/v1/query?query=up%7Bjob%3D%22gateway%22%7D\")",
+      "Bash(curl -s \"http://localhost:9090/api/v1/query?query=vector\\(1\\)\")",
+      "Bash(curl -s -u admin:admin \"http://localhost:3000/api/datasources\")",
+      "Bash(curl -s -u \"admin:admin\" \"http://localhost:3000/api/datasources/proxy/uid/prometheus/api/v1/query?query=up\")",
+      "Bash(curl -s \"http://localhost:9090/api/v1/query?query=locus_qdrant_items_total\")",
+      "Bash(curl -s \"http://localhost:9090/api/v1/query?query=locus_gemini_cache_entries\")",
+      "Bash(docker cp *)",
+      "Bash(docker stop *)",
+      "Bash(docker start *)",
+      "Bash(docker restart *)",
+      "Bash(docker run *)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\User\\Desktop"
+    ]
+  }
+}

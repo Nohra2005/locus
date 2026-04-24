@@ -17,7 +17,8 @@ GATEWAY_URL      = "http://localhost:8000"
 VISUAL_URL       = "http://localhost:8001"
 RANKING_URL      = "http://localhost:8002"
 MLFLOW_URL       = "http://localhost:5000"
-TIMEOUT          = 10
+TIMEOUT          = 10   # fast endpoints
+TIMEOUT_SLOW     = 60   # Qdrant-heavy endpoints (scroll full collection)
 
 
 # ── Gateway ───────────────────────────────────────────────────────────────────
@@ -31,26 +32,25 @@ class TestGateway:
         assert "status" in data or "service" in data or r.status_code == 200
 
     def test_gateway_index_stats(self):
-        """Index stats endpoint returns collection info."""
-        r = requests.get(f"{GATEWAY_URL}/index-stats", timeout=TIMEOUT)
+        """Index stats endpoint returns collection info (scrolls full Qdrant collection — slow)."""
+        r = requests.get(f"{GATEWAY_URL}/index-stats", timeout=TIMEOUT_SLOW)
         assert r.status_code == 200
         data = r.json()
-        # Should have at least a count of indexed items
         assert isinstance(data, dict)
 
     def test_gateway_store_catalogue_requires_param(self):
         """Store catalogue endpoint requires store_name param."""
-        r = requests.get(f"{GATEWAY_URL}/store-catalogue", timeout=TIMEOUT)
+        r = requests.get(f"{GATEWAY_URL}/store-catalogue", timeout=TIMEOUT_SLOW)
         assert r.status_code == 422  # Unprocessable entity — missing required param
 
     def test_gateway_skipped_products(self):
-        """Skipped products endpoint is reachable."""
-        r = requests.get(f"{GATEWAY_URL}/skipped-products", timeout=TIMEOUT)
+        """Skipped products endpoint is reachable (queries Qdrant — slow)."""
+        r = requests.get(f"{GATEWAY_URL}/skipped-products", timeout=TIMEOUT_SLOW)
         assert r.status_code == 200
 
     def test_gateway_feedback_get(self):
-        """Feedback GET endpoint is reachable."""
-        r = requests.get(f"{GATEWAY_URL}/feedback", timeout=TIMEOUT)
+        """Feedback GET endpoint is reachable (queries Qdrant — slow)."""
+        r = requests.get(f"{GATEWAY_URL}/feedback", timeout=TIMEOUT_SLOW)
         assert r.status_code == 200
 
     def test_gateway_search_requires_file(self):
@@ -147,7 +147,7 @@ class TestIntegration:
         expected = {
             "top", "sports_bra", "pants", "leggings", "shorts",
             "skirt", "dress", "sweater", "jacket", "shoes",
-            "hat", "bag", "jumpsuit",
+            "hat", "bag", "jumpsuit", "not_fashion",
         }
         assert set(CANONICAL_LABELS) == expected, (
             f"Label mismatch. Got: {set(CANONICAL_LABELS)}"

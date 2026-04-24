@@ -10,7 +10,12 @@
       "Bash(grep -v \"^[0-9a-f]*: [0-9a-f ]*  .\\\\{16\\\\}$\")",
       "Bash(grep -v \"^0[0-9a-f]$\\\\|^[0-7][0-9a-f]$\\\\|^$\")",
       "Bash(docker buildx:*)",
-      "Bash(docker version:*)"
+      "Bash(docker version:*)",
+      "Bash(npm run *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git fetch *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(curl -s -X POST http://localhost:8000/trigger-retrain)"
     ]
   }
 }

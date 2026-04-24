@@ -32,11 +32,35 @@ import time
 
 from prometheus_client import Gauge, Counter, start_http_server
 
-MLFLOW_URI     = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
-EXPORT_PORT    = int(os.getenv("METRICS_PORT", "8003"))
-REFRESH_SECS   = int(os.getenv("REFRESH_SECS", "30"))
-RESULTS_PATH   = os.getenv("GEMINI_RESULTS_PATH", "/mlops/gemini_judge_results.json")
-CACHE_PATH     = os.getenv("VSS_CACHE_PATH",       "/mlops/vss_cache.json")
+MLFLOW_URI            = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
+EXPORT_PORT           = int(os.getenv("METRICS_PORT", "8003"))
+REFRESH_SECS          = int(os.getenv("REFRESH_SECS", "30"))
+RESULTS_PATH          = os.getenv("GEMINI_RESULTS_PATH", "/mlops/gemini_judge_results.json")
+CACHE_PATH            = os.getenv("VSS_CACHE_PATH",       "/mlops/vss_cache.json")
+GOLDEN_DATASET_PATH   = os.getenv("GOLDEN_DATASET_PATH",  "/mlops/golden_dataset.json")
+
+# ── Category inference ────────────────────────────────────────────────────────
+# Ordered so more-specific terms match before broader ones.
+_CATEGORY_KEYWORDS: list[tuple[str, list[str]]] = [
+    ("Jumpsuits",  ["jumpsuit", "romper", "dungaree", "overall"]),
+    ("Activewear", ["sports bra", "gym", "yoga", "athletic"]),
+    ("Dresses",    ["dress"]),
+    ("Skirts",     ["skirt"]),
+    ("Outerwear",  ["coat", "jacket", "blazer", "parka", "anorak", "puffer", "bomber", "windbreaker"]),
+    ("Footwear",   ["boot", "sneaker", "sandal", "shoe", "heel", "loafer", "pump", "trainer", "mule"]),
+    ("Bags",       ["bag", "tote", "purse", "clutch", "backpack", "crossbody", "satchel"]),
+    ("Accessories",["hat", "cap", "beret", "scarf", "belt", "sunglasses", "watch"]),
+    ("Tops",       ["top", "shirt", "blouse", "hoodie", "cardigan", "sweatshirt", "tank", "sweater", "pullover", "polo", "tee"]),
+    ("Bottoms",    ["jeans", "trouser", "pant", "legging", "chino", "jogger", "short"]),
+]
+
+
+def _infer_category(label: str) -> str:
+    lower = label.lower()
+    for cat, keywords in _CATEGORY_KEYWORDS:
+        if any(kw in lower for kw in keywords):
+            return cat
+    return "Other"
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 
@@ -64,7 +88,9 @@ gemini_queries_fair  = Gauge("locus_gemini_queries_fair",      "Queries with VSS
 gemini_queries_good  = Gauge("locus_gemini_queries_good",      "Queries with VSS@5 in [0.70, 0.85)")
 gemini_queries_excel = Gauge("locus_gemini_queries_excellent", "Queries with VSS@5 >= 0.85")
 gemini_top1_avg      = Gauge("locus_gemini_avg_top1",          "Average Top-1 VSS score across all queries")
-gemini_score_bucket  = Gauge("locus_gemini_score_bucket",      "Count of result scores <= threshold", ["le"])
+gemini_score_bucket       = Gauge("locus_gemini_score_bucket",          "Count of result scores <= threshold", ["le"])
+gemini_avg_vss5_by_cat    = Gauge("locus_gemini_avg_vss5_by_category", "Avg VSS@5 per clothing category",    ["category"])
+golden_dataset_size       = Gauge("locus_golden_dataset_size",          "Number of queries in golden_dataset.json")
 
 
 def _get_mlflow_client():
@@ -193,7 +219,16 @@ def _refresh_live_training_metrics(client) -> None:
 
 
 def _refresh_gemini_metrics() -> None:
-    """Read gemini_judge_results.json and vss_cache.json, update Gemini gauges."""
+    """Read gemini_judge_results.json and results_cache.json, update Gemini gauges."""
+    # Always update cache entry count — this is the judge health proxy.
+    if os.path.exists(CACHE_PATH):
+        try:
+            with open(CACHE_PATH) as f:
+                cache = json.load(f)
+            gemini_cache_entries.set(len(cache))
+        except Exception as e:
+            print(f"[exporter] Could not read results cache: {e}")
+
     if not os.path.exists(RESULTS_PATH):
         print(f"[exporter] Gemini results not found: {RESULTS_PATH} — waiting for first eval run")
         return
@@ -222,30 +257,43 @@ def _refresh_gemini_metrics() -> None:
     gemini_queries_good.set( sum(1 for s in vss5_list if 0.70 <= s < 0.85))
     gemini_queries_excel.set(sum(1 for s in vss5_list if s >= 0.85))
 
+    # ── per-query VSS@5 ───────────────────────────────────────────────────────
+    cat_scores: dict[str, list[float]] = {}
     for r in results:
-        if "vss5" in r:
-            gemini_query_vss5.labels(label=r["label"][:50]).set(r["vss5"])
+        if "vss5" not in r:
+            continue
+        gemini_query_vss5.labels(label=r["label"][:50]).set(r["vss5"])
+        cat = r.get("category") or _infer_category(r["label"])
+        cat_scores.setdefault(cat, []).append(r["vss5"])
+
+    for cat, scores in cat_scores.items():
+        gemini_avg_vss5_by_cat.labels(category=cat).set(round(sum(scores) / len(scores), 4))
 
     for threshold in [0.2, 0.4, 0.6, 0.8, 1.0]:
         gemini_score_bucket.labels(le=str(threshold)).set(
             sum(1 for s in all_scores if s <= threshold)
         )
 
-    if os.path.exists(CACHE_PATH):
-        try:
-            with open(CACHE_PATH) as f:
-                cache = json.load(f)
-            gemini_cache_entries.set(len(cache))
-        except Exception as e:
-            print(f"[exporter] Could not read VSS cache: {e}")
-
     print(
         f"[exporter] Gemini — {len(vss5_list)} queries, avg_vss5={avg:.3f}, "
+        f"categories={list(cat_scores.keys())} "
         f"poor={int(gemini_queries_poor._value.get())} "
         f"fair={int(gemini_queries_fair._value.get())} "
         f"good={int(gemini_queries_good._value.get())} "
         f"excellent={int(gemini_queries_excel._value.get())}"
     )
+
+
+def _refresh_golden_dataset_size() -> None:
+    if not os.path.exists(GOLDEN_DATASET_PATH):
+        return
+    try:
+        with open(GOLDEN_DATASET_PATH) as f:
+            data = json.load(f)
+        golden_dataset_size.set(len(data))
+        print(f"[exporter] Golden dataset — {len(data)} queries")
+    except Exception as e:
+        print(f"[exporter] Could not read golden dataset: {e}")
 
 
 def refresh() -> None:
@@ -256,6 +304,7 @@ def refresh() -> None:
     except Exception as e:
         print(f"[exporter] MLflow connection error: {e}")
     _refresh_gemini_metrics()
+    _refresh_golden_dataset_size()
 
 
 if __name__ == "__main__":

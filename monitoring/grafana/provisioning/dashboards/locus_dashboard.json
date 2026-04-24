@@ -1,542 +1,4502 @@
 {
-  "title": "Locus — AI Fashion Search",
+  "title": "Locus — Admin Dashboard",
   "uid": "locus-main",
   "schemaVersion": 38,
-  "version": 2,
-  "refresh": "30s",
+  "version": 4,
+  "refresh": "15s",
   "timezone": "browser",
-  "tags": ["locus", "ai", "fashion"],
-  "time": { "from": "now-3h", "to": "now" },
+  "tags": [
+    "locus",
+    "ai",
+    "fashion",
+    "admin"
+  ],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "panels": [
-
     {
-      "id": 1, "type": "row", "title": "Qdrant Collections",
-      "collapsed": false, "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }
-    },
-    {
-      "id": 2, "type": "stat",
-      "title": "locus_items",
-      "description": "Fashion products indexed and searchable",
-      "gridPos": { "x": 0, "y": 1, "w": 8, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_qdrant_items_total{collection=\"locus_items\"}", "legendFormat": "Items" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": 0 }, { "color": "yellow", "value": 50 }, { "color": "green", "value": 200 }
-          ]},
-          "color": { "mode": "thresholds" }
-        }
+      "id": 50,
+      "type": "row",
+      "title": "Service Health Bulbs",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
       }
     },
     {
-      "id": 3, "type": "stat",
-      "title": "locus_skipped",
-      "description": "Products rejected during ingestion (no clothing detected, low confidence)",
-      "gridPos": { "x": 8, "y": 1, "w": 8, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_qdrant_items_total{collection=\"locus_skipped\"}", "legendFormat": "Skipped" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": { "mode": "fixed", "fixedColor": "orange" }
-        }
-      }
-    },
-    {
-      "id": 4, "type": "stat",
-      "title": "locus_feedback",
-      "description": "User star ratings collected — need 200+ for CLIP fine-tuning",
-      "gridPos": { "x": 16, "y": 1, "w": 8, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_qdrant_items_total{collection=\"locus_feedback\"}", "legendFormat": "Feedback" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": 0 }, { "color": "yellow", "value": 100 }, { "color": "green", "value": 200 }
-          ]},
-          "color": { "mode": "thresholds" }
-        }
-      }
-    },
-    {
-      "id": 5, "type": "timeseries",
-      "title": "Collection sizes over time",
-      "description": "Track catalog growth and feedback accumulation",
-      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        { "expr": "locus_qdrant_items_total{collection=\"locus_items\"}",    "legendFormat": "locus_items" },
-        { "expr": "locus_qdrant_items_total{collection=\"locus_skipped\"}",  "legendFormat": "locus_skipped" },
-        { "expr": "locus_qdrant_items_total{collection=\"locus_feedback\"}", "legendFormat": "locus_feedback" }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } }
+      "id": 51,
+      "type": "stat",
+      "title": "Gateway",
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 3,
+        "h": 3
       },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"gateway\"}",
+          "legendFormat": "Gateway"
+        }
+      ],
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi" }
-      }
-    },
-
-    {
-      "id": 10, "type": "row", "title": "ML Quality — Recall@K & LoRA Retraining",
-      "collapsed": false, "gridPos": { "x": 0, "y": 13, "w": 24, "h": 1 }
-    },
-    {
-      "id": 11, "type": "gauge",
-      "title": "Recall@5 — Golden Dataset",
-      "description": "Fraction of golden queries where ≥1 relevant product appears in top-5. Target: >0.90",
-      "gridPos": { "x": 0, "y": 14, "w": 5, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_recall_at_5", "legendFormat": "Recall@5" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit", "min": 0, "max": 1,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": 0 }, { "color": "orange", "value": 0.70 },
-            { "color": "yellow", "value": 0.85 }, { "color": "green", "value": 0.93 }
-          ]},
-          "color": { "mode": "thresholds" }
-        }
-      }
-    },
-    {
-      "id": 12, "type": "stat",
-      "title": "Recall@10",
-      "gridPos": { "x": 5, "y": 14, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_recall_at_10", "legendFormat": "Recall@10" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none" },
-      "fieldConfig": { "defaults": { "unit": "percentunit" } }
-    },
-    {
-      "id": 13, "type": "stat",
-      "title": "Recall@25",
-      "gridPos": { "x": 5, "y": 18, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_recall_at_25", "legendFormat": "Recall@25" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "fieldConfig": {
-        "defaults": { "unit": "percentunit", "color": { "mode": "fixed", "fixedColor": "green" } }
-      }
-    },
-    {
-      "id": 14, "type": "bargauge",
-      "title": "LoRA Retraining — Run Outcomes",
-      "description": "How many pipeline runs promoted vs rejected the new adapter.",
-      "gridPos": { "x": 9, "y": 14, "w": 6, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        { "expr": "locus_lora_promoted_total",                                        "legendFormat": "Promoted" },
-        { "expr": "locus_lora_runs_total - locus_lora_promoted_total",                "legendFormat": "Rejected" }
-      ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }] },
-          "color": { "mode": "thresholds" }
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
         },
-        "overrides": [
-          { "matcher": { "id": "byName", "options": "Promoted" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
-          { "matcher": { "id": "byName", "options": "Rejected" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] }
-        ]
-      }
-    },
-    {
-      "id": 15, "type": "stat",
-      "title": "Queries Evaluated",
-      "description": "Number of golden queries in the latest evaluation run.",
-      "gridPos": { "x": 15, "y": 14, "w": 5, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_queries_evaluated_total", "legendFormat": "Queries" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none" },
-      "fieldConfig": { "defaults": { "unit": "short" } }
-    },
-    {
-      "id": 18, "type": "stat",
-      "title": "Latest LoRA Δhit@5",
-      "description": "hit@5 improvement of the last retraining run vs baseline. Positive = better model.",
-      "gridPos": { "x": 15, "y": 18, "w": 5, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_lora_delta_hit5", "legendFormat": "Δhit@5" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": -1 }, { "color": "yellow", "value": -0.02 }, { "color": "green", "value": 0 }
-          ]},
-          "color": { "mode": "thresholds" }
-        }
-      }
-    },
-    {
-      "id": 19, "type": "stat",
-      "title": "Baseline hit@5",
-      "description": "Best hit@5 from locus_search_accuracy. New adapters must beat this - 0.02 to be promoted.",
-      "gridPos": { "x": 20, "y": 14, "w": 4, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_baseline_hit5", "legendFormat": "Baseline" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "fieldConfig": { "defaults": { "unit": "percentunit", "color": { "mode": "fixed", "fixedColor": "blue" } } }
-    },
-    {
-      "id": 40, "type": "row", "title": "Latest Retrain Evaluation",
-      "collapsed": false, "gridPos": { "x": 0, "y": 29, "w": 24, "h": 1 }
-    },
-    {
-      "id": 41, "type": "gauge",
-      "title": "New Model hit@5",
-      "description": "hit@5 of the newly trained adapter from the most recent retrain run. Must be ≥ baseline − 0.02 to promote.",
-      "gridPos": { "x": 0, "y": 30, "w": 6, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_lora_new_hit5", "legendFormat": "New hit@5" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit", "min": 0, "max": 1,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": 0 }, { "color": "orange", "value": 0.70 },
-            { "color": "yellow", "value": 0.85 }, { "color": "green", "value": 0.93 }
-          ]},
-          "color": { "mode": "thresholds" }
-        }
-      }
-    },
-    {
-      "id": 42, "type": "gauge",
-      "title": "New Model ACS@5",
-      "description": "Average cosine similarity of the top-5 results from the new adapter across golden queries.",
-      "gridPos": { "x": 6, "y": 30, "w": 6, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_lora_new_acs5", "legendFormat": "New ACS@5" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit", "min": 0, "max": 1,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": 0 }, { "color": "orange", "value": 0.50 },
-            { "color": "yellow", "value": 0.65 }, { "color": "green", "value": 0.75 }
-          ]},
-          "color": { "mode": "thresholds" }
-        }
-      }
-    },
-    {
-      "id": 43, "type": "stat",
-      "title": "Promotion Decision",
-      "description": "Outcome of the last retrain run. Green = new adapter deployed; orange = rejected, kept existing model.",
-      "gridPos": { "x": 12, "y": 30, "w": 6, "h": 3 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_lora_delta_hit5", "legendFormat": "Δhit@5" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit", "decimals": 3,
-          "displayName": "Δhit@5 vs baseline",
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": -1 }, { "color": "orange", "value": -0.02 }, { "color": "green", "value": 0 }
-          ]},
-          "color": { "mode": "thresholds" }
-        }
-      }
-    },
-    {
-      "id": 44, "type": "stat",
-      "title": "Total Promotions",
-      "description": "How many times a retrained adapter has been promoted to production.",
-      "gridPos": { "x": 12, "y": 33, "w": 6, "h": 3 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_lora_promoted_total", "legendFormat": "Promotions" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "green" } } }
-    },
-    {
-      "id": 45, "type": "timeseries",
-      "title": "Evaluation Quality Trend",
-      "description": "new_hit@5 and new_acs@5 from each completed retrain run. Upward trend = improving model.",
-      "gridPos": { "x": 18, "y": 30, "w": 6, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        { "expr": "locus_lora_new_hit5",  "legendFormat": "hit@5" },
-        { "expr": "locus_lora_new_acs5",  "legendFormat": "ACS@5" }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit", "min": 0, "max": 1,
-          "custom": { "lineWidth": 2, "fillOpacity": 15 }
-        }
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
       },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
-    },
-
-    {
-      "id": 16, "type": "timeseries",
-      "title": "Recall@K Trend — Across Eval Runs",
-      "description": "Should improve after each successful LoRA promotion.",
-      "gridPos": { "x": 0, "y": 37, "w": 14, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        { "expr": "locus_recall_at_5",  "legendFormat": "Recall@5" },
-        { "expr": "locus_recall_at_10", "legendFormat": "Recall@10" },
-        { "expr": "locus_recall_at_25", "legendFormat": "Recall@25" }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit", "min": 0, "max": 1,
-          "custom": { "lineWidth": 2, "fillOpacity": 15 }
-        }
-      },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
-    },
-    {
-      "id": 17, "type": "timeseries",
-      "title": "LoRA Retraining Runs Over Time",
-      "description": "Cumulative pipeline runs and promotions. Gap between lines = rejected runs.",
-      "gridPos": { "x": 14, "y": 37, "w": 10, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        { "expr": "locus_lora_runs_total",      "legendFormat": "Total runs" },
-        { "expr": "locus_lora_promoted_total",  "legendFormat": "Promotions" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-
-    {
-      "id": 30, "type": "row", "title": "Live Retraining Monitor",
-      "collapsed": false, "gridPos": { "x": 0, "y": 44, "w": 24, "h": 1 }
-    },
-    {
-      "id": 31, "type": "stat",
-      "title": "Training Active",
-      "description": "1 while retrain_clip.py pipeline is running, 0 otherwise.",
-      "gridPos": { "x": 0, "y": 45, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_retrain_active", "legendFormat": "Active" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "IDLE",     "color": "blue"  } } },
-            { "type": "value", "options": { "1": { "text": "TRAINING", "color": "green" } } }
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "✕ DOWN",
+                  "color": "red"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "✓ UP",
+                  "color": "green"
+                }
+              }
+            }
           ],
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }, { "color": "green", "value": 1 }] },
-          "color": { "mode": "thresholds" }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
         }
       }
     },
     {
-      "id": 32, "type": "stat",
-      "title": "Current Step / Max Steps",
-      "description": "Training step progress in the active run.",
-      "gridPos": { "x": 4, "y": 45, "w": 5, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        { "expr": "locus_retrain_step",       "legendFormat": "Step" },
-        { "expr": "locus_retrain_max_steps",  "legendFormat": "Max" }
-      ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none", "textMode": "value_and_name" },
-      "fieldConfig": { "defaults": { "unit": "short" } }
-    },
-    {
-      "id": 33, "type": "gauge",
-      "title": "Training Progress",
-      "description": "Percent of MAX_TRAIN_STEPS completed in the active run.",
-      "gridPos": { "x": 9, "y": 45, "w": 5, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "locus_retrain_step / clamp_min(locus_retrain_max_steps, 1)",
-        "legendFormat": "Progress"
-      }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit", "min": 0, "max": 1,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "blue", "value": 0 }, { "color": "green", "value": 1 }
-          ]},
-          "color": { "mode": "thresholds" }
-        }
-      }
-    },
-    {
-      "id": 34, "type": "stat",
-      "title": "Latest Train Loss",
-      "description": "Most recently logged InfoNCE train_loss from the active LoRA run.",
-      "gridPos": { "x": 14, "y": 45, "w": 5, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_lora_train_loss", "legendFormat": "Loss" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short", "decimals": 4,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": 0 }, { "color": "orange", "value": 3 }, { "color": "yellow", "value": 2 }, { "color": "green", "value": 1 }
-          ]},
-          "color": { "mode": "thresholds" }
-        }
-      }
-    },
-    {
-      "id": 35, "type": "timeseries",
-      "title": "Train Loss Curve (live)",
-      "description": "InfoNCE loss sampled every LOG_EVERY_STEPS steps. Updates every 30s via the metrics exporter. Loss should decrease as training progresses.",
-      "gridPos": { "x": 0, "y": 49, "w": 24, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_lora_train_loss", "legendFormat": "Train Loss" }],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short", "decimals": 4,
-          "custom": { "lineWidth": 2, "fillOpacity": 20, "spanNulls": false },
-          "color": { "mode": "fixed", "fixedColor": "orange" }
-        }
+      "id": 52,
+      "type": "stat",
+      "title": "Qdrant",
+      "description": "Proxy: healthy if gateway can read locus_items collection.",
+      "gridPos": {
+        "x": 3,
+        "y": 1,
+        "w": 3,
+        "h": 3
       },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "clamp_max(locus_qdrant_items_total{collection=\"locus_items\"}, 1)",
+          "legendFormat": "Qdrant"
+        }
+      ],
       "options": {
-        "legend": { "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single" }
-      }
-    },
-
-    {
-      "id": 20, "type": "row", "title": "Service Health",
-      "collapsed": false, "gridPos": { "x": 0, "y": 57, "w": 24, "h": 1 }
-    },
-    {
-      "id": 21, "type": "timeseries",
-      "title": "Request Rate by Endpoint (req/s)",
-      "gridPos": { "x": 0, "y": 58, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        { "expr": "rate(http_requests_total{handler=\"/search\"}[1m])",   "legendFormat": "/search" },
-        { "expr": "rate(http_requests_total{handler=\"/detect\"}[1m])",   "legendFormat": "/detect" },
-        { "expr": "rate(http_requests_total{handler=\"/feedback\"}[1m])", "legendFormat": "/feedback" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
-    },
-    {
-      "id": 22, "type": "timeseries",
-      "title": "P95 Response Latency by Endpoint (s)",
-      "gridPos": { "x": 12, "y": 58, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        { "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/search\"}[2m]))",   "legendFormat": "/search p95" },
-        { "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/detect\"}[2m]))",   "legendFormat": "/detect p95" },
-        { "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/feedback\"}[2m]))", "legendFormat": "/feedback p95" }
-      ],
-      "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 } } },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 23, "type": "timeseries",
-      "title": "Error Rate (4xx + 5xx per second)",
-      "gridPos": { "x": 0, "y": 65, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "rate(http_requests_total{status=~\"4..|5..\"}[1m])", "legendFormat": "Errors/s" }],
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
-          "color": { "mode": "fixed", "fixedColor": "red" },
-          "custom": { "lineWidth": 2, "fillOpacity": 20 }
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "✕ DOWN",
+                  "color": "red"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "✓ UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
         }
+      }
+    },
+    {
+      "id": 53,
+      "type": "stat",
+      "title": "Gemini Judge",
+      "description": "Proxy: healthy if judge cache has entries (judge has been called at least once).",
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 3,
+        "h": 3
       },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
-    },
-    {
-      "id": 24, "type": "timeseries",
-      "title": "Searches by Detected Category",
-      "description": "What types of clothing users are searching for most",
-      "gridPos": { "x": 12, "y": 65, "w": 12, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "rate(locus_searches_total[5m])", "legendFormat": "{{category}}" }],
-      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } } },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
-    },
-    {
-      "id": 25, "type": "bargauge",
-      "title": "Feedback — Star Rating Distribution",
-      "description": "All-time feedback by star rating. 4-5 = positive training signal, 1-2 = negative.",
-      "gridPos": { "x": 0, "y": 72, "w": 12, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
-        { "expr": "sum(locus_feedback_stars_total{stars=\"5\"})", "legendFormat": "5 stars" },
-        { "expr": "sum(locus_feedback_stars_total{stars=\"4\"})", "legendFormat": "4 stars" },
-        { "expr": "sum(locus_feedback_stars_total{stars=\"3\"})", "legendFormat": "3 stars" },
-        { "expr": "sum(locus_feedback_stars_total{stars=\"2\"})", "legendFormat": "2 stars" },
-        { "expr": "sum(locus_feedback_stars_total{stars=\"1\"})", "legendFormat": "1 star" }
+        {
+          "expr": "clamp_max(locus_gemini_cache_entries, 1)",
+          "legendFormat": "Judge"
+        }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true },
-      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "blue" } } }
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "✕ DOWN",
+                  "color": "red"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "✓ UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
     },
     {
-      "id": 26, "type": "stat",
-      "title": "Positive Feedback Ratio",
-      "description": "Ratio of 4-5 star ratings vs all non-neutral ratings. >70% = users happy with results.",
-      "gridPos": { "x": 12, "y": 72, "w": 12, "h": 6 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "sum(locus_feedback_stars_total{signal=\"positive\"}) / (sum(locus_feedback_stars_total{signal=\"positive\"}) + sum(locus_feedback_stars_total{signal=\"negative\"}))",
-        "legendFormat": "Positive ratio"
-      }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "id": 54,
+      "type": "stat",
+      "title": "LoRA Trainer",
+      "gridPos": {
+        "x": 9,
+        "y": 1,
+        "w": 3,
+        "h": 3
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"mlops_exporter\"}",
+          "legendFormat": "LoRA"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "✕ DOWN",
+                  "color": "red"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "✓ UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 57,
+      "type": "stat",
+      "title": "Visual Engine",
+      "description": "up=1 only after CLIP finishes loading — goes green ~30–60s after container start.",
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 3,
+        "h": 3
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"visual_engine\"}",
+          "legendFormat": "Visual Engine"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "⌛ LOADING",
+                  "color": "yellow"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "✓ READY",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 59,
+      "type": "stat",
+      "title": "Attr Tagger",
+      "gridPos": {
+        "x": 15,
+        "y": 1,
+        "w": 3,
+        "h": 3
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "up{job=\"attribute_tagger\"}",
+          "legendFormat": "Tagger"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "✕ DOWN",
+                  "color": "red"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "✓ UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 55,
+      "type": "stat",
+      "title": "Prometheus",
+      "description": "Always green when this dashboard is visible.",
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 3,
+        "h": 3
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "vector(1)",
+          "legendFormat": "Prometheus"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "✓ UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 56,
+      "type": "stat",
+      "title": "Grafana",
+      "description": "Always green when this dashboard is visible.",
+      "gridPos": {
+        "x": 21,
+        "y": 1,
+        "w": 3,
+        "h": 3
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "vector(1)",
+          "legendFormat": "Grafana"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "✓ UP",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 100,
+      "type": "row",
+      "title": "System Overview",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 101,
+      "type": "stat",
+      "title": "Searches — Last Minute",
+      "description": "Total search requests in the last 60 seconds.",
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "increase(locus_searches_total[1m])",
+          "legendFormat": "Searches"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 102,
+      "type": "stat",
+      "title": "Errors — Last Minute",
+      "description": "4xx + 5xx HTTP errors in the last 60 seconds.",
+      "gridPos": {
+        "x": 4,
+        "y": 5,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "increase(http_requests_total{status_code=~\"4..|5..\"}[1m])",
+          "legendFormat": "Errors"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 103,
+      "type": "stat",
+      "title": "Search Latency P95",
+      "description": "95th-percentile response time for /search over the last 2 minutes.",
+      "gridPos": {
+        "x": 8,
+        "y": 5,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/search\"}[2m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 104,
+      "type": "stat",
+      "title": "AI Judge Latency P95",
+      "description": "95th-percentile latency of the Gemini attribute tagger (AI evaluation component).",
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(locus_tagger_latency_seconds_bucket[2m]))",
+          "legendFormat": "Judge p95"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 8
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 105,
+      "type": "stat",
+      "title": "Feedback: Positive vs Negative",
+      "description": "Positive (4-5★) vs negative (1-2★) feedback counts side by side.",
+      "gridPos": {
+        "x": 16,
+        "y": 5,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(locus_feedback_stars_total{signal=\"positive\"})",
+          "legendFormat": "Positive"
+        },
+        {
+          "expr": "sum(locus_feedback_stars_total{signal=\"negative\"})",
+          "legendFormat": "Negative"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Positive"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Negative"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 106,
+      "type": "stat",
+      "title": "Last Retraining",
+      "description": "Judge score delta (new − old) of the last completed retraining run. Green = model was promoted. Red = rejected.",
+      "gridPos": {
+        "x": 20,
+        "y": 5,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_judge_delta",
+          "legendFormat": "Δjudge"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": 0 }, { "color": "yellow", "value": 0.5 }, { "color": "green", "value": 0.7 }
-          ]},
-          "color": { "mode": "thresholds" }
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": -1
+              },
+              {
+                "color": "yellow",
+                "value": -0.02
+              },
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
         }
       }
     },
     {
-      "id": 50, "type": "row", "title": "Link Health Monitor",
-      "collapsed": false, "gridPos": { "x": 0, "y": 78, "w": 24, "h": 1 }
+      "id": 200,
+      "type": "row",
+      "title": "Gemini Judge — Search Quality",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 24,
+        "h": 1
+      }
     },
     {
-      "id": 51, "type": "stat",
+      "id": 201,
+      "type": "gauge",
+      "title": "Avg VSS@5",
+      "description": "Average Gemini Visual Similarity Score across all golden queries. Target: >0.70.",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 5,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_gemini_avg_vss5",
+          "legendFormat": "VSS@5"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 0.55
+              },
+              {
+                "color": "yellow",
+                "value": 0.7
+              },
+              {
+                "color": "green",
+                "value": 0.85
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 202,
+      "type": "stat",
+      "title": "Queries Evaluated",
+      "description": "Number of golden queries scored in the latest eval run.",
+      "gridPos": {
+        "x": 5,
+        "y": 11,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_gemini_queries_evaluated",
+          "legendFormat": "Queries"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 203,
+      "type": "stat",
+      "title": "Eval Coverage",
+      "description": "How many distinct golden queries exist in the dataset.",
+      "gridPos": {
+        "x": 5,
+        "y": 15,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_golden_dataset_size",
+          "legendFormat": "Golden queries"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 204,
+      "type": "bargauge",
+      "title": "VSS@5 Per Golden Query",
+      "description": "Individual Gemini score per golden query. Red below 0.50 = alert: that query needs attention.",
+      "gridPos": {
+        "x": 9,
+        "y": 11,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(locus_gemini_query_vss5)",
+          "legendFormat": "{{label}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "yellow",
+                "value": 0.7
+              },
+              {
+                "color": "green",
+                "value": 0.85
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 205,
+      "type": "bargauge",
+      "title": "Search Quality per Category",
+      "description": "Average VSS@5 broken down by detected clothing category. Reveals which categories the model struggles with.",
+      "gridPos": {
+        "x": 17,
+        "y": 11,
+        "w": 7,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_gemini_avg_vss5_by_category",
+          "legendFormat": "{{category}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.6
+              },
+              {
+                "color": "green",
+                "value": 0.8
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 206,
+      "type": "timeseries",
+      "title": "VSS@5 Trend — Across Eval Runs",
+      "description": "Should improve after each successful LoRA promotion.",
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 16,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_gemini_avg_vss5",
+          "legendFormat": "Avg VSS@5"
+        },
+        {
+          "expr": "locus_gemini_avg_top1",
+          "legendFormat": "Avg Top-1"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 207,
+      "type": "stat",
+      "title": "Judge Score Old → New",
+      "description": "Gemini judge avg score: old deployed model vs new candidate from last retrain.",
+      "gridPos": {
+        "x": 16,
+        "y": 19,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_judge_old_avg",
+          "legendFormat": "Old model"
+        },
+        {
+          "expr": "locus_judge_new_avg",
+          "legendFormat": "New model"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 3
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "New model"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Old model"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 1101,
+      "type": "timeseries",
+      "title": "CLIP Confidence — P50 & P90 (per /vectorize call)",
+      "description": "Tracks how confident CLIP is in its top category label. Sustained P50 < 0.4 or a sudden drop indicates model drift or distribution shift.",
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 16,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(locus_clip_confidence_bucket[5m]))",
+          "legendFormat": "P50 (median)"
+        },
+        {
+          "expr": "histogram_quantile(0.90, rate(locus_clip_confidence_bucket[5m]))",
+          "legendFormat": "P90"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.35
+              },
+              {
+                "color": "green",
+                "value": 0.55
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P90"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    6,
+                    3
+                  ],
+                  "fill": "dash"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 1102,
+      "type": "stat",
+      "title": "CLIP Confidence — Current Median",
+      "description": "P50 CLIP category confidence over the last 5 minutes. Below 0.35 = consider retraining.",
+      "gridPos": {
+        "x": 16,
+        "y": 26,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(locus_clip_confidence_bucket[5m]))",
+          "legendFormat": "Median Confidence"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.35
+              },
+              {
+                "color": "green",
+                "value": 0.55
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 300,
+      "type": "row",
+      "title": "LoRA Retraining Pipeline",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 33,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 301,
+      "type": "bargauge",
+      "title": "LoRA Run Outcomes",
+      "description": "How many total runs were promoted vs not promoted.",
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_promoted_total",
+          "legendFormat": "Promoted"
+        },
+        {
+          "expr": "locus_lora_runs_total - locus_lora_promoted_total",
+          "legendFormat": "Not promoted"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Promoted"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Not promoted"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 302,
+      "type": "gauge",
+      "title": "New Model hit@5",
+      "description": "hit@5 of the most recently trained candidate model on the golden dataset.",
+      "gridPos": {
+        "x": 6,
+        "y": 34,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_new_hit5",
+          "legendFormat": "New hit@5"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 0.7
+              },
+              {
+                "color": "yellow",
+                "value": 0.85
+              },
+              {
+                "color": "green",
+                "value": 0.93
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 303,
+      "type": "gauge",
+      "title": "New Model ACS@5",
+      "description": "Average Cosine Similarity of top-5 results from the new candidate model. Measures geometric closeness in embedding space.",
+      "gridPos": {
+        "x": 12,
+        "y": 34,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_new_acs5",
+          "legendFormat": "New ACS@5"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "yellow",
+                "value": 0.65
+              },
+              {
+                "color": "green",
+                "value": 0.75
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 304,
+      "type": "stat",
+      "title": "Baseline hit@5",
+      "description": "hit@5 of the currently deployed model. New models must beat this − 0.02 to be promoted.",
+      "gridPos": {
+        "x": 18,
+        "y": 34,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_baseline_hit5",
+          "legendFormat": "Baseline"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        }
+      }
+    },
+    {
+      "id": 305,
+      "type": "stat",
+      "title": "Latest Δjudge",
+      "description": "Judge score improvement of the last retrain vs baseline. Positive = new model is better.",
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_judge_delta",
+          "legendFormat": "Δjudge"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": -1
+              },
+              {
+                "color": "yellow",
+                "value": -0.02
+              },
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 306,
+      "type": "stat",
+      "title": "Promotion Decision",
+      "description": "Was the last retrained model promoted to production? Green = yes, red = no.",
+      "gridPos": {
+        "x": 6,
+        "y": 42,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_judge_delta >= 0",
+          "legendFormat": "Promoted"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "✕ REJECTED",
+                  "color": "red"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "✓ PROMOTED",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 307,
+      "type": "stat",
+      "title": "Last Retrain Duration",
+      "description": "How long the last LoRA training job took from start to finish.",
+      "gridPos": {
+        "x": 12,
+        "y": 42,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_last_run_duration_seconds",
+          "legendFormat": "Duration"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 308,
+      "type": "stat",
+      "title": "Total Promotions",
+      "description": "How many times a retrained model has been deployed to production across all time.",
+      "gridPos": {
+        "x": 18,
+        "y": 42,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_promoted_total",
+          "legendFormat": "Promotions"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        }
+      }
+    },
+    {
+      "id": 309,
+      "type": "timeseries",
+      "title": "Recall@K Trend — Across Eval Runs",
+      "description": "Recall at top-5, 10, 25 improving over time as models are retrained.",
+      "gridPos": {
+        "x": 0,
+        "y": 46,
+        "w": 14,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_recall_at_5",
+          "legendFormat": "Recall@5"
+        },
+        {
+          "expr": "locus_recall_at_10",
+          "legendFormat": "Recall@10"
+        },
+        {
+          "expr": "locus_recall_at_25",
+          "legendFormat": "Recall@25"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 310,
+      "type": "timeseries",
+      "title": "Eval Quality Trend",
+      "description": "New model hit@5 and ACS@5 from each completed retrain run over time.",
+      "gridPos": {
+        "x": 14,
+        "y": 46,
+        "w": 10,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_new_hit5",
+          "legendFormat": "hit@5"
+        },
+        {
+          "expr": "locus_lora_new_acs5",
+          "legendFormat": "ACS@5"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 400,
+      "type": "row",
+      "title": "Live Retraining Monitor",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 53,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 401,
+      "type": "stat",
+      "title": "Training Active",
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_retrain_active",
+          "legendFormat": "Active"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "IDLE",
+                  "color": "blue"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "TRAINING",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 402,
+      "type": "stat",
+      "title": "Step / Max Steps",
+      "gridPos": {
+        "x": 4,
+        "y": 54,
+        "w": 5,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_retrain_step",
+          "legendFormat": "Step"
+        },
+        {
+          "expr": "locus_retrain_max_steps",
+          "legendFormat": "Max"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 403,
+      "type": "gauge",
+      "title": "Training Progress",
+      "gridPos": {
+        "x": 9,
+        "y": 54,
+        "w": 5,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_retrain_step / clamp_min(locus_retrain_max_steps, 1)",
+          "legendFormat": "Progress"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "showThresholdMarkers": false
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 404,
+      "type": "stat",
+      "title": "Latest Train Loss",
+      "description": "InfoNCE loss at current step. Should decrease during training.",
+      "gridPos": {
+        "x": 14,
+        "y": 54,
+        "w": 5,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_train_loss",
+          "legendFormat": "Loss"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 3
+              },
+              {
+                "color": "yellow",
+                "value": 2
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 405,
+      "type": "text",
+      "title": "Trigger Retrain",
+      "gridPos": {
+        "x": 19,
+        "y": 54,
+        "w": 5,
+        "h": 4
+      },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px\">\n  <button onclick=\"fetch('http://localhost:8000/trigger-retrain',{method:'POST'}).then(r=>r.json()).then(d=>alert('Triggered: '+JSON.stringify(d))).catch(e=>alert('Error: '+e))\" style=\"background:#4caf50;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:0.9rem;font-weight:700;cursor:pointer\">&#9654; Trigger Retrain</button>\n  <p style=\"color:#666;font-size:0.72rem;text-align:center;margin:0\">POST /trigger-retrain</p>\n</div>"
+      }
+    },
+    {
+      "id": 406,
+      "type": "stat",
+      "title": "Total Retrain Runs",
+      "gridPos": {
+        "x": 0,
+        "y": 58,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_runs_total",
+          "legendFormat": "Runs"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 407,
+      "type": "stat",
+      "title": "Failed Runs",
+      "description": "Runs that ended with an error (OOM, timeout, data error). Requires locus_lora_failed_runs_total from mlops_exporter.",
+      "gridPos": {
+        "x": 4,
+        "y": 58,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_failed_runs_total",
+          "legendFormat": "Failed"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 408,
+      "type": "stat",
+      "title": "Success Rate",
+      "description": "Percentage of retrain runs that completed without error.",
+      "gridPos": {
+        "x": 8,
+        "y": 58,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "(locus_lora_runs_total - locus_lora_failed_runs_total) / clamp_min(locus_lora_runs_total, 1)",
+          "legendFormat": "Success %"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.8
+              },
+              {
+                "color": "green",
+                "value": 0.95
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 409,
+      "type": "stat",
+      "title": "Last Failure Reason",
+      "description": "Error code of the last failed run. Requires locus_lora_last_error_code from mlops_exporter. 0=none, 1=OOM, 2=timeout, 3=data error.",
+      "gridPos": {
+        "x": 12,
+        "y": 58,
+        "w": 5,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_last_error_code",
+          "legendFormat": "Error"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "None",
+                  "color": "green"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "OOM",
+                  "color": "red"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "2": {
+                  "text": "Timeout",
+                  "color": "orange"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "3": {
+                  "text": "Data err",
+                  "color": "yellow"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 410,
+      "type": "stat",
+      "title": "Avg Run Duration",
+      "description": "Average wall-clock time of all completed retrain runs. Requires locus_lora_avg_run_duration_seconds from mlops_exporter.",
+      "gridPos": {
+        "x": 17,
+        "y": 58,
+        "w": 4,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_avg_run_duration_seconds",
+          "legendFormat": "Avg duration"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "id": 411,
+      "type": "stat",
+      "title": "Data Points Used",
+      "description": "Feedback + golden samples used in the last training run. Requires locus_lora_data_points_used from mlops_exporter.",
+      "gridPos": {
+        "x": 21,
+        "y": 58,
+        "w": 3,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_data_points_used",
+          "legendFormat": "Data points"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 412,
+      "type": "timeseries",
+      "title": "Train Loss Curve (live)",
+      "description": "InfoNCE loss over training steps. Updates every 30s. Should decrease as training progresses.",
+      "gridPos": {
+        "x": 0,
+        "y": 62,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_lora_train_loss",
+          "legendFormat": "Train Loss"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 4,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "spanNulls": false
+          },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "id": 500,
+      "type": "row",
+      "title": "Customer Feedback & Ratings",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 70,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 501,
+      "type": "stat",
+      "title": "Total Ratings",
+      "description": "All ratings stored in locus_feedback (users + AI judge combined).",
+      "gridPos": {
+        "x": 0,
+        "y": 71,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_qdrant_items_total{collection=\"locus_feedback\"}",
+          "legendFormat": "Total"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 50
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 502,
+      "type": "stat",
+      "title": "Actual User Ratings",
+      "description": "Ratings submitted by real shoppers (source = user).",
+      "gridPos": {
+        "x": 4,
+        "y": 71,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_rating_by_source_total{source=\"user\"}",
+          "legendFormat": "Users"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        }
+      }
+    },
+    {
+      "id": 503,
+      "type": "stat",
+      "title": "AI Judge Ratings",
+      "description": "Ratings generated by the automated AI quality judge (all auto_judge* sources).",
+      "gridPos": {
+        "x": 8,
+        "y": 71,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_rating_by_source_total{source=\"auto_judge\"}",
+          "legendFormat": "AI Judge"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          }
+        }
+      }
+    },
+    {
+      "id": 510,
+      "type": "gauge",
+      "title": "Average Star Rating",
+      "description": "Mean star score across all feedback records in Qdrant.",
+      "gridPos": {
+        "x": 12,
+        "y": 71,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_rating_avg_score",
+          "legendFormat": "Avg"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "showThresholdMarkers": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "min": 1,
+          "max": 5,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 1
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              },
+              {
+                "color": "green",
+                "value": 4
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 511,
+      "type": "stat",
+      "title": "Positive / Negative",
+      "description": "Count of positive (4-5★) vs negative (1-2★) training signals.",
+      "gridPos": {
+        "x": 16,
+        "y": 71,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_rating_by_signal_total{signal=\"positive\"}",
+          "legendFormat": "Positive"
+        },
+        {
+          "expr": "locus_rating_by_signal_total{signal=\"negative\"}",
+          "legendFormat": "Negative"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Positive"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Negative"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 512,
+      "type": "stat",
+      "title": "Ready to Train",
+      "description": "Green when positive + negative ratings ≥ 50 (LoRA training threshold).",
+      "gridPos": {
+        "x": 20,
+        "y": 71,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "(locus_rating_by_signal_total{signal=\"positive\"} + locus_rating_by_signal_total{signal=\"negative\"}) >= 50",
+          "legendFormat": "Ready"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "NOT YET",
+                  "color": "red"
+                }
+              }
+            },
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "READY",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 513,
+      "type": "bargauge",
+      "title": "Star Distribution — All",
+      "description": "Rating count per star level (users + AI judge combined).",
+      "gridPos": {
+        "x": 0,
+        "y": 76,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_rating_by_star_total{source=\"all\",stars=\"5\"}",
+          "legendFormat": "5 ★"
+        },
+        {
+          "expr": "locus_rating_by_star_total{source=\"all\",stars=\"4\"}",
+          "legendFormat": "4 ★"
+        },
+        {
+          "expr": "locus_rating_by_star_total{source=\"all\",stars=\"3\"}",
+          "legendFormat": "3 ★"
+        },
+        {
+          "expr": "locus_rating_by_star_total{source=\"all\",stars=\"2\"}",
+          "legendFormat": "2 ★"
+        },
+        {
+          "expr": "locus_rating_by_star_total{source=\"all\",stars=\"1\"}",
+          "legendFormat": "1 ★"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "3 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "2 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "1 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 514,
+      "type": "bargauge",
+      "title": "Star Distribution — Users Only",
+      "description": "Rating count per star from actual shoppers only.",
+      "gridPos": {
+        "x": 8,
+        "y": 76,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_rating_by_star_total{source=\"user\",stars=\"5\"}",
+          "legendFormat": "5 ★"
+        },
+        {
+          "expr": "locus_rating_by_star_total{source=\"user\",stars=\"4\"}",
+          "legendFormat": "4 ★"
+        },
+        {
+          "expr": "locus_rating_by_star_total{source=\"user\",stars=\"3\"}",
+          "legendFormat": "3 ★"
+        },
+        {
+          "expr": "locus_rating_by_star_total{source=\"user\",stars=\"2\"}",
+          "legendFormat": "2 ★"
+        },
+        {
+          "expr": "locus_rating_by_star_total{source=\"user\",stars=\"1\"}",
+          "legendFormat": "1 ★"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "3 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "2 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "1 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 515,
+      "type": "bargauge",
+      "title": "Star Distribution — AI Judge Only",
+      "description": "Rating count per star from automated AI quality judge.",
+      "gridPos": {
+        "x": 16,
+        "y": 76,
+        "w": 8,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"5\"}",
+          "legendFormat": "5 ★"
+        },
+        {
+          "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"4\"}",
+          "legendFormat": "4 ★"
+        },
+        {
+          "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"3\"}",
+          "legendFormat": "3 ★"
+        },
+        {
+          "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"2\"}",
+          "legendFormat": "2 ★"
+        },
+        {
+          "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"1\"}",
+          "legendFormat": "1 ★"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "light-green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "3 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "2 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "1 ★"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 516,
+      "type": "bargauge",
+      "title": "Training Signal Breakdown",
+      "description": "Ratings grouped into positive (4-5★), neutral (3★), negative (1-2★) training signals.",
+      "gridPos": {
+        "x": 0,
+        "y": 83,
+        "w": 10,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_rating_by_signal_total{signal=\"positive\"}",
+          "legendFormat": "Positive (4-5★)"
+        },
+        {
+          "expr": "locus_rating_by_signal_total{signal=\"neutral\"}",
+          "legendFormat": "Neutral (3★)"
+        },
+        {
+          "expr": "locus_rating_by_signal_total{signal=\"negative\"}",
+          "legendFormat": "Negative (1-2★)"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Positive (4-5★)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Neutral (3★)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Negative (1-2★)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 504,
+      "type": "timeseries",
+      "title": "Feedback Trend Over Time",
+      "description": "Running total of positive / neutral / negative signals in Qdrant (refreshed every 60s).",
+      "gridPos": {
+        "x": 10,
+        "y": 83,
+        "w": 14,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_rating_by_signal_total{signal=\"positive\"}",
+          "legendFormat": "Positive"
+        },
+        {
+          "expr": "locus_rating_by_signal_total{signal=\"neutral\"}",
+          "legendFormat": "Neutral"
+        },
+        {
+          "expr": "locus_rating_by_signal_total{signal=\"negative\"}",
+          "legendFormat": "Negative"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Positive"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Neutral"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Negative"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 505,
+      "type": "timeseries",
+      "title": "Time on Results Page",
+      "description": "How long users spend looking at search results before navigating away. Histogram bucketed.",
+      "gridPos": {
+        "x": 0,
+        "y": 89,
+        "w": 12,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(locus_results_time_on_page_seconds_bucket[10m]))",
+          "legendFormat": "p50 (median)"
+        },
+        {
+          "expr": "histogram_quantile(0.90, rate(locus_results_time_on_page_seconds_bucket[10m]))",
+          "legendFormat": "p90"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(locus_results_time_on_page_seconds_bucket[10m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 506,
+      "type": "bargauge",
+      "title": "Click-Through Rate by Position",
+      "description": "How many times each result position (1=top-left, 2, 3...) was clicked. Lower positions should dominate if search quality is good.",
+      "gridPos": {
+        "x": 12,
+        "y": 89,
+        "w": 12,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(sum by (position) (locus_result_clicks_total))",
+          "legendFormat": "Position {{position}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 600,
+      "type": "row",
+      "title": "Catalog & Data Health",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 90,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 601,
+      "type": "stat",
+      "title": "Indexed Products",
+      "gridPos": {
+        "x": 0,
+        "y": 91,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_qdrant_items_total{collection=\"locus_items\"}",
+          "legendFormat": "Items"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 200
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 602,
+      "type": "stat",
+      "title": "Skipped Products",
+      "description": "Products rejected during ingestion (no clothing detected, low confidence, or corrupt).",
+      "gridPos": {
+        "x": 4,
+        "y": 91,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_qdrant_items_total{collection=\"locus_skipped\"}",
+          "legendFormat": "Skipped"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          }
+        }
+      }
+    },
+    {
+      "id": 603,
+      "type": "stat",
+      "title": "Feedback Records",
+      "description": "User star ratings collected. Need 200+ for LoRA fine-tuning.",
+      "gridPos": {
+        "x": 8,
+        "y": 91,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_qdrant_items_total{collection=\"locus_feedback\"}",
+          "legendFormat": "Feedback"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "green",
+                "value": 200
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 604,
+      "type": "stat",
+      "title": "Corrupt Items Flagged",
+      "description": "Products with corrupt_flag_count ≥ 1. A second flag triggers auto-deletion.",
+      "gridPos": {
+        "x": 12,
+        "y": 91,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_corrupt_items_total",
+          "legendFormat": "Corrupt"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 605,
+      "type": "stat",
+      "title": "Stores Indexed",
+      "description": "Distinct store names that have at least one product in locus_items.",
+      "gridPos": {
+        "x": 16,
+        "y": 91,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "count(count by (store) (locus_store_impressions_total))",
+          "legendFormat": "Stores"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 3
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 606,
+      "type": "stat",
+      "title": "Stores with Missing Info",
+      "description": "Stores where products are missing store name, image URL, or coordinates. Requires backend endpoint — noted for later.",
+      "gridPos": {
+        "x": 20,
+        "y": 91,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_stores_missing_info_total",
+          "legendFormat": "Missing"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 607,
+      "type": "timeseries",
+      "title": "Collection Sizes Over Time",
+      "description": "Track catalog growth and feedback accumulation.",
+      "gridPos": {
+        "x": 0,
+        "y": 96,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_qdrant_items_total{collection=\"locus_items\"}",
+          "legendFormat": "locus_items"
+        },
+        {
+          "expr": "locus_qdrant_items_total{collection=\"locus_skipped\"}",
+          "legendFormat": "locus_skipped"
+        },
+        {
+          "expr": "locus_qdrant_items_total{collection=\"locus_feedback\"}",
+          "legendFormat": "locus_feedback"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 700,
+      "type": "row",
+      "title": "Service Health",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 103,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 701,
+      "type": "timeseries",
+      "title": "Request Rate by Endpoint (req/s)",
+      "gridPos": {
+        "x": 0,
+        "y": 104,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{handler=\"/search\"}[1m])",
+          "legendFormat": "/search"
+        },
+        {
+          "expr": "rate(http_requests_total{handler=\"/detect\"}[1m])",
+          "legendFormat": "/detect"
+        },
+        {
+          "expr": "rate(http_requests_total{handler=\"/feedback\"}[1m])",
+          "legendFormat": "/feedback"
+        },
+        {
+          "expr": "rate(http_requests_total{handler=\"/refine\"}[1m])",
+          "legendFormat": "/refine"
+        },
+        {
+          "expr": "rate(http_requests_total{handler=\"/track-event\"}[1m])",
+          "legendFormat": "/track-event"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 702,
+      "type": "timeseries",
+      "title": "P95 Response Latency by Endpoint (s)",
+      "gridPos": {
+        "x": 12,
+        "y": 104,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/search\"}[2m]))",
+          "legendFormat": "/search p95"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/detect\"}[2m]))",
+          "legendFormat": "/detect p95"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=\"/feedback\"}[2m]))",
+          "legendFormat": "/feedback p95"
+        },
+        {
+          "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{handler=\"/search\"}[2m]))",
+          "legendFormat": "/search p50"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 703,
+      "type": "timeseries",
+      "title": "Error Rate (4xx + 5xx per second)",
+      "gridPos": {
+        "x": 0,
+        "y": 111,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{status_code=~\"5..\"}[1m])",
+          "legendFormat": "5xx (server errors)"
+        },
+        {
+          "expr": "rate(http_requests_total{status_code=~\"4..\"}[1m])",
+          "legendFormat": "4xx (client errors)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 20
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx (server errors)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4xx (client errors)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 704,
+      "type": "timeseries",
+      "title": "Failed Requests by Endpoint",
+      "description": "Error rate per route. Pinpoints which endpoint is failing, not just overall error rate.",
+      "gridPos": {
+        "x": 12,
+        "y": 111,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{status_code=~\"4..|5..\"}[1m])",
+          "legendFormat": "{{handler}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 705,
+      "type": "timeseries",
+      "title": "Searches by Detected Category",
+      "gridPos": {
+        "x": 0,
+        "y": 118,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "rate(locus_searches_total[5m])",
+          "legendFormat": "{{category}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 706,
+      "type": "timeseries",
+      "title": "Attribute Tagger — Request Rate & Failures",
+      "gridPos": {
+        "x": 12,
+        "y": 118,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "rate(locus_tagger_requests_total[1m])",
+          "legendFormat": "Requests/s"
+        },
+        {
+          "expr": "rate(locus_tagger_failures_total[1m])",
+          "legendFormat": "Failures/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failures/s"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 707,
+      "type": "timeseries",
+      "title": "Attribute Tagger — P95 Latency",
+      "gridPos": {
+        "x": 0,
+        "y": 125,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(locus_tagger_latency_seconds_bucket[2m]))",
+          "legendFormat": "Tagger p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 8
+              }
+            ]
+          },
+          "custom": {
+            "lineWidth": 2
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 800,
+      "type": "row",
+      "title": "Link Health Monitor",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 132,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 801,
+      "type": "stat",
       "title": "Next Link Check In",
-      "description": "Countdown to the next scheduled URL health check. Runs every 5 days — checks all product image URLs and recovers broken links.",
-      "gridPos": { "x": 0, "y": 79, "w": 8, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "clamp_min(locus_link_monitor_next_run_timestamp - time(), 0)",
-        "legendFormat": "Seconds until next run"
-      }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
+      "gridPos": {
+        "x": 0,
+        "y": 133,
+        "w": 5,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "clamp_min(locus_link_monitor_next_run_timestamp - time(), 0)",
+          "legendFormat": "Seconds until next run"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "dtdurations",
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "green", "value": 0 },
-            { "color": "yellow", "value": 86400 },
-            { "color": "red", "value": 0 }
-          ]},
-          "color": { "mode": "thresholds" }
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 86400
+              },
+              {
+                "color": "green",
+                "value": 259200
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
         }
       }
     },
     {
-      "id": 52, "type": "stat",
+      "id": 802,
+      "type": "stat",
       "title": "Last Link Check",
-      "description": "Timestamp of the most recently completed link health check run.",
-      "gridPos": { "x": 8, "y": 79, "w": 8, "h": 5 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{
-        "expr": "locus_link_monitor_last_run_timestamp",
-        "legendFormat": "Last run"
-      }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none" },
+      "gridPos": {
+        "x": 5,
+        "y": 133,
+        "w": 5,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_link_monitor_last_run_timestamp",
+          "legendFormat": "Last run"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "none"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "dateTimeAsLocal"
@@ -544,144 +4504,713 @@
       }
     },
     {
-      "id": 53, "type": "text",
+      "id": 803,
+      "type": "text",
       "title": "Force Link Check",
-      "description": "Click the button to run the link health check pipeline immediately, without waiting for the 5-day schedule.",
-      "gridPos": { "x": 16, "y": 79, "w": 8, "h": 5 },
+      "gridPos": {
+        "x": 10,
+        "y": 133,
+        "w": 5,
+        "h": 5
+      },
       "options": {
         "mode": "html",
-        "content": "<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px\">\n  <p style=\"color:#aaa;font-size:0.85rem;text-align:center;margin:0\">Trigger a full URL audit + recovery run now</p>\n  <a href=\"http://localhost:8000/trigger-link-check\" target=\"_blank\" style=\"text-decoration:none\">\n    <button style=\"background:#c9a96e;color:#0a0a0a;border:none;padding:10px 24px;border-radius:6px;font-size:0.95rem;font-weight:700;cursor:pointer;letter-spacing:0.05em\">&#9654; Run Link Check Now</button>\n  </a>\n  <p style=\"color:#555;font-size:0.72rem;text-align:center;margin:0\">Opens gateway /trigger-link-check in a new tab</p>\n</div>"
+        "content": "<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px\">\n  <a href=\"http://localhost:8000/trigger-link-check\" target=\"_blank\" style=\"text-decoration:none\">\n    <button style=\"background:#c9a96e;color:#0a0a0a;border:none;padding:10px 24px;border-radius:6px;font-size:0.9rem;font-weight:700;cursor:pointer\">&#9654; Run Link Check Now</button>\n  </a>\n  <p style=\"color:#555;font-size:0.72rem;text-align:center;margin:0\">GET /trigger-link-check</p>\n</div>"
       }
     },
-
     {
-      "id": 60, "type": "row", "title": "Gemini Visual Similarity Judge",
-      "collapsed": false, "gridPos": { "x": 0, "y": 84, "w": 24, "h": 1 }
-    },
-    {
-      "id": 61, "type": "gauge",
-      "title": "Avg VSS@5 — Latest Eval Run",
-      "description": "Average Gemini Visual Similarity Score. Baseline: 0.635. Target: >0.70",
-      "gridPos": { "x": 0, "y": 85, "w": 5, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_gemini_avg_vss5", "legendFormat": "VSS@5" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "id": 804,
+      "type": "stat",
+      "title": "Total Links Checked",
+      "description": "Number of product URLs verified in the last link check run. Requires locus_link_monitor_checked_total.",
+      "gridPos": {
+        "x": 15,
+        "y": 133,
+        "w": 5,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_link_monitor_checked_total",
+          "legendFormat": "Checked"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "none",
+        "graphMode": "none"
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit", "min": 0, "max": 1,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": 0 }, { "color": "orange", "value": 0.55 },
-            { "color": "yellow", "value": 0.70 }, { "color": "green", "value": 0.85 }
-          ]},
-          "color": { "mode": "thresholds" }
+          "unit": "short",
+          "noValue": "N/A"
         }
       }
     },
     {
-      "id": 62, "type": "stat",
-      "title": "Queries Evaluated",
-      "gridPos": { "x": 5, "y": 85, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_gemini_queries_evaluated", "legendFormat": "Queries" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "none", "graphMode": "none" },
-      "fieldConfig": { "defaults": { "unit": "short" } }
-    },
-    {
-      "id": 63, "type": "stat",
-      "title": "Cache Entries",
-      "description": "Scored pairs saved to disk — these cost $0 on next eval run",
-      "gridPos": { "x": 5, "y": 89, "w": 4, "h": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "locus_gemini_cache_entries", "legendFormat": "Cached pairs" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "green" } } }
-    },
-    {
-      "id": 64, "type": "bargauge",
-      "title": "Grade Distribution",
-      "description": "Queries by quality tier. Goal: eliminate red, grow green.",
-      "gridPos": { "x": 9, "y": 85, "w": 6, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "id": 805,
+      "type": "stat",
+      "title": "Broken Links Found",
+      "description": "Links that returned 404 or failed in the last check run. Requires locus_link_monitor_broken_total.",
+      "gridPos": {
+        "x": 20,
+        "y": 133,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
-        { "expr": "locus_gemini_queries_excellent", "legendFormat": "Excellent ≥0.85" },
-        { "expr": "locus_gemini_queries_good",      "legendFormat": "Good      ≥0.70" },
-        { "expr": "locus_gemini_queries_fair",      "legendFormat": "Fair      ≥0.55" },
-        { "expr": "locus_gemini_queries_poor",      "legendFormat": "Poor       <0.55" }
+        {
+          "expr": "locus_link_monitor_broken_total",
+          "legendFormat": "Broken"
+        }
       ],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
       "fieldConfig": {
-        "defaults": { "unit": "short", "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": 0 }] }
+        "defaults": {
+          "unit": "short",
+          "noValue": "N/A",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 806,
+      "type": "timeseries",
+      "title": "Broken Links Trend",
+      "description": "Is the number of broken links growing over time? Rising trend = stores removing products.",
+      "gridPos": {
+        "x": 0,
+        "y": 138,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_link_monitor_broken_total",
+          "legendFormat": "Broken links"
+        },
+        {
+          "expr": "locus_link_monitor_checked_total",
+          "legendFormat": "Total checked"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
         },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "Excellent ≥0.85" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
-          { "matcher": { "id": "byName", "options": "Good      ≥0.70" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "light-green" } }] },
-          { "matcher": { "id": "byName", "options": "Fair      ≥0.55" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }] },
-          { "matcher": { "id": "byName", "options": "Poor       <0.55" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Broken links"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
         ]
-      }
-    },
-    {
-      "id": 65, "type": "bargauge",
-      "title": "VSS@5 Per Query",
-      "description": "Score for each golden query. Red = poor, green = good.",
-      "gridPos": { "x": 15, "y": 85, "w": 9, "h": 8 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [{ "expr": "sort_desc(locus_gemini_query_vss5)", "legendFormat": "{{label}}" }],
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit", "min": 0, "max": 1,
-          "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": 0 }, { "color": "orange", "value": 0.55 },
-            { "color": "yellow", "value": 0.70 }, { "color": "green", "value": 0.85 }
-          ]},
-          "color": { "mode": "thresholds" }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
         }
       }
     },
     {
-      "id": 66, "type": "timeseries",
-      "title": "VSS@5 Trend — Across Eval Runs",
-      "description": "Should go up after each CLIP fine-tuning round. Baseline is 0.635.",
-      "gridPos": { "x": 0, "y": 93, "w": 14, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "targets": [
-        { "expr": "locus_gemini_avg_vss5",  "legendFormat": "Avg VSS@5" },
-        { "expr": "locus_gemini_avg_top1",  "legendFormat": "Avg Top-1" }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "percentunit", "min": 0, "max": 1, "custom": { "lineWidth": 2, "fillOpacity": 15 } }
-      },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+      "id": 900,
+      "type": "row",
+      "title": "Whitelist & Category Management",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 145,
+        "w": 24,
+        "h": 1
+      }
     },
     {
-      "id": 67, "type": "timeseries",
-      "title": "Score Distribution Over Time",
-      "description": "Cumulative count of individual result scores by bucket.",
-      "gridPos": { "x": 14, "y": 93, "w": 10, "h": 7 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "id": 901,
+      "type": "stat",
+      "title": "Pending Whitelist Suggestions",
+      "gridPos": {
+        "x": 0,
+        "y": 146,
+        "w": 5,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
-        { "expr": "locus_gemini_score_bucket{le=\"0.2\"}", "legendFormat": "≤0.20" },
-        { "expr": "locus_gemini_score_bucket{le=\"0.4\"}", "legendFormat": "≤0.40" },
-        { "expr": "locus_gemini_score_bucket{le=\"0.6\"}", "legendFormat": "≤0.60" },
-        { "expr": "locus_gemini_score_bucket{le=\"0.8\"}", "legendFormat": "≤0.80" },
-        { "expr": "locus_gemini_score_bucket{le=\"1.0\"}", "legendFormat": "≤1.00" }
+        {
+          "expr": "locus_whitelist_pending_total",
+          "legendFormat": "Pending"
+        }
       ],
-      "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 1, "fillOpacity": 10 } } },
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } }
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "orange",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 902,
+      "type": "bargauge",
+      "title": "Searches by Category (all-time)",
+      "gridPos": {
+        "x": 5,
+        "y": 146,
+        "w": 11,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (category) (locus_searches_total)",
+          "legendFormat": "{{category}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 903,
+      "type": "text",
+      "title": "Whitelist Management",
+      "gridPos": {
+        "x": 16,
+        "y": 146,
+        "w": 8,
+        "h": 6
+      },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"padding:10px 14px;line-height:2;font-size:0.87rem;color:#ccc\">\n  <div style=\"margin-bottom:8px;font-weight:700;color:#fff\">Whitelist API Endpoints</div>\n  <div><a href=\"http://localhost:8000/whitelist-suggestions\" target=\"_blank\" style=\"color:#c9a96e\">GET /whitelist-suggestions</a></div>\n  <div><span style=\"color:#aaa\">POST /whitelist-approve</span>&nbsp;<span style=\"color:#555\">{word, category}</span></div>\n  <div><span style=\"color:#aaa\">POST /whitelist-reject</span>&nbsp;&nbsp;<span style=\"color:#555\">{word, category}</span></div>\n  <div style=\"margin-top:8px\"><a href=\"http://localhost:8000/docs\" target=\"_blank\" style=\"color:#6bb5ff;font-size:0.82rem\">&#9654; Open Swagger UI</a></div>\n</div>"
+      }
+    },
+    {
+      "id": 1000,
+      "type": "row",
+      "title": "Store & Retailer Analytics",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 152,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 1001,
+      "type": "bargauge",
+      "title": "Impressions per Store",
+      "description": "How many times products from each store appeared in search results.",
+      "gridPos": {
+        "x": 0,
+        "y": 153,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(sum by (store) (locus_store_impressions_total))",
+          "legendFormat": "{{store}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 1002,
+      "type": "bargauge",
+      "title": "Result Clicks per Store",
+      "description": "How many times a result card from each store was clicked to open the detail sheet.",
+      "gridPos": {
+        "x": 12,
+        "y": 153,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(sum by (store) (locus_store_result_clicks_total))",
+          "legendFormat": "{{store}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 1003,
+      "type": "bargauge",
+      "title": "Website Clicks per Store",
+      "description": "Times a user clicked 'View on store →' — intent to buy.",
+      "gridPos": {
+        "x": 0,
+        "y": 161,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(sum by (store) (locus_store_website_clicks_total))",
+          "legendFormat": "{{store}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        }
+      }
+    },
+    {
+      "id": 1004,
+      "type": "bargauge",
+      "title": "Directions Clicks per Store",
+      "description": "Times a user clicked 'Get directions →' — intent to visit in person.",
+      "gridPos": {
+        "x": 8,
+        "y": 161,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(sum by (store) (locus_store_directions_clicks_total))",
+          "legendFormat": "{{store}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        }
+      }
+    },
+    {
+      "id": 1005,
+      "type": "bargauge",
+      "title": "Click-Through Rate per Store (clicks / impressions)",
+      "description": "What % of impressions led to a result card click. High CTR = store's products are relevant and appealing.",
+      "gridPos": {
+        "x": 16,
+        "y": 161,
+        "w": 8,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(sum by (store) (locus_store_result_clicks_total) / clamp_min(sum by (store) (locus_store_impressions_total), 1))",
+          "legendFormat": "{{store}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.05
+              },
+              {
+                "color": "green",
+                "value": 0.15
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 1006,
+      "type": "bargauge",
+      "title": "Website Conversion Rate per Store",
+      "description": "Website clicks / impressions. Tells you which stores convert searchers into actual buyers.",
+      "gridPos": {
+        "x": 0,
+        "y": 169,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(sum by (store) (locus_store_website_clicks_total) / clamp_min(sum by (store) (locus_store_impressions_total), 1))",
+          "legendFormat": "{{store}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.02
+              },
+              {
+                "color": "green",
+                "value": 0.08
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 1007,
+      "type": "bargauge",
+      "title": "Most Shown Item per Store",
+      "description": "Which specific item from each store appeared most in search results.",
+      "gridPos": {
+        "x": 12,
+        "y": 169,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (store, item_name) (locus_store_item_impressions_total))",
+          "legendFormat": "{{store}} — {{item_name}}"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 1008,
+      "type": "timeseries",
+      "title": "Search Volume by Time of Day",
+      "description": "When are people searching most? Useful for understanding peak hours and scheduling indexing jobs.",
+      "gridPos": {
+        "x": 0,
+        "y": 177,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(locus_searches_total[10m]))",
+          "legendFormat": "Searches/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 20
+          },
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 1009,
+      "type": "timeseries",
+      "title": "Store Engagement Trend",
+      "description": "Impressions and result clicks per store over time. Rising impressions with flat clicks = relevance issue.",
+      "gridPos": {
+        "x": 12,
+        "y": 177,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum by (store) (rate(locus_store_impressions_total[5m]))",
+          "legendFormat": "{{store}} impressions"
+        },
+        {
+          "expr": "sum by (store) (rate(locus_store_result_clicks_total[5m]))",
+          "legendFormat": "{{store}} clicks"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     }
   ],
-
   "annotations": {
-    "list": [{
-      "builtIn": 1,
-      "datasource": { "type": "grafana", "uid": "-- Grafana --" },
-      "enable": true,
-      "hide": true,
-      "iconColor": "rgba(0, 211, 255, 1)",
-      "name": "Annotations & Alerts",
-      "type": "dashboard"
-    }]
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
   }
 }

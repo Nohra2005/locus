@@ -22,6 +22,12 @@ locus_detections_histogram = Histogram(
     buckets=[0, 1, 2, 3, 4, 5, 6, 8, 10, 15],
 )
 
+locus_clip_confidence = Histogram(
+    "locus_clip_confidence",
+    "Top CLIP category confidence score per /vectorize call",
+    buckets=[0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+)
+
 
 OVERRIDES_PATH = "/app/whitelist_overrides.json"
 
@@ -73,6 +79,9 @@ async def vectorize(
 
     if not vector:
         return {"error": "failed to process image"}
+
+    if isinstance(confidence, dict) and confidence:
+        locus_clip_confidence.observe(max(confidence.values()))
 
     return {
         "filename":            file.filename,

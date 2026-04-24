@@ -12,7 +12,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl:     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
-const API = "";
+const API = "http://localhost:8000";
 
 const STORE_COORDS = {
   "Zara":          [33.88685, 35.51308],
@@ -385,8 +385,19 @@ function Navbar({ activeTab, onTab, onLogoClick }) {
             key={tab}
             className={`nav-link ${activeTab === tab ? "active" : ""}`}
             onClick={() => onTab(tab)}
+            style={{ position: "relative" }}
           >
             {tab}
+            {false && (
+              <span style={{
+                position: "absolute", top: 1, right: 1,
+                background: T.red, color: "#fff",
+                borderRadius: "50%", fontSize: "0.55rem", fontWeight: 700,
+                width: 14, height: 14,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                lineHeight: 1,
+              }}>{flagCount > 9 ? "9+" : flagCount}</span>
+            )}
           </button>
         ))}
       </div>
@@ -853,8 +864,11 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
 // PRODUCT DETAIL SHEET
 // ══════════════════════════════════════════════════════════════════
 function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose, saved, onToggleSave }) {
-  const [vote, setVote]       = useState(null);
-  const [hoverStar, setHover] = useState(null);
+  const [vote, setVote]         = useState(null);
+  const [hoverStar, setHover]   = useState(null);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError]   = useState(false);
+  const [copied, setCopied]       = useState(false);
 
   const payload      = result.payload ?? {};
   const raw          = payload.image_url ?? "";
@@ -865,10 +879,18 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
   const scoreColor   = displayScore >= 0.80 ? T.green : displayScore >= 0.60 ? T.yellow : T.red;
   const storeCoords  = STORE_COORDS[payload.store];
   const catColor     = CATEGORY_COLORS[payload.category_tag || category] || T.accent;
+  const productUrl   = payload.product_url || payload.source_url || payload.url || null;
 
   const mapsQuery = payload.store
     ? encodeURIComponent([payload.store, payload.mall_name].filter(Boolean).join(" "))
     : null;
+
+  // Close on Escape for keyboard users
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const handleVote = async (stars) => {
     if (stars === vote) return;
@@ -884,6 +906,25 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
     );
   };
 
+  const handleShare = async () => {
+    const shareData = {
+      title: payload.item_name || "Locus find",
+      text : [payload.item_name, payload.store && `at ${payload.store}`, payload.price].filter(Boolean).join(" • "),
+      url  : productUrl || (typeof window !== "undefined" ? window.location.href : ""),
+    };
+    try {
+      if (navigator.share && navigator.canShare?.(shareData) !== false) {
+        await navigator.share(shareData);
+        return;
+      }
+    } catch { /* user cancelled — fall through to clipboard */ }
+    try {
+      await navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`.trim());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { /* clipboard unavailable — silently ignore */ }
+  };
+
   const fillUpTo = vote !== null ? vote : (hoverStar ?? 0);
 
   return (
@@ -893,120 +934,289 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
         onClick={onClose}
         style={{
           position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.65)",
+          background: "rgba(0,0,0,0.72)",
+          backdropFilter: "blur(3px)",
+          WebkitBackdropFilter: "blur(3px)",
           zIndex: 500,
           animation: "fadeIn 0.2s ease forwards",
         }}
       />
 
       {/* Sheet */}
-      <div style={{
-        position: "fixed", bottom: 0, left: 0, right: 0,
-        maxHeight: "92dvh",
-        background: T.surface,
-        borderRadius: "20px 20px 0 0",
-        zIndex: 501,
-        display: "flex",
-        flexDirection: "column",
-        overflowY: "auto",
-        animation: "slideUp 0.32s cubic-bezier(0.16,1,0.3,1) forwards",
-        boxShadow: "0 -8px 40px rgba(0,0,0,0.6)",
-      }}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={payload.item_name || "Product details"}
+        style={{
+          position: "fixed", bottom: 0, left: 0, right: 0,
+          maxHeight: "92dvh",
+          background: T.surface,
+          borderRadius: "20px 20px 0 0",
+          zIndex: 501,
+          display: "flex",
+          flexDirection: "column",
+          overflowY: "auto",
+          animation: "slideUp 0.32s cubic-bezier(0.16,1,0.3,1) forwards",
+          boxShadow: "0 -8px 40px rgba(0,0,0,0.6)",
+        }}
+      >
         {/* Drag handle */}
-        <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 6px" }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: T.border }} />
+        <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px", flexShrink: 0 }}>
+          <div style={{ width: 40, height: 4, borderRadius: 2, background: T.border }} />
         </div>
 
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          style={{
-            position: "absolute", top: 16, right: 16,
-            background: "rgba(0,0,0,0.4)", border: "none", borderRadius: "50%",
-            width: 32, height: 32, cursor: "pointer",
-            color: T.textMuted, fontSize: "1rem",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            zIndex: 1,
-          }}
-        >×</button>
+        {/* Product image — full item visible on portrait canvas */}
+        <div style={{
+          position: "relative",
+          width: "100%",
+          aspectRatio: "3 / 4",
+          maxHeight: "58dvh",
+          background: `radial-gradient(ellipse at center, ${T.bgDeep} 0%, #07060500 100%), ${T.bgDeep}`,
+          overflow: "hidden",
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}>
+          {imageURL && !imgError ? (
+            <>
+              <img
+                src={imageURL}
+                alt={payload.item_name || "product"}
+                onLoad={() => setImgLoaded(true)}
+                onError={() => setImgError(true)}
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                  width: "auto",
+                  height: "auto",
+                  objectFit: "contain",
+                  opacity: imgLoaded ? 1 : 0,
+                  transition: "opacity 0.3s ease",
+                  filter: "drop-shadow(0 12px 24px rgba(0,0,0,0.45))",
+                }}
+                draggable={false}
+              />
+              {!imgLoaded && (
+                <div style={{
+                  position: "absolute",
+                  color: T.textFaint,
+                  fontSize: "0.7rem",
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                }}>
+                  loading…
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ color: T.textFaint, fontSize: "2.5rem" }}>✦</div>
+          )}
 
-        {/* Product image */}
-        <div style={{ width: "100%", aspectRatio: "16/9", background: T.bgDeep, overflow: "hidden", flexShrink: 0 }}>
-          {imageURL
-            ? <img src={imageURL} alt={payload.item_name || "product"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "2rem" }}>✦</div>
-          }
+          {/* Close button — floats over image, high contrast */}
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              position: "absolute", top: 12, right: 12,
+              background: "rgba(13,12,10,0.72)",
+              backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
+              border: `1px solid ${T.border}`,
+              borderRadius: "50%",
+              width: 34, height: 34, cursor: "pointer",
+              color: T.text, fontSize: "1.1rem", lineHeight: 1,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 2,
+              transition: "transform 0.15s, background 0.15s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,0,0,0.9)"; e.currentTarget.style.transform = "scale(1.06)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(13,12,10,0.72)"; e.currentTarget.style.transform = "scale(1)"; }}
+          >×</button>
+
+          {/* Match badge — floats top-left on image */}
+          <div style={{
+            position: "absolute", top: 12, left: 12,
+            display: "flex", alignItems: "center", gap: 5,
+            background: "rgba(13,12,10,0.72)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
+            border: `1px solid ${scoreColor}55`,
+            borderRadius: 20, padding: "5px 10px",
+            color: scoreColor, fontSize: "0.68rem", fontWeight: 600,
+          }}>
+            {Math.round(displayScore * 100)}% match
+            {isJudged && (
+              <span style={{ fontSize: "0.55rem", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 3, padding: "0 3px", lineHeight: 1.6 }}>AI</span>
+            )}
+          </div>
         </div>
 
         {/* Content */}
-        <div style={{ padding: "20px 22px 32px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ padding: "22px 22px 32px", display: "flex", flexDirection: "column", gap: 18 }}>
 
-          {/* Name + price row */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-            <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.4rem", fontWeight: 600, color: T.text, lineHeight: 1.3, flex: 1 }}>
-              {payload.item_name || "Product"}
-            </h2>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, paddingTop: 2 }}>
-              {payload.price ? (
-                <span style={{ fontSize: "1rem", fontWeight: 600, color: T.accent }}>
-                  {payload.price}
-                </span>
-              ) : (
-                <span style={{ fontSize: "0.75rem", color: T.textFaint }}>—</span>
-              )}
-              <button
-                onClick={() => onToggleSave?.(result)}
-                style={{
-                  background: saved ? `${T.accent}22` : "transparent",
-                  border: `1px solid ${saved ? T.accent : T.border}`,
-                  borderRadius: 8,
-                  padding: "5px 10px",
-                  cursor: "pointer",
-                  color: saved ? T.accent : T.textMuted,
-                  fontSize: "0.78rem",
-                  fontFamily: "'DM Sans', sans-serif",
-                  display: "flex", alignItems: "center", gap: 5,
-                  transition: "all 0.2s",
-                }}
-                title={saved ? "Remove from saved" : "Save item"}
-              >
-                <span style={{ fontSize: "0.85rem" }}>{saved ? "♥" : "♡"}</span>
-                {saved ? "Saved" : "Save"}
-              </button>
-            </div>
-          </div>
-
-          {/* Store info */}
-          {payload.store && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <span style={{ fontSize: "0.82rem", color: T.text, fontWeight: 500 }}>{payload.store}</span>
-              {payload.mall_name && (
-                <span style={{ fontSize: "0.72rem", color: T.textMuted }}>inside {payload.mall_name}</span>
-              )}
-            </div>
-          )}
-
-          {/* Badges row */}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {/* Header: name, price, category pill */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {(payload.category_tag || category) && (
-              <span style={{ fontSize: "0.65rem", fontWeight: 500, color: catColor, background: `${catColor}1a`, border: `1px solid ${catColor}40`, borderRadius: 20, padding: "3px 10px", textTransform: "capitalize" }}>
+              <span style={{
+                fontSize: "0.62rem", fontWeight: 500,
+                color: catColor,
+                letterSpacing: "0.15em",
+                textTransform: "uppercase",
+              }}>
                 {(payload.category_tag || category).replace(/_/g, " ")}
               </span>
             )}
-            <span style={{ fontSize: "0.65rem", display: "flex", alignItems: "center", gap: 4, background: "rgba(0,0,0,0.3)", borderRadius: 20, padding: "3px 10px", color: scoreColor, fontWeight: 600 }}>
-              {Math.round(displayScore * 100)}% match
-              {isJudged && <span style={{ fontSize: "0.55rem", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 3, padding: "0px 3px", lineHeight: 1.6 }}>AI</span>}
-            </span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
+              <h2 style={{
+                fontFamily: "'Cormorant Garamond', serif",
+                fontSize: "1.55rem",
+                fontWeight: 600,
+                color: T.text,
+                lineHeight: 1.25,
+                flex: 1,
+                margin: 0,
+              }}>
+                {payload.item_name || "Product"}
+              </h2>
+              {payload.price && (
+                <span style={{
+                  fontSize: "1.1rem",
+                  fontWeight: 600,
+                  color: T.accent,
+                  whiteSpace: "nowrap",
+                  paddingTop: 3,
+                }}>
+                  {payload.price}
+                </span>
+              )}
+            </div>
           </div>
 
-          <div style={{ height: 1, background: T.borderFaint }} />
+          {/* Store card (only if store is known) */}
+          {payload.store && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "12px 14px",
+              background: T.bgDeep,
+              borderRadius: 12,
+              border: `1px solid ${T.borderFaint}`,
+            }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 10,
+                background: `${T.accent}1a`,
+                border: `1px solid ${T.accent}40`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: T.accent, fontSize: "1rem",
+                flexShrink: 0,
+              }}>
+                {/* location pin glyph */}
+                ◎
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                <span style={{ fontSize: "0.88rem", color: T.text, fontWeight: 500 }}>{payload.store}</span>
+                {payload.mall_name && (
+                  <span style={{ fontSize: "0.72rem", color: T.textMuted }}>inside {payload.mall_name}</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Action row: Save • Share • View in store (conditional) */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              onClick={() => onToggleSave?.(result)}
+              style={{
+                flex: "1 1 90px",
+                background: saved ? `${T.accent}22` : T.bgDeep,
+                border: `1px solid ${saved ? T.accent : T.border}`,
+                borderRadius: 10,
+                padding: "10px 12px",
+                cursor: "pointer",
+                color: saved ? T.accent : T.text,
+                fontSize: "0.82rem", fontWeight: 500,
+                fontFamily: "'DM Sans', sans-serif",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                transition: "all 0.2s",
+              }}
+              title={saved ? "Remove from saved" : "Save item"}
+            >
+              <span style={{ fontSize: "0.95rem" }}>{saved ? "♥" : "♡"}</span>
+              {saved ? "Saved" : "Save"}
+            </button>
+
+            <button
+              onClick={handleShare}
+              style={{
+                flex: "1 1 90px",
+                background: T.bgDeep,
+                border: `1px solid ${T.border}`,
+                borderRadius: 10,
+                padding: "10px 12px",
+                cursor: "pointer",
+                color: copied ? T.green : T.text,
+                fontSize: "0.82rem", fontWeight: 500,
+                fontFamily: "'DM Sans', sans-serif",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                transition: "all 0.2s",
+              }}
+              title="Share"
+            >
+              <span style={{ fontSize: "0.9rem" }}>{copied ? "✓" : "↗"}</span>
+              {copied ? "Copied" : "Share"}
+            </button>
+
+            {productUrl && (
+              <a
+                href={productUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  fetch(`${API}/track-event`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ event_type: "website_click", store: payload.store || "" }),
+                  }).catch(() => {});
+                }}
+                style={{
+                  flex: "1 1 100%",
+                  background: T.accent,
+                  border: `1px solid ${T.accent}`,
+                  borderRadius: 10,
+                  padding: "11px 14px",
+                  textDecoration: "none",
+                  color: T.bgDeep,
+                  fontSize: "0.85rem", fontWeight: 600,
+                  fontFamily: "'DM Sans', sans-serif",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  transition: "filter 0.2s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.filter = "brightness(1.08)"}
+                onMouseLeave={e => e.currentTarget.style.filter = "brightness(1)"}
+              >
+                View on {payload.store || "store"} →
+              </a>
+            )}
+          </div>
 
           {/* Location section */}
           {storeCoords ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <span style={{ fontSize: "0.65rem", color: T.textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Find in store</span>
-              <div style={{ borderRadius: 10, overflow: "hidden", border: `1px solid ${T.border}`, height: 160 }}>
-                <MapContainer center={storeCoords} zoom={14} style={{ height: "100%", width: "100%" }} zoomControl={false} scrollWheelZoom={false} dragging={false}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <span style={{ fontSize: "0.65rem", color: T.textMuted, letterSpacing: "0.12em", textTransform: "uppercase" }}>Find in store</span>
+                <span style={{ fontSize: "0.62rem", color: T.textFaint }}>drag to explore</span>
+              </div>
+              <div style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${T.border}`, height: 220 }}>
+                <MapContainer
+                  center={storeCoords}
+                  zoom={15}
+                  style={{ height: "100%", width: "100%" }}
+                  zoomControl={true}
+                  scrollWheelZoom={true}
+                  dragging={true}
+                  doubleClickZoom={true}
+                  touchZoom={true}
+                >
                   <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
                   <Marker position={storeCoords}>
                     <Popup>
@@ -1020,11 +1230,18 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                 href={`https://maps.google.com/?q=${mapsQuery}`}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => {
+                  fetch(`${API}/track-event`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ event_type: "directions_click", store: payload.store || "" }),
+                  }).catch(() => {});
+                }}
                 style={{
                   display: "block", textAlign: "center",
-                  padding: "10px", borderRadius: 10,
+                  padding: "11px", borderRadius: 10,
                   background: T.accentBg, border: `1px solid ${T.accentRing}`,
-                  color: T.accent, fontSize: "0.78rem", fontWeight: 500,
+                  color: T.accent, fontSize: "0.82rem", fontWeight: 500,
                   textDecoration: "none",
                   transition: "background 0.2s",
                 }}
@@ -1034,25 +1251,20 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                 Get directions →
               </a>
             </div>
-          ) : payload.store ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <span style={{ fontSize: "0.65rem", color: T.textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Available at</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: T.bgDeep, borderRadius: 10, border: `1px solid ${T.borderFaint}` }}>
-                <span style={{ fontSize: "0.9rem" }}>🏪</span>
-                <div>
-                  <div style={{ fontSize: "0.82rem", color: T.text, fontWeight: 500 }}>{payload.store}</div>
-                  {payload.mall_name && <div style={{ fontSize: "0.7rem", color: T.textMuted }}>inside {payload.mall_name}</div>}
-                </div>
-              </div>
-            </div>
           ) : null}
 
-          <div style={{ height: 1, background: T.borderFaint }} />
-
           {/* Star rating */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <span style={{ fontSize: "0.65rem", color: T.textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Rate this match</span>
-            <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>
+          <div style={{
+            display: "flex", flexDirection: "column", gap: 10,
+            padding: "14px 16px",
+            background: T.bgDeep,
+            borderRadius: 12,
+            border: `1px solid ${T.borderFaint}`,
+          }}>
+            <span style={{ fontSize: "0.65rem", color: T.textMuted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              Rate this match
+            </span>
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
               {[1, 2, 3, 4, 5].map(star => (
                 <button
                   key={star}
@@ -1060,14 +1272,14 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                   onMouseEnter={() => setHover(star)}
                   onMouseLeave={() => setHover(null)}
                   onClick={() => handleVote(star)}
-                  style={{ fontSize: "1.3rem" }}
+                  style={{ fontSize: "1.5rem" }}
                   title={`Rate ${star} star${star > 1 ? "s" : ""}`}
                 >
                   ★
                 </button>
               ))}
               {vote !== null && (
-                <span style={{ fontSize: "0.68rem", color: T.textMuted, marginLeft: 8 }}>
+                <span style={{ fontSize: "0.72rem", color: T.textMuted, marginLeft: 10 }}>
                   {vote >= 4 ? "great find!" : vote === 3 ? "okay match" : "poor match"}
                 </span>
               )}
@@ -1083,9 +1295,10 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
 // ══════════════════════════════════════════════════════════════════
 // RESULT CARD
 // ══════════════════════════════════════════════════════════════════
-function ResultCard({ result, category, onFeedback, onCardClick, highlighted, judgeScore, saved, onToggleSave }) {
-  const [vote, setVote]       = useState(null);
-  const [hoverStar, setHover] = useState(null);
+function ResultCard({ result, category, onFeedback, onCardClick, highlighted, judgeScore, saved, onToggleSave, onFlag }) {
+  const [vote, setVote]         = useState(null);
+  const [hoverStar, setHover]   = useState(null);
+  const [flagged, setFlagged]   = useState(false);
 
   const score    = result.score ?? 0;
   const payload  = result.payload ?? {};
@@ -1154,6 +1367,34 @@ function ResultCard({ result, category, onFeedback, onCardClick, highlighted, ju
         >
           {saved ? "♥" : "♡"}
         </button>
+        {onFlag && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (flagged) return;
+              setFlagged(true);
+              onFlag(
+                payload.product_id || payload.item_id || payload.image_url,
+                payload.item_name || "",
+                payload.store     || "",
+                payload.image_url || "",
+              );
+            }}
+            style={{
+              position: "absolute", top: 40, left: 8,
+              background: flagged ? "rgba(180,50,50,0.85)" : "rgba(0,0,0,0.55)",
+              border: "none", borderRadius: "50%",
+              width: 28, height: 28, cursor: flagged ? "default" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "0.8rem", lineHeight: 1,
+              color: flagged ? "#fff" : T.textMuted,
+              transition: "background 0.2s, color 0.2s",
+            }}
+            title={flagged ? "Flagged — hidden from search" : "Flag: hide this result"}
+          >
+            🚩
+          </button>
+        )}
         <span style={{ position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", borderRadius: 4, padding: "2px 8px", fontSize: "0.6rem", color: T.textMuted, whiteSpace: "nowrap", pointerEvents: "none" }}>
           tap to view
         </span>
@@ -1277,11 +1518,27 @@ function AttributePanel({ attributes, refineMode, onRefine }) {
 // ══════════════════════════════════════════════════════════════════
 // RESULTS VIEW
 // ══════════════════════════════════════════════════════════════════
-function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, attributes, refineMode, onRefine, onRefineCrop, radius, setRadius, userLocation, onFeedback, onReset, saved = [], onToggleSave }) {
+function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, attributes, refineMode, onRefine, onRefineCrop, radius, setRadius, userLocation, onFeedback, onReset, saved = [], onToggleSave, onFlag }) {
   const [highlightedStore, setHighlightedStore] = useState(null);
   const [activeDetail,     setActiveDetail]     = useState(null);
+  const impressionsFired = useRef(false);
   const userLL   = userLocation || [33.8869, 35.5131];
   const category = categoryInfo?.category || selectedItem?.search_label || "";
+
+  // Fire one batch impression event when results first render
+  useEffect(() => {
+    if (impressionsFired.current || results.length === 0) return;
+    impressionsFired.current = true;
+    const impressions = results.map(r => ({
+      store:     r.payload?.store     || "",
+      item_name: r.payload?.item_name || "",
+    }));
+    fetch(`${API}/track-event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_type: "impressions", impressions }),
+    }).catch(() => {});
+  }, [results]);
 
   const storeResults = {};
   results.forEach(r => {
@@ -1447,20 +1704,35 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
           </div>
         ) : (
           <div className="results-grid">
-            {displayResults.map((result) => {
-              const flat = result.payload ?? result;
-              const pid  = flat.product_id || flat.item_id || flat.image_url;
+            {displayResults.map((result, idx) => {
+              const flat     = result.payload ?? result;
+              const pid      = flat.product_id || flat.item_id || flat.image_url;
+              const position = idx + 1;
+              const handleCardClick = (r) => {
+                fetch(`${API}/track-event`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    event_type: "result_click",
+                    position,
+                    store:     flat.store     || "",
+                    item_name: flat.item_name || "",
+                  }),
+                }).catch(() => {});
+                setActiveDetail(r);
+              };
               return (
                 <ResultCard
                   key={pid}
                   result={result}
                   category={category}
                   onFeedback={onFeedback}
-                  onCardClick={setActiveDetail}
+                  onCardClick={handleCardClick}
                   highlighted={flat.store === highlightedStore}
                   judgeScore={judgeScores[pid] ?? null}
                   saved={isItemSaved(pid, saved)}
                   onToggleSave={onToggleSave}
+                  onFlag={onFlag}
                 />
               );
             })}
@@ -1695,6 +1967,476 @@ function HistoryView({ history, onRestore, onClear }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// RATING STATS PANEL
+// ══════════════════════════════════════════════════════════════════
+function RatingStatsPanel() {
+  const [stats,   setStats]   = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(false);
+  const [source,  setSource]  = useState("all"); // "all" | "user" | "auto_judge"
+
+  const load = () => {
+    setLoading(true);
+    setError(false);
+    fetch(`${API}/rating-stats`)
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(data => { setStats(data); setLoading(false); })
+      .catch(() => { setError(true); setLoading(false); });
+  };
+
+  useEffect(() => { load(); }, []);
+
+  if (loading) {
+    return (
+      <div style={{ padding: "32px 24px", maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ color: T.textMuted, fontSize: "0.85rem" }}>Loading rating stats…</div>
+      </div>
+    );
+  }
+
+  if (error || !stats) {
+    return (
+      <div style={{ padding: "32px 24px", maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{
+          background: T.surface, border: `1px solid ${T.border}`,
+          borderRadius: 10, padding: "20px 24px",
+          display: "flex", alignItems: "center", gap: 16,
+        }}>
+          <span style={{ color: T.red, fontSize: "0.85rem" }}>
+            Could not load rating stats from gateway.
+          </span>
+          <button onClick={load} style={{
+            padding: "5px 14px", borderRadius: 20,
+            border: `1px solid ${T.border}`, background: "transparent",
+            color: T.textMuted, fontSize: "0.78rem", cursor: "pointer",
+          }}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  const byStarMap = source === "user"
+    ? stats.by_star_user
+    : source === "auto_judge"
+      ? stats.by_star_judge
+      : stats.by_star;
+
+  const sourceTotal = source === "user"
+    ? stats.by_source.user
+    : source === "auto_judge"
+      ? stats.by_source.auto_judge
+      : stats.total;
+
+  const maxCount = Math.max(...Object.values(byStarMap), 1);
+
+  const STAR_COLOR = "#c9a96e";
+  const SIGNAL_COLORS = {
+    positive: { bg: "rgba(122,171,138,0.12)", border: "rgba(122,171,138,0.3)", text: T.green },
+    negative: { bg: "rgba(201,112,112,0.12)", border: "rgba(201,112,112,0.3)",  text: T.red },
+    neutral:  { bg: "rgba(201,169,110,0.08)", border: "rgba(201,169,110,0.2)",  text: T.yellow },
+  };
+
+  const filledStars = (n) =>
+    Array.from({ length: 5 }, (_, i) => (
+      <span key={i} style={{ color: i < Math.round(n) ? STAR_COLOR : T.textFaint, fontSize: "1rem" }}>★</span>
+    ));
+
+  const userPct  = stats.total > 0 ? ((stats.by_source.user  / stats.total) * 100).toFixed(1) : "0";
+  const judgePct = stats.total > 0 ? ((stats.by_source.auto_judge / stats.total) * 100).toFixed(1) : "0";
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 24px 0" }}>
+
+      {/* ── Header ── */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 24 }}>
+        <h2 style={{
+          fontFamily: "'Cormorant Garamond', serif",
+          fontSize: "1.6rem", fontWeight: 600, color: T.text,
+        }}>
+          Ratings Overview
+        </h2>
+        <span style={{ color: T.textMuted, fontSize: "0.82rem" }}>
+          {stats.total.toLocaleString()} total · avg {stats.avg_rating.toFixed(1)} ★ · {filledStars(stats.avg_rating)}
+        </span>
+      </div>
+
+      {stats.total === 0 ? (
+        <div style={{ textAlign: "center", padding: "48px 0", color: T.textMuted, fontSize: "0.85rem" }}>
+          <div style={{ fontSize: "2rem", marginBottom: 10, opacity: 0.3 }}>★</div>
+          No ratings yet
+        </div>
+      ) : (
+        <>
+          {/* ── Source breakdown (the two numbers you're looking for) ── */}
+          <div style={{
+            background: T.surface, border: `1px solid ${T.border}`,
+            borderRadius: 12, padding: "20px 24px", marginBottom: 16,
+          }}>
+            <div style={{ color: T.textMuted, fontSize: "0.7rem", fontWeight: 700,
+              textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 16 }}>
+              Rating Source
+            </div>
+
+            {/* Big numbers side by side */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+
+              {/* Actual users */}
+              <div style={{
+                background: "rgba(122,171,138,0.07)", border: "1px solid rgba(122,171,138,0.25)",
+                borderRadius: 10, padding: "16px 20px",
+              }}>
+                <div style={{ color: T.green, fontSize: "0.7rem", fontWeight: 700,
+                  textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+                  Actual User Ratings
+                </div>
+                <div style={{ color: T.text, fontSize: "2.2rem", fontWeight: 700, lineHeight: 1 }}>
+                  {stats.by_source.user.toLocaleString()}
+                </div>
+                <div style={{ color: T.textMuted, fontSize: "0.78rem", marginTop: 6 }}>
+                  {userPct}% of total — submitted by real shoppers
+                </div>
+              </div>
+
+              {/* AI judge */}
+              <div style={{
+                background: "rgba(201,169,110,0.07)", border: "1px solid rgba(201,169,110,0.2)",
+                borderRadius: 10, padding: "16px 20px",
+              }}>
+                <div style={{ color: T.accent, fontSize: "0.7rem", fontWeight: 700,
+                  textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+                  AI Judge Ratings
+                </div>
+                <div style={{ color: T.text, fontSize: "2.2rem", fontWeight: 700, lineHeight: 1 }}>
+                  {stats.by_source.auto_judge.toLocaleString()}
+                </div>
+                <div style={{ color: T.textMuted, fontSize: "0.78rem", marginTop: 6 }}>
+                  {judgePct}% of total — automated quality scoring
+                </div>
+              </div>
+            </div>
+
+            {/* Visual split bar */}
+            <div style={{ height: 6, borderRadius: 3, background: T.bgDeep, overflow: "hidden" }}>
+              <div style={{
+                height: "100%", width: `${userPct}%`,
+                background: T.green, borderRadius: 3,
+              }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
+              <span style={{ color: T.green, fontSize: "0.7rem" }}>Users {userPct}%</span>
+              <span style={{ color: T.accent, fontSize: "0.7rem" }}>AI Judge {judgePct}%</span>
+            </div>
+          </div>
+
+          {/* ── Ready-to-train pill ── */}
+          <div style={{ marginBottom: 20 }}>
+            <span style={{
+              display: "inline-block",
+              background: stats.ready_to_train ? "rgba(122,171,138,0.12)" : "rgba(201,112,112,0.1)",
+              border: `1px solid ${stats.ready_to_train ? "rgba(122,171,138,0.3)" : "rgba(201,112,112,0.3)"}`,
+              color: stats.ready_to_train ? T.green : T.red,
+              fontSize: "0.75rem", fontWeight: 600,
+              padding: "4px 14px", borderRadius: 20,
+            }}>
+              {stats.ready_to_train ? "Ready to train" : "Not enough pairs to train"}
+            </span>
+          </div>
+
+          {/* ── Star distribution ── */}
+          <div style={{
+            background: T.surface, border: `1px solid ${T.border}`,
+            borderRadius: 12, padding: "18px 24px", marginBottom: 16,
+          }}>
+            {/* Section header + filter tabs inline */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ color: T.textMuted, fontSize: "0.7rem", fontWeight: 700,
+                textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                Star Distribution
+              </div>
+              <div style={{ display: "flex", gap: 4 }}>
+                {[
+                  { key: "all",        label: "All" },
+                  { key: "user",       label: "Users only" },
+                  { key: "auto_judge", label: "AI Judge only" },
+                ].map(opt => (
+                  <button key={opt.key} onClick={() => setSource(opt.key)} style={{
+                    padding: "3px 10px", borderRadius: 20, border: "1px solid",
+                    fontSize: "0.72rem", cursor: "pointer", transition: "all 0.15s",
+                    background:  source === opt.key ? T.accentBg  : "transparent",
+                    borderColor: source === opt.key ? T.accent     : T.border,
+                    color:       source === opt.key ? T.accent      : T.textMuted,
+                    fontWeight:  source === opt.key ? 600 : 400,
+                  }}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {[5, 4, 3, 2, 1].map(star => {
+              const count = byStarMap[String(star)] || 0;
+              const pct   = sourceTotal > 0 ? ((count / sourceTotal) * 100).toFixed(1) : "0.0";
+              const barW  = sourceTotal > 0 ? (count / maxCount) * 100 : 0;
+              return (
+                <div key={star} style={{
+                  display: "grid",
+                  gridTemplateColumns: "72px 1fr 56px 44px",
+                  alignItems: "center", gap: 10, marginBottom: 9,
+                }}>
+                  <div style={{ display: "flex", gap: 2, justifyContent: "flex-end" }}>
+                    {Array.from({ length: 5 }, (_, i) => (
+                      <span key={i} style={{ color: i < star ? STAR_COLOR : T.textFaint, fontSize: "0.78rem" }}>★</span>
+                    ))}
+                  </div>
+                  <div style={{ height: 8, borderRadius: 4, background: T.bgDeep, overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%", width: `${barW}%`,
+                      background: `linear-gradient(90deg, ${T.accent}, ${T.accentDeep})`,
+                      borderRadius: 4, transition: "width 0.4s ease",
+                    }} />
+                  </div>
+                  <div style={{ color: T.text, fontSize: "0.82rem", fontWeight: 600, textAlign: "right" }}>
+                    {count.toLocaleString()}
+                  </div>
+                  <div style={{ color: T.textMuted, fontSize: "0.75rem", textAlign: "right" }}>
+                    {pct}%
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Training signal ── */}
+          <div style={{
+            background: T.surface, border: `1px solid ${T.border}`,
+            borderRadius: 12, padding: "18px 24px", marginBottom: 28,
+          }}>
+            <div style={{ color: T.textMuted, fontSize: "0.7rem", fontWeight: 700,
+              textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>
+              Training Signal Breakdown
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+              {[
+                { key: "positive", label: "Positive",  desc: "4–5 ★", bg: "rgba(122,171,138,0.1)",  border: "rgba(122,171,138,0.25)", color: T.green },
+                { key: "neutral",  label: "Neutral",   desc: "3 ★",   bg: "rgba(201,169,110,0.07)", border: "rgba(201,169,110,0.2)",  color: T.yellow },
+                { key: "negative", label: "Negative",  desc: "1–2 ★", bg: "rgba(201,112,112,0.1)",  border: "rgba(201,112,112,0.25)", color: T.red },
+              ].map(sig => {
+                const cnt = stats.by_signal[sig.key];
+                const pct = stats.total > 0 ? ((cnt / stats.total) * 100).toFixed(0) : "0";
+                return (
+                  <div key={sig.key} style={{
+                    background: sig.bg, border: `1px solid ${sig.border}`, borderRadius: 10, padding: "14px 16px",
+                  }}>
+                    <div style={{ color: sig.color, fontSize: "0.7rem", fontWeight: 700,
+                      textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                      {sig.label} · {sig.desc}
+                    </div>
+                    <div style={{ color: T.text, fontSize: "1.5rem", fontWeight: 700 }}>
+                      {cnt.toLocaleString()}
+                    </div>
+                    <div style={{ color: T.textMuted, fontSize: "0.75rem", marginTop: 3 }}>
+                      {pct}% of total
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// ADMIN FLAGS VIEW
+// ══════════════════════════════════════════════════════════════════
+function AdminFlagsView({ onFlagsChange }) {
+  const [flags,   setFlags]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busy,    setBusy]    = useState({});
+
+  useEffect(() => {
+    fetch(`${API}/low-score-flags`)
+      .then(r => r.json())
+      .then(data => { setFlags(data.flags || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const act = async (productId, endpoint) => {
+    setBusy(prev => ({ ...prev, [productId]: true }));
+    try {
+      const res = await fetch(`${API}/low-score-flags/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: productId }),
+      });
+      if (res.ok) {
+        setFlags(prev => {
+          const next = prev.filter(f => f.product_id !== productId);
+          onFlagsChange?.(next.length);
+          return next;
+        });
+      }
+    } catch { /* non-critical */ } finally {
+      setBusy(prev => ({ ...prev, [productId]: false }));
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ padding: 40, textAlign: "center", color: T.textMuted, fontSize: "0.85rem" }}>
+        Loading flags…
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 24px" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          {flags.length > 0 && (
+            <span style={{
+              background: "rgba(201,112,112,0.12)", border: "1px solid rgba(201,112,112,0.3)",
+              color: T.red, fontSize: "0.72rem", fontWeight: 700,
+              padding: "3px 10px", borderRadius: 20,
+            }}>
+              {flags.length} warning{flags.length !== 1 ? "s" : ""}
+            </span>
+          )}
+          <h2 style={{
+            fontFamily: "'Cormorant Garamond', serif",
+            fontSize: "1.6rem", fontWeight: 600, color: T.text,
+          }}>
+            Low-Quality Match Flags
+          </h2>
+        </div>
+        <p style={{ color: T.textMuted, fontSize: "0.82rem", lineHeight: 1.5 }}>
+          {flags.length === 0
+            ? "No issues detected — all top-3 results are meeting quality thresholds."
+            : `${flags.length} item${flags.length !== 1 ? "s" : ""} were flagged because Gemini judge scored them below ${Math.round(40)}% in a top-3 position. They are hidden from search results until reviewed.`}
+        </p>
+      </div>
+
+      {flags.length === 0 && (
+        <div style={{
+          textAlign: "center", padding: "60px 0",
+          color: T.textMuted, fontSize: "0.85rem",
+        }}>
+          <div style={{ fontSize: "2rem", marginBottom: 12, opacity: 0.3 }}>✓</div>
+          All clear
+        </div>
+      )}
+
+      {/* Flag grid */}
+      {flags.length > 0 && (
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+          gap: 16,
+        }}>
+          {flags.map(flag => {
+            const pct   = Math.round((flag.judge_score ?? 0) * 100);
+            const color = pct >= 35 ? T.yellow : T.red;
+            const isBusy = !!busy[flag.product_id];
+            return (
+              <div key={flag.product_id} style={{
+                background: T.surface,
+                border: `1px solid ${T.border}`,
+                borderRadius: 12,
+                overflow: "hidden",
+                opacity: isBusy ? 0.5 : 1,
+                transition: "opacity 0.2s",
+              }}>
+                {/* Image */}
+                <div style={{ position: "relative", aspectRatio: "3/4", background: T.bgDeep }}>
+                  {flag.image_url ? (
+                    <img
+                      src={flag.image_url}
+                      alt={flag.name}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      onError={e => { e.target.style.display = "none"; }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: "100%", height: "100%",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: T.textFaint, fontSize: "0.75rem",
+                    }}>No image</div>
+                  )}
+                  {/* Score badge */}
+                  <div style={{
+                    position: "absolute", top: 8, right: 8,
+                    background: `${color}22`, border: `1px solid ${color}55`,
+                    color, fontSize: "0.68rem", fontWeight: 700,
+                    padding: "3px 7px", borderRadius: 6,
+                    backdropFilter: "blur(4px)",
+                  }}>
+                    {pct}%
+                  </div>
+                </div>
+
+                {/* Meta */}
+                <div style={{ padding: "11px 13px" }}>
+                  <div style={{
+                    fontSize: "0.78rem", color: T.text, fontWeight: 500,
+                    marginBottom: 3,
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  }}>
+                    {flag.name || "Unknown item"}
+                  </div>
+                  <div style={{ fontSize: "0.7rem", color: T.textMuted, marginBottom: 11 }}>
+                    {flag.store_name || "Unknown store"}
+                    {flag.flagged_at && (
+                      <span style={{ marginLeft: 6, opacity: 0.6 }}>
+                        · {new Date(flag.flagged_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                      disabled={isBusy}
+                      onClick={() => act(flag.product_id, "dismiss")}
+                      style={{
+                        flex: 1, padding: "5px 0",
+                        background: T.accentBg, border: `1px solid ${T.accentRing}`,
+                        color: T.accent, borderRadius: 6, fontSize: "0.7rem",
+                        cursor: isBusy ? "default" : "pointer",
+                        fontFamily: "'DM Sans', sans-serif",
+                      }}
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      disabled={isBusy}
+                      onClick={() => act(flag.product_id, "confirm-remove")}
+                      style={{
+                        flex: 1, padding: "5px 0",
+                        background: "rgba(201,112,112,0.08)",
+                        border: "1px solid rgba(201,112,112,0.25)",
+                        color: T.red, borderRadius: 6, fontSize: "0.7rem",
+                        cursor: isBusy ? "default" : "pointer",
+                        fontFamily: "'DM Sans', sans-serif",
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // ROOT
 // ══════════════════════════════════════════════════════════════════
 export default function App() {
@@ -1719,7 +2461,6 @@ export default function App() {
   const [error,            setError]            = useState(null);
   const [history,          setHistory]          = useState(() => loadHistory());
   const [saved,            setSaved]            = useState(() => loadSaved());
-
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
       pos => setUserLocation([pos.coords.latitude, pos.coords.longitude]),
@@ -1745,6 +2486,21 @@ export default function App() {
     }, 4000);
     return () => clearInterval(interval);
   }, [view, searchId]);
+
+  // Track time spent on results page and fire event on exit.
+  useEffect(() => {
+    if (view !== "results") return;
+    const entryTime = Date.now();
+    return () => {
+      const seconds = (Date.now() - entryTime) / 1000;
+      if (seconds < 1) return;
+      fetch(`${API}/track-event`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_type: "results_exit", duration_seconds: seconds }),
+      }).catch(() => {});
+    };
+  }, [view]);
 
   // Poll for attribute tagger results after search; populates the attribute panel.
   useEffect(() => {
@@ -1875,6 +2631,16 @@ export default function App() {
           category:          category  || "",
           rating,
         }),
+      });
+    } catch { /* non-critical */ }
+  }, []);
+
+  const handleFlagItem = useCallback(async (productId, name, store, imageUrl) => {
+    try {
+      await fetch(`${API}/admin/flag-item`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ product_id: productId, name, store_name: store, image_url: imageUrl }),
       });
     } catch { /* non-critical */ }
   }, []);
@@ -2010,6 +2776,7 @@ export default function App() {
               setRadius={setRadius}
               userLocation={userLocation}
               onFeedback={handleFeedback}
+              onFlag={handleFlagItem}
               onReset={reset}
               onRefineCrop={handleRefineCrop}
               saved={saved}

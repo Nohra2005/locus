@@ -78,7 +78,7 @@ services:
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8004/health || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8004/health')\""]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -194,7 +194,7 @@ services:
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - GEMINI_RESULTS_PATH=/mlops/gemini_judge_results.json
-      - VSS_CACHE_PATH=/mlops/vss_cache.json
+      - VSS_CACHE_PATH=/mlops/results_cache.json
       - METRICS_PORT=8003
       - REFRESH_SECS=30
     restart: unless-stopped
