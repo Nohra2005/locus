@@ -33,6 +33,9 @@ _judge_scores:     dict[str, dict[str, float]] = {}
 _judge_timestamps: dict[str, float]            = {}
 _JUDGE_TTL = 300  # 5 minutes
 
+LOW_SCORE_THRESHOLD  = 0.40   # Gemini judge score below this in top-3 → low-quality flag
+LOW_SCORE_FLAGS_PATH = "/app/low_score_flags.json"
+
 
 def _cleanup_judge_scores() -> None:
     cutoff = _time_module.monotonic() - _JUDGE_TTL
@@ -58,6 +61,22 @@ def _cleanup_attribute_cache() -> None:
         _attribute_cache.pop(sid, None)
         _original_results.pop(sid, None)
         _attr_timestamps.pop(sid, None)
+
+
+def _read_low_score_flags() -> list:
+    try:
+        with open(LOW_SCORE_FLAGS_PATH) as f:
+            return _json.load(f)
+    except Exception:
+        return []
+
+
+def _write_low_score_flags(flags: list) -> None:
+    try:
+        with open(LOW_SCORE_FLAGS_PATH, "w") as f:
+            _json.dump(flags, f, indent=2)
+    except Exception as exc:
+        print(f"[LOW_SCORE] Failed to write flags file: {exc}")
 
 
 async def _audit_corrupt_items(
@@ -150,6 +169,87 @@ async def _audit_corrupt_items(
                 print(f"[CORRUPT] Set payload failed for {pid[:60]}: {exc}")
 
 
+async def _audit_low_score_top3(
+    top3_matches: list,
+    scores_dict: dict,
+) -> None:
+    """
+    After Gemini judge scores arrive, checks each of the top-3 results.
+    If any scores below LOW_SCORE_THRESHOLD it is flagged with low_score_flag=True
+    in Qdrant (hidden from future searches) and recorded in the admin flags JSON.
+
+    Metadata is read directly from the match dict passed in — the same dict that
+    run_judge used to assign scores — so the judge score is always linked to the
+    correct item regardless of any reranking that may have occurred.
+    """
+    top3_pids = [m["product_id"] for m in top3_matches]
+    deadline  = _time_module.monotonic() + 90
+    while _time_module.monotonic() < deadline:
+        if all(pid in scores_dict for pid in top3_pids):
+            break
+        await asyncio.sleep(5)
+
+    existing_flags = _read_low_score_flags()
+    flagged_pids   = {f["product_id"] for f in existing_flags}
+    new_flags      = list(existing_flags)
+
+    for match in top3_matches:
+        pid   = match["product_id"]
+        score = scores_dict.get(pid)
+        if score is None:
+            continue
+        if score >= LOW_SCORE_THRESHOLD:
+            continue
+        if pid in flagged_pids:
+            print(f"[LOW_SCORE] {pid[:60]} already flagged (score={score:.3f}) — skipping")
+            continue
+
+        print(f"[LOW_SCORE] FLAGGING top-3 match '{match.get('name', '')}' "
+              f"({pid[:60]}) judge={score:.3f} < {LOW_SCORE_THRESHOLD}")
+
+        try:
+            scroll_hits, _ = await asyncio.to_thread(
+                client.scroll,
+                collection_name=COLLECTION_NAME,
+                scroll_filter=models.Filter(must=[
+                    models.FieldCondition(key="product_id", match=models.MatchValue(value=pid))
+                ]),
+                limit=50,
+                with_payload=True,
+            )
+        except Exception as exc:
+            print(f"[LOW_SCORE] Scroll failed for {pid[:60]}: {exc}")
+            continue
+
+        if not scroll_hits:
+            continue
+
+        all_ids = [p.id for p in scroll_hits]
+        try:
+            await asyncio.to_thread(
+                client.set_payload,
+                collection_name=COLLECTION_NAME,
+                payload={"low_score_flag": True},
+                points=all_ids,
+            )
+        except Exception as exc:
+            print(f"[LOW_SCORE] Set payload failed for {pid[:60]}: {exc}")
+            continue
+
+        new_flags.append({
+            "product_id":  pid,
+            "image_url":   match.get("image_url", ""),
+            "name":        match.get("name", ""),
+            "store_name":  match.get("store_name", ""),
+            "judge_score": score,
+            "flagged_at":  datetime.utcnow().isoformat(),
+        })
+        flagged_pids.add(pid)
+
+    if len(new_flags) > len(existing_flags):
+        _write_low_score_flags(new_flags)
+
+
 async def _run_tagger(search_id: str, image_b64: str, category: str) -> None:
     try:
         async with httpx.AsyncClient(timeout=20.0) as _tc:
@@ -183,11 +283,32 @@ locus_searches = Counter(
     ["category"],
 )
 
-# Feedback star ratings
+# Feedback star ratings (runtime counter, incremented on each /feedback POST)
 locus_feedback_stars = Counter(
     "locus_feedback_stars_total",
     "Feedback events by star rating and training signal",
     ["stars", "signal"],
+)
+
+# Rating distribution gauges — read from Qdrant every 60s, reflect true totals
+locus_rating_by_star = Gauge(
+    "locus_rating_by_star_total",
+    "Ratings per star level from locus_feedback Qdrant collection",
+    ["stars", "source"],  # source: all | user | judge
+)
+locus_rating_by_source = Gauge(
+    "locus_rating_by_source_total",
+    "Total ratings by source (user vs auto_judge) from locus_feedback",
+    ["source"],
+)
+locus_rating_avg = Gauge(
+    "locus_rating_avg_score",
+    "Average star rating across all locus_feedback records",
+)
+locus_rating_by_signal = Gauge(
+    "locus_rating_by_signal_total",
+    "Total ratings per training signal from locus_feedback",
+    ["signal"],
 )
 
 # Link health monitor timing
@@ -198,6 +319,63 @@ locus_link_monitor_last_run = Gauge(
 locus_link_monitor_next_run = Gauge(
     "locus_link_monitor_next_run_timestamp",
     "Unix timestamp of the next scheduled link health check run",
+)
+
+# Admin / operational metrics (refreshed every 30s by _refresh_admin_metrics)
+locus_active_sessions = Gauge(
+    "locus_active_sessions",
+    "Live search sessions (judge + attribute caches currently held in memory)",
+)
+locus_whitelist_pending = Gauge(
+    "locus_whitelist_pending_total",
+    "Pending whitelist suggestions awaiting approve/reject",
+)
+locus_corrupt_items = Gauge(
+    "locus_corrupt_items_total",
+    "Products with corrupt_flag_count >= 1 in locus_items collection",
+)
+locus_low_score_flags_metric = Gauge(
+    "locus_low_score_flags_total",
+    "Products with low_score_flag=True in locus_items collection",
+)
+
+# User engagement tracking
+locus_result_clicks = Counter(
+    "locus_result_clicks_total",
+    "Number of result card clicks by display position (1-indexed)",
+    ["position"],
+)
+locus_results_time_on_page = Histogram(
+    "locus_results_time_on_page_seconds",
+    "Seconds a user spends on the results page before navigating away",
+    buckets=[5, 10, 20, 30, 60, 120, 300, 600],
+)
+
+# Store & retailer analytics
+locus_store_impressions = Counter(
+    "locus_store_impressions_total",
+    "Times a product from a store appeared in search results",
+    ["store"],
+)
+locus_store_item_impressions = Counter(
+    "locus_store_item_impressions_total",
+    "Times a specific item appeared in search results",
+    ["store", "item_name"],
+)
+locus_store_result_clicks = Counter(
+    "locus_store_result_clicks_total",
+    "Times a result card from a store was clicked to open the detail sheet",
+    ["store"],
+)
+locus_store_website_clicks = Counter(
+    "locus_store_website_clicks_total",
+    "Times a user clicked the View on store website link",
+    ["store"],
+)
+locus_store_directions_clicks = Counter(
+    "locus_store_directions_clicks_total",
+    "Times a user clicked Get directions for a store",
+    ["store"],
 )
 
 app.add_middleware(
@@ -237,8 +415,62 @@ else:
     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=30)
 
 
+def _compute_rating_gauges():
+    """Synchronous helper: scroll locus_feedback and update all rating Prometheus gauges."""
+    all_records = []
+    cursor = None
+    while True:
+        batch, next_cursor = client.scroll(
+            collection_name=FEEDBACK_COLLECTION,
+            limit=500, offset=cursor,
+            with_payload=True, with_vectors=False,
+        )
+        if not batch:
+            break
+        all_records.extend(batch)
+        if next_cursor is None:
+            break
+        cursor = next_cursor
+
+    records = [pt.payload for pt in all_records]
+
+    by_star       = {str(i): 0 for i in range(1, 6)}
+    by_star_user  = {str(i): 0 for i in range(1, 6)}
+    by_star_judge = {str(i): 0 for i in range(1, 6)}
+
+    for r in records:
+        star   = r.get("rating", 0)
+        source = r.get("source", "user")
+        if 1 <= star <= 5:
+            by_star[str(star)] += 1
+            if source != "user":
+                by_star_judge[str(star)] += 1
+            else:
+                by_star_user[str(star)] += 1
+
+    for s in range(1, 6):
+        locus_rating_by_star.labels(stars=str(s), source="all").set(by_star[str(s)])
+        locus_rating_by_star.labels(stars=str(s), source="user").set(by_star_user[str(s)])
+        locus_rating_by_star.labels(stars=str(s), source="judge").set(by_star_judge[str(s)])
+
+    rated = [r["rating"] for r in records if r.get("rating")]
+    locus_rating_avg.set(round(sum(rated) / len(rated), 2) if rated else 0.0)
+
+    positives = sum(1 for r in records if r.get("training_signal") == "positive")
+    negatives = sum(1 for r in records if r.get("training_signal") == "negative")
+    neutrals  = sum(1 for r in records if r.get("training_signal") == "neutral")
+    locus_rating_by_signal.labels(signal="positive").set(positives)
+    locus_rating_by_signal.labels(signal="negative").set(negatives)
+    locus_rating_by_signal.labels(signal="neutral").set(neutrals)
+
+    user_count  = sum(1 for r in records if r.get("source") == "user")
+    judge_count = len(records) - user_count
+    locus_rating_by_source.labels(source="user").set(user_count)
+    locus_rating_by_source.labels(source="auto_judge").set(judge_count)
+
+
 async def _refresh_qdrant_metrics():
-    """Background task: refresh Qdrant collection counts every 60s."""
+    """Background task: refresh Qdrant collection counts + rating gauges every 60s."""
     while True:
         for col in [COLLECTION_NAME, SKIPPED_COLLECTION, FEEDBACK_COLLECTION]:
             try:
@@ -246,6 +478,10 @@ async def _refresh_qdrant_metrics():
                 locus_qdrant_items.labels(collection=col).set(info.points_count or 0)
             except Exception as e:
                 print(f"[METRICS] Could not refresh count for {col}: {e}")
+        try:
+            await asyncio.to_thread(_compute_rating_gauges)
+        except Exception as e:
+            print(f"[METRICS] Could not refresh rating gauges: {e}")
         await asyncio.sleep(60)
 
 
@@ -272,10 +508,59 @@ async def _refresh_link_monitor_metrics():
         await asyncio.sleep(60)
 
 
+async def _refresh_admin_metrics():
+    """Background task: update session count, whitelist pending, and corrupt items every 30s."""
+    while True:
+        locus_active_sessions.set(len(_judge_scores) + len(_attribute_cache))
+        try:
+            pending = _read_pending()
+            locus_whitelist_pending.set(
+                sum(1 for p in pending if p.get("status") == "pending")
+            )
+        except Exception:
+            pass
+        try:
+            hits, _ = await asyncio.to_thread(
+                client.scroll,
+                collection_name=COLLECTION_NAME,
+                scroll_filter=models.Filter(must=[
+                    models.FieldCondition(
+                        key="corrupt_flag_count",
+                        range=models.Range(gte=1),
+                    )
+                ]),
+                limit=1000,
+                with_payload=False,
+                with_vectors=False,
+            )
+            locus_corrupt_items.set(len(hits))
+        except Exception:
+            pass
+        try:
+            low_hits, _ = await asyncio.to_thread(
+                client.scroll,
+                collection_name=COLLECTION_NAME,
+                scroll_filter=models.Filter(must=[
+                    models.FieldCondition(
+                        key="low_score_flag",
+                        match=models.MatchValue(value=True),
+                    )
+                ]),
+                limit=1000,
+                with_payload=False,
+                with_vectors=False,
+            )
+            locus_low_score_flags_metric.set(len(low_hits))
+        except Exception:
+            pass
+        await asyncio.sleep(30)
+
+
 @app.on_event("startup")
 async def startup_metrics():
     asyncio.create_task(_refresh_qdrant_metrics())
     asyncio.create_task(_refresh_link_monitor_metrics())
+    asyncio.create_task(_refresh_admin_metrics())
 
 
 @app.on_event("startup")
@@ -310,6 +595,14 @@ def startup_event():
         client.create_payload_index(
             collection_name=COLLECTION_NAME,
             field_name="broken",
+            field_schema=models.PayloadSchemaType.BOOL,
+        )
+    except Exception:
+        pass
+    try:
+        client.create_payload_index(
+            collection_name=COLLECTION_NAME,
+            field_name="low_score_flag",
             field_schema=models.PayloadSchemaType.BOOL,
         )
     except Exception:
@@ -584,6 +877,111 @@ async def get_feedback(
         "ready_to_train": (positives + negatives) >= 50,  # training threshold from roadmap
         "records":  records[:limit],
     }
+
+
+@app.get("/rating-stats")
+async def get_rating_stats():
+    """Aggregate star-rating distribution for the admin dashboard."""
+    all_records = []
+    cursor = None
+    while True:
+        batch, next_cursor = client.scroll(
+            collection_name=FEEDBACK_COLLECTION,
+            limit=500,
+            offset=cursor,
+            with_payload=True,
+            with_vectors=False,
+        )
+        if not batch:
+            break
+        all_records.extend(batch)
+        if next_cursor is None:
+            break
+        cursor = next_cursor
+
+    records = [pt.payload for pt in all_records]
+    total = len(records)
+
+    by_star       = {str(i): 0 for i in range(1, 6)}
+    by_star_user  = {str(i): 0 for i in range(1, 6)}
+    by_star_judge = {str(i): 0 for i in range(1, 6)}
+
+    def is_judge(source: str) -> bool:
+        return source != "user"
+
+    for r in records:
+        star   = r.get("rating", 0)
+        source = r.get("source", "user")
+        if 1 <= star <= 5:
+            by_star[str(star)] += 1
+            if is_judge(source):
+                by_star_judge[str(star)] += 1
+            else:
+                by_star_user[str(star)] += 1
+
+    rated      = [r["rating"] for r in records if r.get("rating")]
+    avg_rating = round(sum(rated) / len(rated), 2) if rated else 0.0
+
+    positives = sum(1 for r in records if r.get("training_signal") == "positive")
+    negatives = sum(1 for r in records if r.get("training_signal") == "negative")
+    neutrals  = sum(1 for r in records if r.get("training_signal") == "neutral")
+
+    user_count  = sum(1 for r in records if not is_judge(r.get("source", "user")))
+    judge_count = sum(1 for r in records if is_judge(r.get("source", "user")))
+
+    return {
+        "total":          total,
+        "avg_rating":     avg_rating,
+        "by_star":        by_star,
+        "by_star_user":   by_star_user,
+        "by_star_judge":  by_star_judge,
+        "by_source":      {"user": user_count, "auto_judge": judge_count},
+        "by_signal":      {"positive": positives, "negative": negatives, "neutral": neutrals},
+        "ready_to_train": (positives + negatives) >= 50,
+    }
+
+
+# ── User engagement tracking ───────────────────────────────────────────────────
+
+class ImpressionItem(BaseModel):
+    store:     str = ""
+    item_name: str = ""
+
+
+class TrackEventRequest(BaseModel):
+    event_type:       str                    # "result_click" | "results_exit" | "impressions" | "website_click" | "directions_click"
+    search_id:        str             = ""
+    position:         int             = 0    # 1-indexed display position (result_click only)
+    duration_seconds: float           = 0.0  # seconds on results page (results_exit only)
+    store:            str             = ""   # store name for click/conversion events
+    item_name:        str             = ""   # item name for result_click
+    impressions:      list[ImpressionItem] = []  # batch list for impressions event
+
+
+@app.post("/track-event")
+async def track_event(req: TrackEventRequest):
+    if req.event_type == "result_click" and req.position > 0:
+        locus_result_clicks.labels(position=str(req.position)).inc()
+        if req.store:
+            locus_store_result_clicks.labels(store=req.store).inc()
+
+    elif req.event_type == "results_exit" and req.duration_seconds > 0:
+        locus_results_time_on_page.observe(req.duration_seconds)
+
+    elif req.event_type == "impressions" and req.impressions:
+        for imp in req.impressions:
+            store = imp.store or "unknown"
+            locus_store_impressions.labels(store=store).inc()
+            if imp.item_name:
+                locus_store_item_impressions.labels(store=store, item_name=imp.item_name).inc()
+
+    elif req.event_type == "website_click" and req.store:
+        locus_store_website_clicks.labels(store=req.store).inc()
+
+    elif req.event_type == "directions_click" and req.store:
+        locus_store_directions_clicks.labels(store=req.store).inc()
+
+    return {"status": "ok"}
 
 
 # ── Detect ─────────────────────────────────────────────────────────────────────
@@ -894,6 +1292,11 @@ async def search_items(
         key="broken",
         match=models.MatchValue(value=True)
     ))
+    # Exclude items flagged as low-quality by Gemini judge (admin-reviewable)
+    must_not_conditions.append(models.FieldCondition(
+        key="low_score_flag",
+        match=models.MatchValue(value=True)
+    ))
 
     if must_conditions or must_not_conditions:
         query_filter = models.Filter(
@@ -1020,6 +1423,15 @@ async def search_items(
                 matches[:3],
                 scores_dict,
             )
+        # Always audit top-3 for low Gemini scores; flagged items are hidden from
+        # future searches and surfaced in the admin dashboard for review.
+        # Passing matches[:3] directly ensures judge scores stay linked to the
+        # correct item metadata regardless of any reranking.
+        background_tasks.add_task(
+            _audit_low_score_top3,
+            matches[:3],
+            scores_dict,
+        )
 
     return {
         "matches":                   matches,
@@ -1124,8 +1536,9 @@ async def refine_results(body: RefineRequest):
     refine_filter = models.Filter(
         must=must_conditions or None,
         must_not=[
-            models.FieldCondition(key="broken",     match=models.MatchValue(value=True)),
-            models.FieldCondition(key="store_name", match=models.MatchValue(value="golden_dataset")),
+            models.FieldCondition(key="broken",         match=models.MatchValue(value=True)),
+            models.FieldCondition(key="store_name",     match=models.MatchValue(value="golden_dataset")),
+            models.FieldCondition(key="low_score_flag", match=models.MatchValue(value=True)),
         ],
     )
 
@@ -1212,6 +1625,131 @@ async def delete_skipped_product(point_id: str):
         return {"status": "deleted", "id": point_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LOW-SCORE FLAGS  (admin review panel)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class LowScoreFlagRequest(BaseModel):
+    product_id: str
+
+
+class ManualFlagRequest(BaseModel):
+    product_id: str
+    name:       str = ""
+    store_name: str = ""
+    image_url:  str = ""
+
+
+@app.post("/admin/flag-item")
+async def admin_flag_item(body: ManualFlagRequest):
+    """Manually suppress a search result. Sets low_score_flag=True in Qdrant and records it in the admin flags JSON."""
+    pid = body.product_id
+    existing_flags = _read_low_score_flags()
+    if any(f["product_id"] == pid for f in existing_flags):
+        return {"status": "already_flagged", "product_id": pid}
+
+    try:
+        scroll_hits, _ = await asyncio.to_thread(
+            client.scroll,
+            collection_name=COLLECTION_NAME,
+            scroll_filter=models.Filter(must=[
+                models.FieldCondition(key="product_id", match=models.MatchValue(value=pid))
+            ]),
+            limit=50,
+            with_payload=False,
+        )
+        if not scroll_hits:
+            raise HTTPException(status_code=404, detail="product_id not found in Qdrant")
+        await asyncio.to_thread(
+            client.set_payload,
+            collection_name=COLLECTION_NAME,
+            payload={"low_score_flag": True},
+            points=[p.id for p in scroll_hits],
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    new_entry = {
+        "product_id": pid,
+        "image_url":  body.image_url,
+        "name":       body.name,
+        "store_name": body.store_name,
+        "judge_score": None,
+        "flagged_at": datetime.utcnow().isoformat(),
+        "manual":     True,
+    }
+    _write_low_score_flags(existing_flags + [new_entry])
+    print(f"[LOW_SCORE] MANUALLY FLAGGED '{body.name}' ({pid[:60]}) by admin")
+    return {"status": "flagged", "product_id": pid}
+
+
+@app.get("/low-score-flags")
+async def get_low_score_flags():
+    """Return all products currently flagged for low Gemini judge score."""
+    return {"flags": _read_low_score_flags()}
+
+
+@app.post("/low-score-flags/dismiss")
+async def dismiss_low_score_flag(body: LowScoreFlagRequest):
+    """Un-flag a product: restore it to search results and remove it from the admin list."""
+    pid = body.product_id
+    try:
+        scroll_hits, _ = await asyncio.to_thread(
+            client.scroll,
+            collection_name=COLLECTION_NAME,
+            scroll_filter=models.Filter(must=[
+                models.FieldCondition(key="product_id", match=models.MatchValue(value=pid))
+            ]),
+            limit=50,
+            with_payload=False,
+        )
+        if scroll_hits:
+            await asyncio.to_thread(
+                client.set_payload,
+                collection_name=COLLECTION_NAME,
+                payload={"low_score_flag": False},
+                points=[p.id for p in scroll_hits],
+            )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    flags = _read_low_score_flags()
+    _write_low_score_flags([f for f in flags if f.get("product_id") != pid])
+    print(f"[LOW_SCORE] DISMISSED flag for product {pid[:60]}")
+    return {"status": "dismissed", "product_id": pid}
+
+
+@app.post("/low-score-flags/confirm-remove")
+async def confirm_remove_flagged_item(body: LowScoreFlagRequest):
+    """Permanently delete a low-score-flagged product from Qdrant and the admin list."""
+    pid = body.product_id
+    try:
+        scroll_hits, _ = await asyncio.to_thread(
+            client.scroll,
+            collection_name=COLLECTION_NAME,
+            scroll_filter=models.Filter(must=[
+                models.FieldCondition(key="product_id", match=models.MatchValue(value=pid))
+            ]),
+            limit=50,
+            with_payload=False,
+        )
+        if scroll_hits:
+            await asyncio.to_thread(
+                client.delete,
+                collection_name=COLLECTION_NAME,
+                points_selector=models.PointIdsList(points=[p.id for p in scroll_hits]),
+            )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    flags = _read_low_score_flags()
+    _write_low_score_flags([f for f in flags if f.get("product_id") != pid])
+    print(f"[LOW_SCORE] DELETED product {pid[:60]} by admin request")
+    return {"status": "deleted", "product_id": pid}
 
 
 # ══════════════════════════════════════════════════════════════════════════════

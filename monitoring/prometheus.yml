@@ -1,6 +1,6 @@
 global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+  scrape_interval: 10s
+  evaluation_interval: 10s
 
 scrape_configs:
 
@@ -12,9 +12,9 @@ scrape_configs:
     static_configs:
       - targets: ['visual_engine:8001']
 
-  - job_name: 'ranking_engine'
+  - job_name: 'attribute_tagger'
     static_configs:
-      - targets: ['ranking_engine:8002']
+      - targets: ['attribute_tagger:8004']
 
   - job_name: 'mlops_exporter'
     static_configs:

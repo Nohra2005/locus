@@ -1,0 +1,42 @@
+[
+  {
+    "product_id": "1a67c603-6b79-52b0-b2e8-bf6b736ce2e9",
+    "image_url": "https://cdn.shopify.com/s/files/1/2277/0487/products/3d4ce7099146d518a077a5920de00222.png?v=1692768574",
+    "name": "New Balance Tenacity Heathertech Men Performance T-Shirt Black Heather",
+    "store_name": "Mikesport",
+    "judge_score": 0.35,
+    "flagged_at": "2026-04-24T04:46:01.036754"
+  },
+  {
+    "product_id": "69ddc478-65ad-5f7d-a373-b7f67f195a80",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-01275001-01-1_front.jpg?v=1757458389",
+    "name": "Ribbed Slit Tube Top",
+    "store_name": "Forever21",
+    "judge_score": 0.3,
+    "flagged_at": "2026-04-24T04:48:12.340546"
+  },
+  {
+    "product_id": "cfb44f1d-cdfe-5ad8-8e39-cf6bb3c393d4",
+    "image_url": "https://cdn.shopify.com/s/files/1/0283/6715/9393/files/655800280_x.jpg?v=1770459043",
+    "name": "DEBBY ECRU EMBROIDERED BLOUSE",
+    "store_name": "Maison123",
+    "judge_score": 0.35,
+    "flagged_at": "2026-04-24T05:16:37.687162"
+  },
+  {
+    "product_id": "f8a9294a-21bd-5900-8c0a-aa0c73b611c1",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-01348547-01-1_front.jpg?v=1751597294",
+    "name": "Off-the-Shoulder Bustier Crop Top",
+    "store_name": "Forever21",
+    "judge_score": 0.01,
+    "flagged_at": "2026-04-24T05:16:37.843102"
+  },
+  {
+    "product_id": "2e503f0e-b80b-5db4-b559-6e8b2f56f83a",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00452349-01-1_front.jpg?v=1751573325",
+    "name": "Patchwork Colorblock Denim Shirt",
+    "store_name": "Forever21",
+    "judge_score": 0.15,
+    "flagged_at": "2026-04-24T05:16:37.985507"
+  }
+]
