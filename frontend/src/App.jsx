@@ -23,22 +23,22 @@ const STORE_COORDS = {
 };
 
 const T = {
-  bg:          "#F2F2F7",
-  bgDeep:      "#E5E5EA",
+  bg:          "#FAF9F7",
+  bgDeep:      "#F0EBE5",
   surface:     "#FFFFFF",
-  surfaceHov:  "#F9F9F9",
-  border:      "rgba(60,60,67,0.18)",
-  borderFaint: "rgba(60,60,67,0.08)",
-  text:        "#000000",
-  textMuted:   "rgba(60,60,67,0.6)",
-  textFaint:   "rgba(60,60,67,0.28)",
-  accent:      "#007AFF",
-  accentBg:    "rgba(0,122,255,0.08)",
-  accentRing:  "rgba(0,122,255,0.2)",
-  accentDeep:  "#0062CC",
-  green:       "#34C759",
-  yellow:      "#FF9500",
-  red:         "#FF3B30",
+  surfaceHov:  "#FAFAF8",
+  border:      "rgba(30,20,12,0.12)",
+  borderFaint: "rgba(30,20,12,0.06)",
+  text:        "#1C1714",
+  textMuted:   "rgba(28,23,20,0.48)",
+  textFaint:   "rgba(28,23,20,0.22)",
+  accent:      "#8B6F5E",
+  accentBg:    "rgba(139,111,94,0.08)",
+  accentRing:  "rgba(139,111,94,0.22)",
+  accentDeep:  "#6A4F40",
+  green:       "#5A8A6A",
+  yellow:      "#C49A3C",
+  red:         "#B85858",
 };
 
 const GLOBAL_CSS = `
@@ -49,7 +49,7 @@ const GLOBAL_CSS = `
     width: 100%;
     background: ${T.bg};
     color: ${T.text};
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Josefin Sans', sans-serif;
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
@@ -61,7 +61,7 @@ const GLOBAL_CSS = `
 
   .leaflet-container {
     background: ${T.bgDeep} !important;
-    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif !important;
+    font-family: 'Josefin Sans', sans-serif !important;
   }
   .leaflet-popup-content-wrapper {
     background: ${T.surface} !important;
@@ -69,7 +69,7 @@ const GLOBAL_CSS = `
     border: 1px solid ${T.border} !important;
     border-radius: 12px !important;
     box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
-    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif !important;
+    font-family: 'Josefin Sans', sans-serif !important;
     font-size: 0.85rem !important;
   }
   .leaflet-popup-tip { background: ${T.surface} !important; }
@@ -96,21 +96,52 @@ const GLOBAL_CSS = `
     to   { transform: translateY(0); }
   }
 
+  @keyframes clothFloat {
+    0%   { transform: translateY(0vh)    rotate(-7deg) scale(1); }
+    45%  { transform: translateY(-52vh)  rotate(5deg)  scale(1.04); }
+    100% { transform: translateY(-112vh) rotate(-4deg) scale(0.96); }
+  }
+  @keyframes clothFloatR {
+    0%   { transform: translateY(0vh)    rotate(7deg)  scale(1); }
+    45%  { transform: translateY(-52vh)  rotate(-5deg) scale(1.04); }
+    100% { transform: translateY(-112vh) rotate(3deg)  scale(0.96); }
+  }
+  @keyframes blob1 {
+    0%, 100% { transform: translate(0px, 0px) scale(1); }
+    25%  { transform: translate(22px, -28px) scale(1.05); }
+    50%  { transform: translate(-16px, 14px) scale(0.96); }
+    75%  { transform: translate(10px, 24px) scale(1.03); }
+  }
+  @keyframes blob2 {
+    0%, 100% { transform: translate(0px, 0px) scale(1); }
+    30%  { transform: translate(-24px, 18px) scale(1.07); }
+    60%  { transform: translate(20px, -12px) scale(0.94); }
+  }
+
   .fade-up { animation: fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
   .fade-in { animation: fadeIn 0.3s ease forwards; }
+
+  .font-serif {
+    font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+  }
+
+  .font-logo {
+    font-family: 'Bodoni Moda', 'Didot', 'Bodoni MT', Georgia, serif;
+    font-style: italic;
+  }
 
   .results-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: 14px;
   }
-  @media (min-width: 640px)  { .results-grid { grid-template-columns: repeat(3, 1fr); } }
-  @media (min-width: 1024px) { .results-grid { grid-template-columns: repeat(4, 1fr); } }
+  @media (min-width: 560px)  { .results-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; } }
+  @media (min-width: 1024px) { .results-grid { grid-template-columns: repeat(4, 1fr); gap: 18px; } }
 
   .upload-zone {
-    border: 2px dashed rgba(60,60,67,0.2);
-    border-radius: 20px;
-    background: ${T.surface};
+    border: 1.5px dashed ${T.border};
+    border-radius: 12px;
+    background: transparent;
     transition: border-color 0.2s, background 0.2s;
     cursor: pointer;
   }
@@ -125,18 +156,19 @@ const GLOBAL_CSS = `
     justify-content: center;
     gap: 8px;
     padding: 15px 28px;
-    background: ${T.accent};
-    color: #FFFFFF;
+    background: ${T.text};
+    color: ${T.bg};
     border: none;
-    border-radius: 14px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
-    font-size: 1rem;
-    font-weight: 600;
+    border-radius: 12px;
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 0.92rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
     cursor: pointer;
-    transition: opacity 0.15s, transform 0.1s;
+    transition: opacity 0.15s, transform 0.12s;
     -webkit-tap-highlight-color: transparent;
   }
-  .btn-primary:hover { opacity: 0.85; }
+  .btn-primary:hover { opacity: 0.80; }
   .btn-primary:active { transform: scale(0.97); }
 
   .btn-secondary {
@@ -144,35 +176,35 @@ const GLOBAL_CSS = `
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 15px 28px;
-    background: ${T.surface};
-    color: ${T.accent};
-    border: none;
-    border-radius: 14px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
-    font-size: 1rem;
-    font-weight: 600;
+    padding: 14px 28px;
+    background: transparent;
+    color: ${T.text};
+    border: 1px solid ${T.border};
+    border-radius: 10px;
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
     cursor: pointer;
-    transition: opacity 0.15s;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    transition: background 0.15s;
     -webkit-tap-highlight-color: transparent;
   }
-  .btn-secondary:hover { opacity: 0.8; }
+  .btn-secondary:hover { background: ${T.bgDeep}; }
 
   .btn-ghost {
     background: none;
     border: none;
-    color: ${T.accent};
+    color: ${T.textMuted};
     cursor: pointer;
-    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
-    font-size: 1rem;
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 0.9rem;
     font-weight: 400;
     padding: 8px 14px;
-    border-radius: 10px;
-    transition: background 0.15s;
+    border-radius: 8px;
+    transition: background 0.15s, color 0.15s;
     -webkit-tap-highlight-color: transparent;
   }
-  .btn-ghost:hover { background: ${T.accentBg}; }
+  .btn-ghost:hover { background: ${T.bgDeep}; color: ${T.text}; }
 
   .star-btn {
     background: none;
@@ -214,7 +246,7 @@ const GLOBAL_CSS = `
     color: ${T.text};
     border: 1px solid ${T.border};
     border-radius: 10px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+    font-family: 'Josefin Sans', sans-serif;
   }
 `;
 
@@ -407,7 +439,7 @@ function Navbar({ activeTab, onTab }) {
     }}>
       {["Discover", "Saved", "History", "Store"].map(tab => {
         const active = activeTab === tab;
-        const label = tab === "Discover" ? "Search" : tab;
+        const label = tab === "Store" ? "Studio" : tab;
         return (
           <button
             key={tab}
@@ -422,7 +454,7 @@ function Navbar({ activeTab, onTab }) {
             }}
           >
             {TAB_ICONS[tab](active)}
-            <span style={{ fontSize: "0.65rem", fontWeight: active ? 600 : 400, letterSpacing: "-0.01em" }}>
+            <span style={{ fontSize: "0.6rem", fontWeight: active ? 600 : 400, letterSpacing: "0.06em", textTransform: "uppercase" }}>
               {label}
             </span>
           </button>
@@ -433,8 +465,64 @@ function Navbar({ activeTab, onTab }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// FLOATING CLOTHES BACKGROUND
+// ══════════════════════════════════════════════════════════════════
+const CLOTH_EMOJIS = [
+  "👗","🧥","👜","👠","👒","👔","👗","🧣","👟","🕶️",
+  "🧤","👗","👜","🧥","👠","👗","👒","🧥","👗","👟",
+];
+
+function FloatingClothes({ opacity = 1 }) {
+  const items = useMemo(() => CLOTH_EMOJIS.map((emoji, i) => {
+    const total = CLOTH_EMOJIS.length;
+    const slotW = 100 / total;
+    const jitter = (i % 3 - 1) * slotW * 0.35;
+    return {
+      id: i,
+      emoji,
+      left: `${Math.max(1, Math.min(96, slotW * i + slotW * 0.4 + jitter))}%`,
+      fontSize: `${1.5 + (i % 5) * 0.22}rem`,
+      duration: `${22 + (i % 6) * 3.5}s`,
+      delay: `${-((i / total) * (22 + (i % 6) * 3.5))}s`,
+      itemOpacity: (0.11 + (i % 4) * 0.022) * opacity,
+      anim: i % 2 === 0 ? "clothFloat" : "clothFloatR",
+    };
+  }), [opacity]);
+
+  return (
+    <div style={{
+      position: "absolute", inset: 0,
+      overflow: "hidden", pointerEvents: "none", zIndex: 0,
+    }}>
+      {items.map(item => (
+        <span
+          key={item.id}
+          style={{
+            position: "absolute",
+            left: item.left,
+            bottom: "-6%",
+            fontSize: item.fontSize,
+            opacity: item.itemOpacity,
+            animation: `${item.anim} ${item.duration} linear ${item.delay} infinite`,
+            filter: "brightness(1.05) saturate(1.1)",
+            userSelect: "none",
+            lineHeight: 1,
+            display: "block",
+            willChange: "transform",
+          }}
+        >
+          {item.emoji}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // LANDING
 // ══════════════════════════════════════════════════════════════════
+const LANDING_CATEGORIES = ["Dress", "Jacket", "Bag", "Shoes", "Top", "Pants", "Sweater", "Hat"];
+
 function LandingView({ onUpload, error }) {
   const inputRef  = useRef(null);
   const cameraRef = useRef(null);
@@ -447,57 +535,108 @@ function LandingView({ onUpload, error }) {
   return (
     <div className="fade-in" style={{
       minHeight: "100svh",
+      position: "relative",
       display: "flex", flexDirection: "column",
       alignItems: "center", justifyContent: "center",
-      padding: "32px 24px",
+      padding: "32px 28px",
       paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 20px)",
+      background: T.bg,
+      overflow: "hidden",
     }}>
-      {/* App icon + branding */}
-      <div className="fade-up" style={{ textAlign: "center", marginBottom: 52 }}>
+      <FloatingClothes opacity={1} />
+
+      {/* Editorial branding */}
+      <div className="fade-up" style={{ textAlign: "center", marginBottom: 48, position: "relative", zIndex: 1 }}>
+        {/* Double-ring lens mark */}
         <div style={{
-          width: 80, height: 80, borderRadius: 20,
-          background: `linear-gradient(145deg, ${T.accent}, #5856D6)`,
+          width: 76, height: 76,
+          borderRadius: "50%",
+          border: "1px solid rgba(28,23,20,0.14)",
           display: "flex", alignItems: "center", justifyContent: "center",
-          margin: "0 auto 20px",
-          boxShadow: `0 8px 32px ${T.accentRing}`,
+          margin: "0 auto 30px",
+          position: "relative",
         }}>
-          <svg width="38" height="38" viewBox="0 0 38 38" fill="none">
-            <circle cx="17" cy="17" r="9" stroke="#fff" strokeWidth="2.5"/>
-            <line x1="23.5" y1="23.5" x2="32" y2="32" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+          <div style={{
+            position: "absolute",
+            width: 54, height: 54,
+            borderRadius: "50%",
+            border: "1px solid rgba(28,23,20,0.07)",
+          }} />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke={T.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="6"/>
+            <line x1="16" y1="16" x2="22" y2="22"/>
           </svg>
         </div>
-        <h1 style={{ fontSize: "2.6rem", fontWeight: 700, letterSpacing: "-0.03em", color: T.text, marginBottom: 10 }}>
+
+        {/* Serif italic wordmark */}
+        <h1 className="font-logo" style={{
+          fontSize: "4rem", fontWeight: 400,
+          letterSpacing: "0.06em", color: T.text,
+          marginBottom: 20, lineHeight: 1,
+        }}>
           locus
         </h1>
-        <p style={{ fontSize: "1.05rem", color: T.textMuted, lineHeight: 1.5, maxWidth: 280, margin: "0 auto" }}>
-          Photograph any fashion item to find it nearby
+
+        {/* Thin rule + descriptor */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12,
+          maxWidth: 240, margin: "0 auto 18px",
+        }}>
+          <div style={{ flex: 1, height: "1px", background: T.border }} />
+          <span style={{
+            fontSize: "0.5rem", letterSpacing: "0.22em",
+            textTransform: "uppercase", color: T.textMuted,
+            whiteSpace: "nowrap",
+          }}>
+            fashion discovery
+          </span>
+          <div style={{ flex: 1, height: "1px", background: T.border }} />
+        </div>
+
+        <p style={{
+          fontSize: "0.88rem", color: T.textMuted,
+          lineHeight: 1.7, maxWidth: 240, margin: "0 auto",
+        }}>
+          Photograph any piece. Find it in stores near you.
         </p>
       </div>
 
-      {/* Upload buttons */}
-      <div className="fade-up" style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Upload actions */}
+      <div className="fade-up" style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 10, position: "relative", zIndex: 1 }}>
         <button
           className="btn-primary"
-          style={{ width: "100%" }}
+          style={{ width: "100%", height: 52 }}
           onClick={() => cameraRef.current?.click()}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
             <circle cx="12" cy="13" r="4"/>
           </svg>
           Take a photo
         </button>
 
-        <button
-          className="btn-secondary"
-          style={{ width: "100%" }}
+        <div
+          className={`upload-zone ${dragging ? "drag-over" : ""}`}
           onClick={() => inputRef.current?.click()}
           onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            gap: 10, padding: "15px 28px",
+            cursor: "pointer",
+          }}
         >
-          {dragging ? "Drop it!" : "Choose from library"}
-        </button>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.textMuted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          <span style={{ fontSize: "0.9rem", color: T.textMuted, fontWeight: 400 }}>
+            {dragging ? "Drop to discover" : "Choose from library"}
+          </span>
+        </div>
 
         <input
           ref={cameraRef}
@@ -516,8 +655,28 @@ function LandingView({ onUpload, error }) {
         />
       </div>
 
+      {/* Category suggestion pills */}
+      <div className="fade-up" style={{ marginTop: 30, display: "flex", flexWrap: "wrap", gap: 7, justifyContent: "center", maxWidth: 310, position: "relative", zIndex: 1 }}>
+        {LANDING_CATEGORIES.map(cat => (
+          <span key={cat} style={{
+            fontSize: "0.58rem", letterSpacing: "0.12em", textTransform: "uppercase",
+            color: T.textFaint, background: "transparent",
+            border: `1px solid ${T.borderFaint}`,
+            borderRadius: 20, padding: "4px 11px",
+          }}>
+            {cat}
+          </span>
+        ))}
+      </div>
+
       {error && (
-        <div className="fade-up" style={{ marginTop: 20, padding: "14px 18px", background: "rgba(255,59,48,0.08)", border: "1px solid rgba(255,59,48,0.2)", borderRadius: 12, fontSize: "0.9rem", color: T.red, maxWidth: 340, width: "100%", textAlign: "center" }}>
+        <div className="fade-up" style={{
+          marginTop: 20, padding: "14px 18px",
+          background: "rgba(184,88,88,0.08)", border: "1px solid rgba(184,88,88,0.2)",
+          borderRadius: 10, fontSize: "0.9rem", color: T.red,
+          maxWidth: 340, width: "100%", textAlign: "center",
+          position: "relative", zIndex: 1,
+        }}>
           {error}
         </div>
       )}
@@ -532,11 +691,20 @@ function LoadingView({ label }) {
   return (
     <div style={{
       minHeight: "100svh", display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center", gap: 16,
+      alignItems: "center", justifyContent: "center",
       paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px))",
+      background: T.bg,
+      position: "relative",
+      overflow: "hidden",
     }}>
-      <div style={{ width: 40, height: 40, border: "3px solid rgba(60,60,67,0.12)", borderTop: `3px solid ${T.accent}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-      <span style={{ fontSize: "1rem", color: T.textMuted }}>{label}</span>
+      <FloatingClothes opacity={0.6} />
+      <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 18, position: "relative", zIndex: 1 }}>
+        <span className="font-logo" style={{ fontSize: "1.9rem", fontWeight: 400, color: T.text, letterSpacing: "0.06em", opacity: 0.7 }}>
+          locus
+        </span>
+        <div style={{ width: 28, height: 28, border: `2px solid ${T.borderFaint}`, borderTop: `2px solid ${T.accent}`, borderRadius: "50%", animation: "spin 0.9s linear infinite" }} />
+        <span style={{ fontSize: "0.72rem", color: T.textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</span>
+      </div>
     </div>
   );
 }
@@ -1356,9 +1524,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
 // RESULT CARD
 // ══════════════════════════════════════════════════════════════════
 function ResultCard({ result, category, onFeedback, onCardClick, highlighted, judgeScore, saved, onToggleSave, onFlag }) {
-  const [vote, setVote]         = useState(null);
-  const [hoverStar, setHover]   = useState(null);
-  const [flagged, setFlagged]   = useState(false);
+  const [flagged, setFlagged] = useState(false);
 
   const score    = result.score ?? 0;
   const payload  = result.payload ?? {};
@@ -1366,67 +1532,73 @@ function ResultCard({ result, category, onFeedback, onCardClick, highlighted, ju
   const imageURL = raw ? (raw.startsWith("http") ? raw : `${API}${raw}`) : null;
 
   const displayScore = judgeScore ?? score;
-  const isJudged     = judgeScore !== null && judgeScore !== undefined;
   const scoreColor   = displayScore >= 0.80 ? T.green : displayScore >= 0.60 ? T.yellow : T.red;
-
-  const handleVote = async (stars) => {
-    if (stars === vote) return; // same rating clicked again — no-op
-    setVote(stars);
-    setHover(null);
-    await onFeedback(
-      payload.product_id || payload.item_id || payload.image_url,
-      stars,
-      payload.item_name || "",
-      payload.store     || "",
-      category          || "",
-      payload.image_url || "",
-    );
-  };
-
-  const fillUpTo = vote !== null ? vote : (hoverStar ?? 0);
+  const catColor     = CATEGORY_COLORS[payload.category_tag || category] || T.accent;
 
   return (
-    <div style={{
-      background: T.surface,
-      border: `1px solid ${highlighted ? T.accent : T.border}`,
-      borderRadius: "12px",
-      overflow: "hidden",
-      display: "flex",
-      flexDirection: "column",
-      transition: "border-color 0.2s",
-    }}>
-      <div
-        onClick={() => onCardClick?.(result)}
-        style={{ aspectRatio: "3/4", background: T.bgDeep, overflow: "hidden", position: "relative", cursor: "pointer" }}
-      >
+    <div
+      style={{
+        background: T.surface,
+        border: `1px solid ${highlighted ? T.accent : T.border}`,
+        borderRadius: "14px",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        transition: "border-color 0.2s, transform 0.22s cubic-bezier(0.16,1,0.3,1), box-shadow 0.22s cubic-bezier(0.16,1,0.3,1)",
+        cursor: "pointer",
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.transform = "translateY(-3px)";
+        e.currentTarget.style.boxShadow = "0 10px 32px rgba(0,0,0,0.08)";
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = "";
+        e.currentTarget.style.boxShadow = "";
+      }}
+      onClick={() => onCardClick?.(result)}
+    >
+      {/* Image */}
+      <div style={{ aspectRatio: "3/4", background: T.bgDeep, overflow: "hidden", position: "relative" }}>
         {imageURL
-          ? <img src={imageURL} alt={payload.item_name || "product"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ? <img
+              src={imageURL}
+              alt={payload.item_name || "product"}
+              style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.5s ease", display: "block" }}
+              onMouseEnter={e => { e.target.style.transform = "scale(1.05)"; }}
+              onMouseLeave={e => { e.target.style.transform = "scale(1)"; }}
+            />
           : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.5rem" }}>✦</div>
         }
-        <span style={{ position: "absolute", top: 8, right: 8, display: "flex", alignItems: "center", gap: 3, background: "rgba(0,0,0,0.55)", borderRadius: 5, padding: "2px 6px" }}>
-          <span style={{ fontSize: "0.72rem", fontWeight: 600, color: scoreColor }}>{Math.round(displayScore * 100)}%</span>
-          {isJudged
-            ? <span style={{ fontSize: "0.52rem", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 3, padding: "0px 3px", lineHeight: 1.6 }}>AI</span>
-            : <span style={{ fontSize: "0.52rem", color: T.textFaint }}>~</span>
-          }
-        </span>
+
+        {/* Match score — light frosted badge top-right */}
+        <div style={{
+          position: "absolute", top: 8, right: 8,
+          background: "rgba(250,249,247,0.88)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+          borderRadius: 20, padding: "3px 9px",
+        }}>
+          <span style={{ fontSize: "0.62rem", fontWeight: 600, color: scoreColor }}>{Math.round(displayScore * 100)}%</span>
+        </div>
+
+        {/* Save button — bottom right, frosted */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleSave?.(result); }}
           style={{
-            position: "absolute", top: 8, left: 8,
-            background: "rgba(0,0,0,0.55)",
-            border: `1px solid ${saved ? T.accent : "transparent"}`,
-            borderRadius: "50%",
-            width: 28, height: 28, cursor: "pointer",
+            position: "absolute", bottom: 8, right: 8,
+            background: saved ? T.accent : "rgba(250,249,247,0.88)",
+            backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+            border: "none", borderRadius: "50%",
+            width: 30, height: 30, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "0.9rem", lineHeight: 1,
-            color: saved ? T.accent : T.textMuted,
-            transition: "color 0.2s, border-color 0.2s",
+            fontSize: "0.82rem",
+            color: saved ? "#fff" : T.textMuted,
+            transition: "background 0.2s, color 0.2s",
           }}
           title={saved ? "Unsave" : "Save"}
         >
           {saved ? "♥" : "♡"}
         </button>
+
+        {/* Flag button — bottom left */}
         {onFlag && (
           <button
             onClick={(e) => {
@@ -1441,49 +1613,38 @@ function ResultCard({ result, category, onFeedback, onCardClick, highlighted, ju
               );
             }}
             style={{
-              position: "absolute", top: 40, left: 8,
-              background: flagged ? "rgba(180,50,50,0.85)" : "rgba(0,0,0,0.55)",
+              position: "absolute", bottom: 8, left: 8,
+              background: flagged ? "rgba(180,50,50,0.85)" : "rgba(250,249,247,0.85)",
+              backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
               border: "none", borderRadius: "50%",
               width: 28, height: 28, cursor: flagged ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "0.8rem", lineHeight: 1,
+              fontSize: "0.72rem",
               color: flagged ? "#fff" : T.textMuted,
-              transition: "background 0.2s, color 0.2s",
+              transition: "background 0.2s",
             }}
             title={flagged ? "Flagged — hidden from search" : "Flag: hide this result"}
           >
             🚩
           </button>
         )}
-        <span style={{ position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", borderRadius: 4, padding: "2px 8px", fontSize: "0.6rem", color: T.textMuted, whiteSpace: "nowrap", pointerEvents: "none" }}>
-          tap to view
-        </span>
       </div>
 
-      <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
-        <div style={{ fontSize: "0.78rem", fontWeight: 500, color: T.text, lineHeight: 1.4 }}>
+      {/* Info */}
+      <div style={{ padding: "11px 13px 13px", display: "flex", flexDirection: "column", gap: 5 }}>
+        {/* Category accent bar */}
+        <div style={{ height: 2, borderRadius: 1, background: `${catColor}38`, marginBottom: 1 }} />
+
+        <div style={{ fontSize: "0.77rem", fontWeight: 500, color: T.text, lineHeight: 1.35, letterSpacing: "-0.01em" }}>
           {payload.item_name || "Product"}
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: "0.68rem", color: T.textMuted }}>{payload.store || ""}</span>
-        </div>
-
-        <div style={{ display: "flex", gap: "1px", marginTop: "auto", paddingTop: "4px" }}>
-          {[1, 2, 3, 4, 5].map(star => (
-            <button
-              key={star}
-              className={`star-btn ${star <= fillUpTo ? "filled" : ""}`}
-              onMouseEnter={() => setHover(star)}
-              onMouseLeave={() => setHover(null)}
-              onClick={(e) => { e.stopPropagation(); handleVote(star); }}
-              title={`Rate ${star} star${star > 1 ? "s" : ""}`}
-            >
-              ★
-            </button>
-          ))}
-          {vote !== null && (
-            <span style={{ fontSize: "0.6rem", color: T.textMuted, marginLeft: "4px", alignSelf: "center" }}>
-              {vote >= 4 ? "great" : vote === 3 ? "ok" : "poor"}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 1 }}>
+          <span style={{ fontSize: "0.63rem", color: T.textMuted, letterSpacing: "0.02em" }}>
+            {payload.store || ""}
+          </span>
+          {payload.price && (
+            <span style={{ fontSize: "0.75rem", color: T.accent, fontWeight: 600 }}>
+              {payload.price}
             </span>
           )}
         </div>
@@ -1647,19 +1808,19 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
           <button className="btn-ghost" onClick={onReset} style={{ padding: "6px 10px" }}>← Back</button>
           <div>
-            <div style={{ fontSize: "1rem", fontWeight: 700, color: T.text, letterSpacing: "-0.02em", textTransform: "capitalize" }}>
+            <div className="font-serif" style={{ fontSize: "1.2rem", fontWeight: 300, fontStyle: "italic", color: T.text, letterSpacing: "0.02em", textTransform: "capitalize", lineHeight: 1.2 }}>
               {selectedItem?.label || category || "Results"}
             </div>
-            <div style={{ fontSize: "0.68rem", color: T.textMuted }}>
+            <div style={{ fontSize: "0.63rem", color: T.textMuted, letterSpacing: "0.02em", marginTop: 2 }}>
               {displayResults.length} match{displayResults.length !== 1 ? "es" : ""}
               {storesInRadius.length > 0 && ` · ${storesInRadius.length} store${storesInRadius.length > 1 ? "s" : ""} nearby`}
             </div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "0.68rem", color: T.textMuted }}>radius</span>
-          <input type="range" min={1} max={50} value={radius} onChange={e => setRadius(Number(e.target.value))} style={{ width: 80 }} />
-          <span style={{ fontSize: "0.72rem", color: T.accent, minWidth: 36 }}>{radius} km</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span style={{ fontSize: "0.6rem", color: T.textFaint, letterSpacing: "0.06em", textTransform: "uppercase" }}>radius</span>
+          <input type="range" min={1} max={50} value={radius} onChange={e => setRadius(Number(e.target.value))} style={{ width: 76 }} />
+          <span style={{ fontSize: "0.7rem", color: T.accent, minWidth: 34, fontWeight: 500 }}>{radius} km</span>
         </div>
       </div>
 
@@ -1745,9 +1906,9 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
           </div>
         )}
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-          <span style={{ fontSize: "0.7rem", color: T.textMuted, letterSpacing: "0.08em" }}>
-            MATCHES
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+          <span style={{ fontSize: "0.6rem", color: T.textMuted, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+            Matches
             {highlightedStore && (
               <span style={{ color: T.accent, marginLeft: "8px" }}>
                 · {highlightedStore}
@@ -1823,19 +1984,19 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
 // CATEGORY COLOR MAP (shared by Saved + History views)
 // ══════════════════════════════════════════════════════════════════
 const CATEGORY_COLORS = {
-  top:        "#007AFF",
-  pants:      "#5856D6",
-  leggings:   "#5856D6",
-  dress:      "#FF2D55",
-  skirt:      "#FF2D55",
-  shorts:     "#FF9500",
-  sweater:    "#34C759",
-  jacket:     "#30D158",
-  shoes:      "#FF9500",
-  hat:        "#FFCC00",
-  bag:        "#FF6B00",
-  jumpsuit:   "#FF3B30",
-  sports_bra: "#5AC8FA",
+  top:        "#7A9AB0",
+  pants:      "#7878A0",
+  leggings:   "#7878A0",
+  dress:      "#B07898",
+  skirt:      "#C09498",
+  shorts:     "#B09470",
+  sweater:    "#7A9E8C",
+  jacket:     "#728880",
+  shoes:      "#A08868",
+  hat:        "#B0983C",
+  bag:        "#A07060",
+  jumpsuit:   "#9A6878",
+  sports_bra: "#6898B0",
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -1846,7 +2007,7 @@ function SavedView({ saved, onOpenDetail, onToggleSave }) {
     <div style={{ minHeight: "100svh", padding: "24px 20px", paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 24px)", maxWidth: 640, margin: "0 auto" }}>
       <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
-          <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: T.text, letterSpacing: "-0.03em" }}>
+          <h2 className="font-serif" style={{ fontSize: "2rem", fontWeight: 400, fontStyle: "italic", color: T.text, letterSpacing: "0.02em" }}>
             Saved
           </h2>
         </div>
@@ -1856,10 +2017,12 @@ function SavedView({ saved, onOpenDetail, onToggleSave }) {
       </div>
 
       {saved.length === 0 ? (
-        <div className="fade-up" style={{ textAlign: "center", padding: "80px 0", color: T.textMuted }}>
-          <div style={{ fontSize: "2rem", marginBottom: 16, opacity: 0.3 }}>♡</div>
-          <p style={{ fontSize: "0.88rem" }}>No saved items yet</p>
-          <p style={{ fontSize: "0.75rem", marginTop: 8, color: T.textFaint }}>Tap ♡ on any result to save it here</p>
+        <div className="fade-up" style={{ textAlign: "center", padding: "88px 0", color: T.textMuted }}>
+          <div className="font-serif" style={{ fontSize: "2.8rem", fontWeight: 300, fontStyle: "italic", color: T.textFaint, marginBottom: 16, lineHeight: 1 }}>
+            empty
+          </div>
+          <p style={{ fontSize: "0.82rem", color: T.textMuted }}>No saved items yet</p>
+          <p style={{ fontSize: "0.72rem", marginTop: 8, color: T.textFaint }}>Tap ♡ on any result to save it here</p>
         </div>
       ) : (
         <div className="results-grid">
@@ -1872,39 +2035,50 @@ function SavedView({ saved, onOpenDetail, onToggleSave }) {
             return (
               <div
                 key={productId}
-                style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", position: "relative", cursor: "pointer" }}
+                style={{
+                  background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14,
+                  overflow: "hidden", display: "flex", flexDirection: "column",
+                  position: "relative", cursor: "pointer",
+                  transition: "transform 0.22s cubic-bezier(0.16,1,0.3,1), box-shadow 0.22s cubic-bezier(0.16,1,0.3,1)",
+                }}
                 onClick={() => onOpenDetail(result)}
+                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 10px 32px rgba(0,0,0,0.08)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; }}
               >
-                {/* Unsave button */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); onToggleSave(result); }}
-                  style={{ position: "absolute", top: 8, left: 8, background: `${T.accent}22`, border: `1px solid ${T.accent}`, borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.9rem", color: T.accent, zIndex: 1 }}
-                  title="Unsave"
-                >♥</button>
-
                 {/* Image */}
                 <div style={{ aspectRatio: "3/4", background: T.bgDeep, overflow: "hidden" }}>
                   {imageURL
-                    ? <img src={imageURL} alt={payload.item_name || "product"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ? <img src={imageURL} alt={payload.item_name || "product"} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.5s ease" }}
+                        onMouseEnter={e => { e.target.style.transform = "scale(1.05)"; }}
+                        onMouseLeave={e => { e.target.style.transform = "scale(1)"; }}
+                      />
                     : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.5rem" }}>✦</div>
                   }
+                  {/* Unsave button — frosted, bottom-right */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onToggleSave(result); }}
+                    style={{
+                      position: "absolute", bottom: 8, right: 8, zIndex: 1,
+                      background: T.accent, border: "none", borderRadius: "50%",
+                      width: 30, height: 30, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "0.82rem", color: "#fff",
+                    }}
+                    title="Unsave"
+                  >♥</button>
                 </div>
 
                 {/* Info */}
-                <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ fontSize: "0.78rem", fontWeight: 500, color: T.text, lineHeight: 1.4 }}>
+                <div style={{ padding: "11px 13px 13px", display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ height: 2, borderRadius: 1, background: `${catColor}38`, marginBottom: 1 }} />
+                  <div style={{ fontSize: "0.77rem", fontWeight: 500, color: T.text, lineHeight: 1.35, letterSpacing: "-0.01em" }}>
                     {payload.item_name || "Product"}
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "0.68rem", color: T.textMuted }}>{payload.store || ""}</span>
-                    {payload.price && <span style={{ fontSize: "0.72rem", color: T.accent, fontWeight: 600 }}>{payload.price}</span>}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 1 }}>
+                    <span style={{ fontSize: "0.63rem", color: T.textMuted, letterSpacing: "0.02em" }}>{payload.store || ""}</span>
+                    {payload.price && <span style={{ fontSize: "0.75rem", color: T.accent, fontWeight: 600 }}>{payload.price}</span>}
                   </div>
-                  {payload.category_tag && (
-                    <span style={{ fontSize: "0.6rem", color: catColor, background: `${catColor}18`, border: `1px solid ${catColor}35`, borderRadius: 20, padding: "1px 7px", alignSelf: "flex-start", textTransform: "capitalize" }}>
-                      {payload.category_tag.replace(/_/g, " ")}
-                    </span>
-                  )}
-                  <div style={{ fontSize: "0.6rem", color: T.textFaint, marginTop: 2 }}>
+                  <div style={{ fontSize: "0.58rem", color: T.textFaint, marginTop: 2, letterSpacing: "0.03em" }}>
                     Saved {timeAgo(savedAt)}
                   </div>
                 </div>
@@ -1922,7 +2096,7 @@ function SavedView({ saved, onOpenDetail, onToggleSave }) {
 // ══════════════════════════════════════════════════════════════════
 function HistoryCard({ entry, onRestore }) {
   const color = CATEGORY_COLORS[entry.category] || T.accent;
-  const thumbs = entry.results.slice(0, 3).map(r => r.payload?.image_url).filter(Boolean);
+  const thumbs = entry.results.slice(0, 4).map(r => r.payload?.image_url).filter(Boolean);
 
   return (
     <div
@@ -1930,38 +2104,46 @@ function HistoryCard({ entry, onRestore }) {
       style={{
         background: T.surface,
         border: `1px solid ${T.border}`,
-        borderRadius: "12px",
-        padding: "14px",
+        borderRadius: "14px",
+        padding: "14px 16px",
         display: "flex",
         gap: "14px",
-        alignItems: "flex-start",
+        alignItems: "center",
         cursor: "pointer",
-        transition: "border-color 0.2s, background 0.2s",
+        transition: "border-color 0.2s, transform 0.2s, box-shadow 0.2s",
       }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = T.surfaceHov; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.background = T.surface; }}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = T.accent;
+        e.currentTarget.style.transform = "translateY(-1px)";
+        e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.06)";
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = T.border;
+        e.currentTarget.style.transform = "";
+        e.currentTarget.style.boxShadow = "";
+      }}
     >
-      {/* Crop thumbnail */}
-      <div style={{ width: 56, height: 56, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: T.bgDeep, border: `1px solid ${T.borderFaint}` }}>
+      {/* Crop thumbnail — portrait aspect */}
+      <div style={{ width: 48, height: 64, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: T.bgDeep, border: `1px solid ${T.borderFaint}` }}>
         {entry.cropImageBase64
           ? <img src={entry.cropImageBase64} alt="search crop" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.2rem" }}>✦</div>
+          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1rem" }}>✦</div>
         }
       </div>
 
       {/* Info */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 7 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: "0.65rem", fontWeight: 500, color, background: `${color}1a`, border: `1px solid ${color}40`, borderRadius: 20, padding: "2px 8px", textTransform: "capitalize", letterSpacing: "0.03em" }}>
+          <span style={{ fontSize: "0.6rem", fontWeight: 500, color, background: `${color}15`, border: `1px solid ${color}35`, borderRadius: 20, padding: "2px 9px", textTransform: "capitalize", letterSpacing: "0.04em" }}>
             {entry.category?.replace(/_/g, " ") || "unknown"}
           </span>
-          <span style={{ fontSize: "0.65rem", color: T.textMuted }}>{timeAgo(entry.timestamp)}</span>
+          <span style={{ fontSize: "0.62rem", color: T.textFaint, letterSpacing: "0.02em" }}>{timeAgo(entry.timestamp)}</span>
         </div>
 
         {/* Result mini-thumbnails */}
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           {thumbs.map((url, i) => (
-            <div key={i} style={{ width: 32, height: 40, borderRadius: 4, overflow: "hidden", background: T.bgDeep, flexShrink: 0 }}>
+            <div key={i} style={{ width: 28, height: 36, borderRadius: 5, overflow: "hidden", background: T.bgDeep, flexShrink: 0, border: `1px solid ${T.borderFaint}` }}>
               <img
                 src={url.startsWith("http") ? url : `${API}${url}`}
                 alt=""
@@ -1970,14 +2152,14 @@ function HistoryCard({ entry, onRestore }) {
               />
             </div>
           ))}
-          <span style={{ fontSize: "0.65rem", color: T.textMuted, marginLeft: 4 }}>
+          <span style={{ fontSize: "0.62rem", color: T.textMuted, marginLeft: 5 }}>
             {entry.results.length} result{entry.results.length !== 1 ? "s" : ""}
           </span>
         </div>
       </div>
 
       {/* Arrow */}
-      <span style={{ color: T.textFaint, fontSize: "0.9rem", flexShrink: 0, alignSelf: "center" }}>›</span>
+      <span style={{ color: T.textFaint, fontSize: "1rem", flexShrink: 0 }}>›</span>
     </div>
   );
 }
@@ -1987,7 +2169,7 @@ function HistoryView({ history, onRestore, onClear }) {
     <div style={{ minHeight: "100svh", padding: "24px 20px", paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 24px)", maxWidth: 640, margin: "0 auto" }}>
       <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
-          <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: T.text, letterSpacing: "-0.03em" }}>
+          <h2 className="font-serif" style={{ fontSize: "2rem", fontWeight: 400, fontStyle: "italic", color: T.text, letterSpacing: "0.02em" }}>
             History
           </h2>
         </div>
@@ -2002,10 +2184,12 @@ function HistoryView({ history, onRestore, onClear }) {
       </div>
 
       {history.length === 0 ? (
-        <div className="fade-up" style={{ textAlign: "center", padding: "80px 0", color: T.textMuted }}>
-          <div style={{ fontSize: "2rem", marginBottom: 16, opacity: 0.3 }}>✦</div>
-          <p style={{ fontSize: "0.88rem" }}>No searches yet</p>
-          <p style={{ fontSize: "0.75rem", marginTop: 8, color: T.textFaint }}>Your search history will appear here</p>
+        <div className="fade-up" style={{ textAlign: "center", padding: "88px 0", color: T.textMuted }}>
+          <div className="font-serif" style={{ fontSize: "2.8rem", fontWeight: 300, fontStyle: "italic", color: T.textFaint, marginBottom: 16, lineHeight: 1 }}>
+            empty
+          </div>
+          <p style={{ fontSize: "0.82rem", color: T.textMuted }}>No searches yet</p>
+          <p style={{ fontSize: "0.72rem", marginTop: 8, color: T.textFaint }}>Your search history will appear here</p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

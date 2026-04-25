@@ -12,3 +12,5 @@ pydantic
 requests
 prometheus-fastapi-instrumentator
 google-genai
+PyJWT>=2.8.0
+passlib[bcrypt]>=1.7.4

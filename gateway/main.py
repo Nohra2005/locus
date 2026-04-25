@@ -28,6 +28,7 @@ from qdrant_client.http.models import Distance, PointStruct, VectorParams
 import time as _time_module
 
 from judge import run_judge
+from auth import router as auth_router, verify_token, optional_token
 
 # ── Per-search judge score store ──────────────────────────────────────────────
 # search_id → {product_id: float_score}  written incrementally by run_judge.
@@ -403,6 +404,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 _MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
@@ -1192,6 +1195,68 @@ async def delete_catalogue_item(item_id: str):
         return {"status": "deleted", "id": item_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/store-stats")
+async def store_stats(payload=Depends(verify_token)):
+    """Return aggregate stats for the authenticated store."""
+    store_name = payload["store_name"]
+    try:
+        results, _ = client.scroll(
+            collection_name=COLLECTION_NAME,
+            scroll_filter=models.Filter(must=[
+                models.FieldCondition(key="store_name", match=models.MatchValue(value=store_name))
+            ]),
+            limit=5000,
+            with_payload=True,
+            with_vectors=False,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    seen: dict[str, dict] = {}
+    category_counts: dict[str, int] = {}
+    rating_sum = 0
+    rating_count = 0
+    week_ago = datetime.utcnow().timestamp() - 7 * 86400
+
+    for point in results:
+        p          = point.payload
+        product_id = p.get("product_id", str(point.id))
+        if product_id in seen:
+            continue
+        seen[product_id] = {
+            "id":           str(point.id),
+            "name":         p.get("name", ""),
+            "price":        p.get("price", ""),
+            "category_tag": p.get("category_tag", ""),
+            "image_url":    p.get("image_url", ""),
+            "updated_at":   p.get("updated_at", ""),
+        }
+        cat = p.get("category_tag") or "other"
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+        rc = p.get("rating_count", 0) or 0
+        rs = p.get("rating_sum", 0) or 0
+        rating_count += rc
+        rating_sum   += rs
+
+    total       = len(seen)
+    avg_rating  = round(rating_sum / rating_count, 2) if rating_count else None
+
+    recent = sorted(
+        seen.values(),
+        key=lambda x: x.get("updated_at", ""),
+        reverse=True,
+    )[:10]
+
+    return {
+        "store_name":      store_name,
+        "total_products":  total,
+        "avg_rating":      avg_rating,
+        "rating_count":    rating_count,
+        "categories":      category_counts,
+        "recent_products": recent,
+    }
 
 
 # ── Classify crop (query-time: user drew a box, CLIP predicts category) ────────
