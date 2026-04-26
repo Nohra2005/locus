@@ -74,7 +74,10 @@ jobs:
           echo "Visual engine ready."
 
       - name: Install test dependencies
-        run: pip install --break-system-packages pytest requests pillow
+        run: |
+          python3 -m venv /tmp/test-venv
+          /tmp/test-venv/bin/pip install pytest requests pillow
+          echo "/tmp/test-venv/bin" >> $GITHUB_PATH
 
       - name: Run smoke tests
         run: pytest tests/test_smoke.py -v
