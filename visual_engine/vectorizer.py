@@ -43,17 +43,19 @@
 import copy
 import json
 import os
-import torch
 import io
 import base64
 import time
-from PIL import Image, ImageEnhance
 
-from transformers import CLIPProcessor, CLIPModel
-from sentence_transformers import SentenceTransformer, util
-
-from detector_clothing import ClothingDetector
-from detector_accessories import AccessoryDetector
+try:
+    import torch
+    from PIL import Image, ImageEnhance
+    from transformers import CLIPProcessor, CLIPModel
+    from sentence_transformers import SentenceTransformer, util
+    from detector_clothing import ClothingDetector
+    from detector_accessories import AccessoryDetector
+except ImportError:
+    pass
 from clip_labels import (
     CANONICAL_LABELS,
     CLIP_PROMPTS,
