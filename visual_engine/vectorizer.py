@@ -680,7 +680,7 @@ class LocusVisualizer:
     # =========================================================================
     # PRIVATE: _clip_embed()
     # =========================================================================
-    def _clip_embed(self, pil_image: Image.Image, label_hint: str = "", query_mode: bool = False):
+    def _clip_embed(self, pil_image: "Image.Image", label_hint: str = "", query_mode: bool = False):
         clip_inputs = self.clip_processor(images=pil_image, return_tensors="pt")
         with torch.no_grad():
             vision_out     = self.clip_model.vision_model(**clip_inputs)
