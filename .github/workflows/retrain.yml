@@ -37,6 +37,8 @@ jobs:
           # We handle promotion via SCP + SSH below.
           MLFLOW_TRACKING_URI: ""
           SKIP_PROMOTE:        "true"
+          # 150 steps ≈ 35 min on a free-tier 2-core runner; keeps total job < 90 min.
+          MAX_TRAIN_STEPS:     "150"
         run: |
           cd mlops
           python retrain_clip.py --no-promote
