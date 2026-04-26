@@ -26,7 +26,7 @@ jobs:
 
   # ── Job 2: Integration + quality gate — needs full stack ──────────────────
   integration-tests:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: unit-tests
 
     steps:
