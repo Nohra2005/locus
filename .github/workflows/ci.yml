@@ -54,6 +54,7 @@ jobs:
           docker compose up -d gateway visual_engine attribute_tagger mlflow
         env:
           USERPROFILE: /home/runner
+          DOCKER_BUILDKIT: 1
 
       - name: Wait for gateway
         run: |
