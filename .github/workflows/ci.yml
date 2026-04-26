@@ -30,6 +30,9 @@ jobs:
     needs: unit-tests
 
     steps:
+      - name: Fix workspace permissions
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" 2>/dev/null || true
+
       - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
