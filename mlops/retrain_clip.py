@@ -150,7 +150,7 @@ def _check_triggers(force: bool) -> tuple[bool, str]:
         except Exception:
             pass
 
-    return False, f"no trigger condition met (pairs={n_pairs}, threshold={MIN_FEEDBACK_PAIRS})"
+    return False, f"no trigger condition met (pairs={n_pairs}, threshold={threshold})"
 
 
 def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
