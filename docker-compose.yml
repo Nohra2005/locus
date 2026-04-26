@@ -20,7 +20,9 @@ services:
 
   # ── 1. Gateway ────────────────────────────────────────────────────
   gateway:
-    build: ./gateway
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
     ports:
       - "8000:8000"
     depends_on:
@@ -46,6 +48,7 @@ services:
       - ./gateway:/app
       - ./mlops:/mlops
       - ./mlops/golden_images:/mlops/golden_images
+      - ./frontend/dist:/app/frontend/dist
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -122,7 +125,9 @@ services:
   # Report written to mlops/link_health_report.json after each run.
   # To run manually: docker compose exec gateway python repair_broken_links.py
   link_monitor:
-    build: ./gateway
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
     working_dir: /app
     command: >
       sh -c "while true; do

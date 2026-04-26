@@ -503,12 +503,20 @@ class LocusVisualizer:
                               f"for '{final_category}' conf={selected_box['score']:.2f}")
 
             if selected_box is None:
-                print(f"[CROP]     No usable box for '{title}' → skip")
-                return {
-                    "skipped": True, "skip_reason": "no_box_found",
-                    "all_detections": detections,
-                    "selected_bbox":  None,
-                }
+                if final_category in _ACCESSORY_CATEGORIES:
+                    # Accessory product photos (single shoe/bag/hat on white bg) have no
+                    # garment context for YOLO to anchor on — detection reliably fails.
+                    # The whole image IS the product, so embed it directly.
+                    selected_box = {"bbox": [0, 0, W, H], "label": final_category, "source": "full_image_fallback"}
+                    box_source   = "full_image"
+                    print(f"[CROP T4]  No YOLO box for accessory '{final_category}' '{title}' — full image fallback")
+                else:
+                    print(f"[CROP]     No usable box for '{title}' → skip")
+                    return {
+                        "skipped": True, "skip_reason": "no_box_found",
+                        "all_detections": detections,
+                        "selected_bbox":  None,
+                    }
 
             # ── Crop & embed ──────────────────────────────────────────────────
             bx1, by1, bx2, by2 = selected_box["bbox"]
@@ -530,7 +538,11 @@ class LocusVisualizer:
             computed_shoe_style = None
             if final_category == "shoes" and selected_box is not None:
                 box_label = selected_box.get("label", "")
-                computed_shoe_style = shoe_style_from_label(box_label) if box_label else "other"
+                if box_source == "full_image" or box_label in ("shoes", final_category, ""):
+                    # YOLO didn't contribute a specific sub-label — derive style from title
+                    computed_shoe_style = shoe_style_from_label(title) if title else "other"
+                else:
+                    computed_shoe_style = shoe_style_from_label(box_label)
                 print(f"[SHOE]     shoe_style='{computed_shoe_style}'  (box label: '{box_label}')")
 
             return {

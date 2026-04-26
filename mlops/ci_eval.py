@@ -41,6 +41,19 @@ EVAL_QUERIES = [
     "black shoulder bag",                      # bag
 ]
 
+def _shoe_style_from_name(name: str) -> str:
+    lower = name.lower()
+    if any(k in lower for k in ("sneaker", "trainer", "running", "platform", "wedge", "clog")):
+        return "sneaker"
+    if "boot" in lower:
+        return "boot"
+    if any(k in lower for k in ("heel", "pump", "stiletto", "kitten")):
+        return "heel"
+    if any(k in lower for k in ("sandal", "loafer", "flat", "mule", "espadrille", "ballet")):
+        return "sandal"
+    return "other"
+
+
 _JUDGE_PROMPT = (
     "You are a fashion visual similarity expert.\n"
     "Rate how visually similar the result image is to the query image on a scale 0.00–1.00.\n"
@@ -121,10 +134,15 @@ def run_eval(gateway_url: str) -> tuple[float, int]:
         category    = entry.get("query_category_tag", "")
 
         try:
+            search_data = {"search_label": category} if category else {}
+            if category == "shoes":
+                style = _shoe_style_from_name(query_name)
+                if style and style != "other":
+                    search_data["shoe_style"] = style
             r = requests.post(
                 f"{gateway_url}/search",
                 files={"file": ("q.jpg", io.BytesIO(image_bytes), "image/jpeg")},
-                data={"search_label": category} if category else {},
+                data=search_data,
                 timeout=30,
             )
             r.raise_for_status()

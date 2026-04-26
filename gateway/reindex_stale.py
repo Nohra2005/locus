@@ -280,21 +280,24 @@ async def reindex_one(
             new_box_source = idx_data.get("box_source", "unknown")
 
             if not DRY_RUN:
+                payload = {
+                    "name":         name,
+                    "store_name":   product["store_name"],
+                    "mall_name":    product["mall_name"],
+                    "image_url":    img_url,
+                    "category_tag": new_category,
+                    "price":        product["price"],
+                    "product_id":   product["product_id"],
+                    "box_source":   new_box_source,
+                }
+                if idx_data.get("shoe_style"):
+                    payload["shoe_style"] = idx_data["shoe_style"]
                 client.upsert(
                     collection_name=COLLECTION_NAME,
                     points=[PointStruct(
                         id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
                         vector  = vector_normal,
-                        payload = {
-                            "name":         name,
-                            "store_name":   product["store_name"],
-                            "mall_name":    product["mall_name"],
-                            "image_url":    img_url,
-                            "category_tag": new_category,
-                            "price":        product["price"],
-                            "product_id":   product["product_id"],
-                            "box_source":   new_box_source,
-                        }
+                        payload = payload,
                     )]
                 )
 
@@ -323,12 +326,12 @@ async def reindex_one(
 
 async def reindex_from_skipped(http: httpx.AsyncClient):
     """
-    Retry products in locus_skipped with skip_reason = no_consensus.
-    After a whitelist update they may now classify correctly and can be
-    promoted to locus_items. Successfully indexed products are removed
-    from locus_skipped. Still-failing products stay in locus_skipped.
+    Retry products in locus_skipped with skip_reason = no_consensus OR no_box_found.
+    - no_consensus: a whitelist update may now resolve the category.
+    - no_box_found: the full-image fallback for accessories may now index them.
+    Successfully indexed products are removed from locus_skipped.
     """
-    print("\nPass 2 — scanning locus_skipped for no_consensus products...")
+    print("\nPass 2 — scanning locus_skipped for no_consensus / no_box_found products...")
 
     all_skipped = []
     offset      = None
@@ -345,17 +348,17 @@ async def reindex_from_skipped(http: httpx.AsyncClient):
             break
         for pt in results:
             p = pt.payload
-            if p.get("skip_reason") == "no_consensus":
+            if p.get("skip_reason") in ("no_consensus", "no_box_found"):
                 all_skipped.append({"point_id": str(pt.id), **p})
         if next_offset is None:
             break
         offset = next_offset
 
     if not all_skipped:
-        print("  No no_consensus products in locus_skipped — nothing to retry.")
+        print("  No retryable products in locus_skipped — nothing to retry.")
         return
 
-    print(f"  Found {len(all_skipped)} no_consensus products to retry.\n")
+    print(f"  Found {len(all_skipped)} products to retry.\n")
 
     semaphore  = asyncio.Semaphore(CONCURRENCY)
     ok_count   = 0
@@ -401,21 +404,24 @@ async def reindex_from_skipped(http: httpx.AsyncClient):
                 new_box_source = idx_data.get("box_source", "unknown")
 
                 if not DRY_RUN:
+                    payload = {
+                        "name":         name,
+                        "store_name":   product.get("store_name", ""),
+                        "mall_name":    product.get("mall_name", ""),
+                        "image_url":    img_url,
+                        "category_tag": new_category,
+                        "price":        product.get("price", ""),
+                        "product_id":   product.get("product_id", ""),
+                        "box_source":   new_box_source,
+                    }
+                    if idx_data.get("shoe_style"):
+                        payload["shoe_style"] = idx_data["shoe_style"]
                     client.upsert(
                         collection_name=COLLECTION_NAME,
                         points=[PointStruct(
                             id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
                             vector  = vector_normal,
-                            payload = {
-                                "name":         name,
-                                "store_name":   product.get("store_name", ""),
-                                "mall_name":    product.get("mall_name", ""),
-                                "image_url":    img_url,
-                                "category_tag": new_category,
-                                "price":        product.get("price", ""),
-                                "product_id":   product.get("product_id", ""),
-                                "box_source":   new_box_source,
-                            }
+                            payload = payload,
                         )]
                     )
                     _delete_from_collection(SKIPPED_COLLECTION, point_id, name)

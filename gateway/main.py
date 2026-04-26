@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 import httpx
 from bs4 import BeautifulSoup
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -439,6 +440,8 @@ LINK_MONITOR_INTERVAL    = 432000  # 5 days in seconds (matches docker-compose s
 
 GOLDEN_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/golden-dataset/images", StaticFiles(directory=str(GOLDEN_IMAGES_DIR)), name="golden_images")
+if pathlib.Path("frontend/dist/assets").exists():
+    app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="spa_assets")
 
 if QDRANT_URL:
     print(f"[QDRANT] Connecting to cloud: {QDRANT_URL}")
@@ -726,8 +729,8 @@ def startup_event():
 
 
 @app.get("/")
-def read_root():
-    return {"status": "online", "service": "Locus Gateway"}
+async def read_root():
+    return FileResponse("frontend/dist/index.html")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -3098,3 +3101,8 @@ async def _run_link_check_subprocess():
         print(f"[LINK CHECK] Pipeline finished (exit={proc.returncode}):\n{stdout.decode()[-2000:]}")
     finally:
         _link_check_running = False
+
+
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    return FileResponse("frontend/dist/index.html")
