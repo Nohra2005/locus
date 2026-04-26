@@ -39,6 +39,13 @@ spec:
                 secretKeyRef:
                   name: locus-secrets
                   key: GOOGLE_API_KEY
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
           readinessProbe:
             httpGet:
               path: /
@@ -70,11 +77,18 @@ spec:
           env:
             - name: TRANSFORMERS_CACHE
               value: /root/.cache/huggingface
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+            limits:
+              cpu: "1500m"
+              memory: "3Gi"
           readinessProbe:
             httpGet:
               path: /health
               port: 8001
-            initialDelaySeconds: 30
+            initialDelaySeconds: 90
             periodSeconds: 10
 ---
 apiVersion: apps/v1
@@ -104,6 +118,13 @@ spec:
                 secretKeyRef:
                   name: locus-secrets
                   key: OPENROUTER_API_KEY
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "192Mi"
+            limits:
+              cpu: "300m"
+              memory: "384Mi"
           readinessProbe:
             httpGet:
               path: /health
@@ -135,6 +156,13 @@ spec:
           envFrom:
             - configMapRef:
                 name: locus-config
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "96Mi"
+            limits:
+              cpu: "150m"
+              memory: "192Mi"
           readinessProbe:
             httpGet:
               path: /metrics

@@ -40,7 +40,7 @@ OPENROUTER_API_KEY   = os.getenv("OPENROUTER_API_KEY", "")
 EXPERIMENT_NAME      = "locus_lora_retraining"
 
 # Trigger thresholds
-MIN_FEEDBACK_PAIRS   = int(os.getenv("MIN_FEEDBACK_PAIRS", 50))   # lower for dev/demo
+FEEDBACK_RATE        = float(os.getenv("FEEDBACK_RATE", 0.10))    # retrain when N% of catalog is rated
 MIN_ACS_THRESHOLD    = float(os.getenv("MIN_ACS_THRESHOLD", 0.70))
 
 # Paths
@@ -61,12 +61,12 @@ def _get_qdrant_client():
     return QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
 
 
-def _count_feedback_pairs() -> int:
-    """Count the number of actionable feedback pairs (positive + negative) in Qdrant."""
+def _count_feedback_and_catalog() -> tuple[int, int]:
+    """Return (feedback_pairs, catalog_size) from Qdrant."""
     try:
         client = _get_qdrant_client()
         from qdrant_client.http import models as qmodels
-        pos_count = client.count(
+        feedback = client.count(
             collection_name=FEEDBACK_COL,
             count_filter=qmodels.Filter(must=[
                 qmodels.FieldCondition(
@@ -76,10 +76,11 @@ def _count_feedback_pairs() -> int:
             ]),
             exact=True,
         ).count
-        return pos_count
+        catalog = client.count(collection_name="locus_items", exact=False).count
+        return feedback, catalog
     except Exception as e:
-        print(f"[RETRAIN] Could not count feedback: {e}")
-        return 0
+        print(f"[RETRAIN] Could not count feedback/catalog: {e}")
+        return 0, 0
 
 
 def _cleanup_stale_runs() -> None:
@@ -130,11 +131,12 @@ def _check_triggers(force: bool) -> tuple[bool, str]:
     if force:
         return True, "forced via --force flag"
 
-    n_pairs = _count_feedback_pairs()
-    print(f"[RETRAIN] Feedback pairs in Qdrant: {n_pairs} (threshold: {MIN_FEEDBACK_PAIRS})")
+    n_pairs, catalog_size = _count_feedback_and_catalog()
+    threshold = max(1, int(catalog_size * FEEDBACK_RATE))
+    print(f"[RETRAIN] Feedback pairs: {n_pairs} / catalog: {catalog_size} / threshold: {threshold} ({FEEDBACK_RATE*100:.0f}%)")
 
-    if n_pairs >= MIN_FEEDBACK_PAIRS:
-        return True, f"feedback threshold met ({n_pairs} >= {MIN_FEEDBACK_PAIRS})"
+    if catalog_size > 0 and n_pairs >= threshold:
+        return True, f"feedback rate met ({n_pairs}/{catalog_size} = {n_pairs/catalog_size*100:.1f}% >= {FEEDBACK_RATE*100:.0f}%)"
 
     # Check ACS@5 drift via latest vss_cache.json written by metrics_exporter
     vss_cache = SCRIPT_DIR / "vss_cache.json"
@@ -148,7 +150,7 @@ def _check_triggers(force: bool) -> tuple[bool, str]:
         except Exception:
             pass
 
-    return False, f"no trigger condition met (pairs={n_pairs}, threshold={MIN_FEEDBACK_PAIRS})"
+    return False, f"no trigger condition met (pairs={n_pairs}, threshold={threshold})"
 
 
 def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:

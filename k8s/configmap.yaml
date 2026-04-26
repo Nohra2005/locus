@@ -4,9 +4,10 @@ kind: ConfigMap
 metadata:
   name: locus-config
 data:
-  QDRANT_URL: "https://your-cluster.qdrant.io:6333"
-  GATEWAY_BASE_URL: "https://your-gateway-domain"
-  CORS_ORIGINS: "https://your-gateway-domain"
+  QDRANT_URL: "https://7aaeeac4-b452-4685-8e6e-d788a362a7f1.europe-west3-0.gcp.cloud.qdrant.io:6333"
+  GATEWAY_BASE_URL: "http://20.240.203.22"
+  # Set to GitHub Pages URL once partner deploys frontend (e.g. https://username.github.io/locus)
+  CORS_ORIGINS: "http://localhost:5173"
   VISUAL_HOST: "http://visual-engine:8001"
   TAGGER_HOST: "http://attribute-tagger:8004"
   MLFLOW_TRACKING_URI: "http://mlflow:5000"
