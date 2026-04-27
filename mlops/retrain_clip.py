@@ -244,6 +244,24 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
             mlflow.log_param("outcome", "promoted")
             mlflow.set_tag("promoted", "true")
             print(f"\n✅ PROMOTED — new adapter deployed (delta={delta:+.4f})")
+
+            # Update CI baseline to reflect the new model's performance level
+            gateway_url = os.getenv("GATEWAY_URL", "http://localhost:8000")
+            print(f"\n[BASELINE] Recomputing CI baseline against {gateway_url} ...")
+            try:
+                import subprocess
+                result_bl = subprocess.run(
+                    [sys.executable, str(Path(__file__).parent / "ci_eval.py"),
+                     "--gateway-url", gateway_url, "--set-baseline"],
+                    capture_output=True, text=True, timeout=600,
+                )
+                print(result_bl.stdout)
+                if result_bl.returncode == 0:
+                    print("[BASELINE] Baseline updated successfully.")
+                else:
+                    print(f"[BASELINE] Warning: baseline update failed:\n{result_bl.stderr}")
+            except Exception as e:
+                print(f"[BASELINE] Warning: could not update baseline: {e}")
         elif promoted and skip_promote:
             mlflow.log_param("outcome", "promoted-pending-deploy")
             mlflow.set_tag("promoted", "pending")

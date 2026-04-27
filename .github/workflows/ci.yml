@@ -90,7 +90,7 @@ jobs:
           TAGGER_URL:  http://localhost:8004
 
       - name: Run judge quality gate
-        run: python mlops/ci_eval.py --gateway-url http://localhost:8000 --min-score 0.65
+        run: python mlops/ci_eval.py --gateway-url http://localhost:8000
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
