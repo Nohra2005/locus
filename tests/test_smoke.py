@@ -28,7 +28,7 @@ class TestGateway:
         r = requests.get(f"{GATEWAY_URL}/health", timeout=TIMEOUT)
         assert r.status_code == 200
         data = r.json()
-        assert data.get("gateway") == "ready"
+        assert data.get("ready") is True
 
     def test_gateway_index_stats(self):
         """Index stats endpoint returns collection info (scrolls full Qdrant collection — slow)."""
