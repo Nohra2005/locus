@@ -298,7 +298,7 @@ async def reindex_one(
                 client.upsert(
                     collection_name=COLLECTION_NAME,
                     points=[PointStruct(
-                        id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
+                        id      = point_id,
                         vector  = vector_normal,
                         payload = payload,
                     )]
