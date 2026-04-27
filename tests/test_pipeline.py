@@ -240,7 +240,7 @@ class TestCORS:
 
     def test_cors_header_on_get(self):
         r = requests.get(
-            f"{GATEWAY_URL}/",
+            f"{GATEWAY_URL}/health",
             headers={"Origin": "http://example.com"},
             timeout=TIMEOUT,
         )
@@ -280,7 +280,7 @@ class TestAttributeTagger:
 
 class TestIndexAndHealth:
     def test_gateway_health(self):
-        r = requests.get(f"{GATEWAY_URL}/", timeout=TIMEOUT)
+        r = requests.get(f"{GATEWAY_URL}/health", timeout=TIMEOUT)
         assert r.status_code == 200
 
     def test_visual_engine_health(self):
