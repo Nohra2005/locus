@@ -24,11 +24,11 @@ TIMEOUT_SLOW     = 60   # Qdrant-heavy endpoints (scroll full collection)
 
 class TestGateway:
     def test_gateway_health(self):
-        """Gateway root returns online status."""
-        r = requests.get(f"{GATEWAY_URL}/", timeout=TIMEOUT)
+        """Gateway health endpoint returns ready status."""
+        r = requests.get(f"{GATEWAY_URL}/health", timeout=TIMEOUT)
         assert r.status_code == 200
         data = r.json()
-        assert "status" in data or "service" in data or r.status_code == 200
+        assert data.get("gateway") == "ready"
 
     def test_gateway_index_stats(self):
         """Index stats endpoint returns collection info (scrolls full Qdrant collection — slow)."""
