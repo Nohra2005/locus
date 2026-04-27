@@ -29,7 +29,7 @@ services:
       visual_engine:
         condition: service_started
       attribute_tagger:
-        condition: service_healthy
+        condition: service_started
     environment:
       - VISUAL_HOST=http://visual_engine:8001
       - TAGGER_HOST=http://attribute_tagger:8004
