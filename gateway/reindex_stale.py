@@ -232,9 +232,9 @@ async def reindex_one(
 
                 if reason == "no_box_found":
                     # Keep old vector — stale beats nothing.
-                    # Store in dashboard so owner can see it.
+                    # Do NOT call _store_skipped: item is already in locus_items
+                    # and adding it to locus_skipped causes Pass 2 to double-process it.
                     print(f"  [KEEP]  '{name}' — no box found, keeping old vector")
-                    _store_skipped(product, reason)
                     return {
                         "status":     "kept_no_box",
                         "item":       name,

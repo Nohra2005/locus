@@ -12,3 +12,4 @@ pydantic
 requests
 prometheus-fastapi-instrumentator
 google-genai
+python-dotenv
