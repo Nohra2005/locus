@@ -31,6 +31,9 @@ import os
 import uuid
 from datetime import datetime
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import httpx
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
