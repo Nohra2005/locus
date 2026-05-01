@@ -23,27 +23,25 @@ const STORE_COORDS = {
 };
 
 const T = {
-  bg:          "#0d0c0a",
-  bgDeep:      "#090807",
-  surface:     "#161410",
-  surfaceHov:  "#1c1a16",
-  border:      "#2a2620",
-  borderFaint: "#1a1814",
-  text:        "#e8e2d9",
-  textMuted:   "#6b6458",
-  textFaint:   "#3d3830",
-  accent:      "#c9a96e",
-  accentBg:    "rgba(201,169,110,0.08)",
-  accentRing:  "rgba(201,169,110,0.2)",
-  accentDeep:  "#a8895a",
-  green:       "#7aab8a",
-  yellow:      "#c9a96e",
-  red:         "#c97070",
+  bg:          "#FAF9F7",
+  bgDeep:      "#F0EBE5",
+  surface:     "#FFFFFF",
+  surfaceHov:  "#FAFAF8",
+  border:      "rgba(30,20,12,0.12)",
+  borderFaint: "rgba(30,20,12,0.06)",
+  text:        "#1C1714",
+  textMuted:   "rgba(28,23,20,0.48)",
+  textFaint:   "rgba(28,23,20,0.22)",
+  accent:      "#8B6F5E",
+  accentBg:    "rgba(139,111,94,0.08)",
+  accentRing:  "rgba(139,111,94,0.22)",
+  accentDeep:  "#6A4F40",
+  green:       "#5A8A6A",
+  yellow:      "#C49A3C",
+  red:         "#B85858",
 };
 
 const GLOBAL_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,600&family=DM+Sans:wght@300;400;500&display=swap');
-
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   html, body, #root {
@@ -51,31 +49,31 @@ const GLOBAL_CSS = `
     width: 100%;
     background: ${T.bg};
     color: ${T.text};
-    font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 16px;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
 
   ::-webkit-scrollbar { width: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: ${T.border}; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb { background: rgba(60,60,67,0.2); border-radius: 2px; }
 
   .leaflet-container {
     background: ${T.bgDeep} !important;
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Josefin Sans', sans-serif !important;
   }
   .leaflet-popup-content-wrapper {
     background: ${T.surface} !important;
     color: ${T.text} !important;
     border: 1px solid ${T.border} !important;
-    border-radius: 8px !important;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 0.75rem !important;
+    border-radius: 12px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+    font-family: 'Josefin Sans', sans-serif !important;
+    font-size: 0.85rem !important;
   }
   .leaflet-popup-tip { background: ${T.surface} !important; }
-  .leaflet-popup-close-button { color: ${T.textMuted} !important; top: 6px !important; right: 6px !important; }
+  .leaflet-popup-close-button { color: ${T.textMuted} !important; top: 8px !important; right: 8px !important; }
   .leaflet-control-zoom a {
     background: ${T.surface} !important;
     color: ${T.textMuted} !important;
@@ -98,40 +96,75 @@ const GLOBAL_CSS = `
     to   { transform: translateY(0); }
   }
 
-  .fade-up { animation: fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
-  .fade-in { animation: fadeIn 0.35s ease forwards; }
+  @keyframes clothFloat {
+    0%   { transform: translateY(0vh)    rotate(-7deg) scale(1); }
+    45%  { transform: translateY(-52vh)  rotate(5deg)  scale(1.04); }
+    100% { transform: translateY(-112vh) rotate(-4deg) scale(0.96); }
+  }
+  @keyframes clothFloatR {
+    0%   { transform: translateY(0vh)    rotate(7deg)  scale(1); }
+    45%  { transform: translateY(-52vh)  rotate(-5deg) scale(1.04); }
+    100% { transform: translateY(-112vh) rotate(3deg)  scale(0.96); }
+  }
+  @keyframes blob1 {
+    0%, 100% { transform: translate(0px, 0px) scale(1); }
+    25%  { transform: translate(22px, -28px) scale(1.05); }
+    50%  { transform: translate(-16px, 14px) scale(0.96); }
+    75%  { transform: translate(10px, 24px) scale(1.03); }
+  }
+  @keyframes blob2 {
+    0%, 100% { transform: translate(0px, 0px) scale(1); }
+    30%  { transform: translate(-24px, 18px) scale(1.07); }
+    60%  { transform: translate(20px, -12px) scale(0.94); }
+  }
+
+  .fade-up { animation: fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
+  .fade-in { animation: fadeIn 0.3s ease forwards; }
+
+  @keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position:  400px 0; }
+  }
+  .shimmer-box {
+    background: linear-gradient(90deg, ${T.bgDeep} 25%, ${T.border} 50%, ${T.bgDeep} 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.4s infinite linear;
+  }
+
+  .discover-scroll {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 4px;
+  }
+  .discover-scroll::-webkit-scrollbar { display: none; }
+
+  .font-serif {
+    font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+  }
+
+  .font-logo {
+    font-family: 'Bodoni Moda', 'Didot', 'Bodoni MT', Georgia, serif;
+    font-style: italic;
+  }
 
   .results-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: 14px;
   }
-  @media (min-width: 640px)  { .results-grid { grid-template-columns: repeat(3, 1fr); } }
-  @media (min-width: 1024px) { .results-grid { grid-template-columns: repeat(4, 1fr); } }
-
-  .nav-link {
-    font-size: 0.8rem;
-    color: ${T.textMuted};
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-family: 'DM Sans', sans-serif;
-    transition: color 0.2s, background 0.2s;
-  }
-  .nav-link:hover { color: ${T.text}; }
-  .nav-link.active {
-    background: ${T.surface};
-    color: ${T.text};
-    border: 1px solid ${T.border};
-  }
+  @media (min-width: 560px)  { .results-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; } }
+  @media (min-width: 1024px) { .results-grid { grid-template-columns: repeat(4, 1fr); gap: 18px; } }
 
   .upload-zone {
     border: 1.5px dashed ${T.border};
-    border-radius: 16px;
-    background: ${T.surface};
-    transition: border-color 0.25s, background 0.25s;
+    border-radius: 12px;
+    background: transparent;
+    transition: border-color 0.2s, background 0.2s;
     cursor: pointer;
   }
   .upload-zone:hover, .upload-zone.drag-over {
@@ -142,67 +175,100 @@ const GLOBAL_CSS = `
   .btn-primary {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
-    padding: 10px 24px;
-    background: ${T.surface};
+    padding: 15px 28px;
+    background: ${T.text};
+    color: ${T.bg};
+    border: none;
+    border-radius: 12px;
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 0.92rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.12s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-primary:hover { opacity: 0.80; }
+  .btn-primary:active { transform: scale(0.97); }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 14px 28px;
+    background: transparent;
     color: ${T.text};
     border: 1px solid ${T.border};
-    border-radius: 24px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.82rem;
-    font-weight: 500;
+    border-radius: 10px;
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
     cursor: pointer;
-    transition: border-color 0.2s, background 0.2s, color 0.2s;
+    transition: background 0.15s;
+    -webkit-tap-highlight-color: transparent;
   }
-  .btn-primary:hover {
-    border-color: ${T.accent};
-    color: ${T.accent};
-    background: ${T.accentBg};
-  }
+  .btn-secondary:hover { background: ${T.bgDeep}; }
 
   .btn-ghost {
     background: none;
     border: none;
     color: ${T.textMuted};
     cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.8rem;
-    padding: 6px 10px;
-    border-radius: 6px;
-    transition: color 0.2s, background 0.2s;
+    font-family: 'Josefin Sans', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 400;
+    padding: 8px 14px;
+    border-radius: 8px;
+    transition: background 0.15s, color 0.15s;
+    -webkit-tap-highlight-color: transparent;
   }
-  .btn-ghost:hover { color: ${T.text}; background: ${T.surface}; }
+  .btn-ghost:hover { background: ${T.bgDeep}; color: ${T.text}; }
 
   .star-btn {
     background: none;
     border: none;
-    padding: 2px 1px;
+    padding: 2px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 1rem;
     line-height: 1;
-    transition: transform 0.1s, color 0.15s;
-    color: ${T.textFaint};
+    transition: transform 0.1s;
+    color: rgba(60,60,67,0.22);
+    -webkit-tap-highlight-color: transparent;
   }
   .star-btn:hover:not(:disabled) { transform: scale(1.2); }
   .star-btn:disabled { cursor: default; }
-  .star-btn.filled { color: ${T.accent}; }
-  .star-btn.dimmed { color: ${T.borderFaint}; }
+  .star-btn.filled { color: ${T.yellow}; }
+  .star-btn.dimmed { color: rgba(60,60,67,0.1); }
 
   input[type=range] {
     -webkit-appearance: none;
     appearance: none;
-    height: 2px;
-    background: ${T.border};
+    height: 4px;
+    background: rgba(60,60,67,0.15);
     border-radius: 2px;
     outline: none;
     cursor: pointer;
   }
   input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 12px; height: 12px;
+    width: 20px; height: 20px;
     border-radius: 50%;
-    background: ${T.accent};
+    background: #FFFFFF;
     cursor: pointer;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.2);
+    border: 2px solid ${T.accent};
+  }
+
+  select {
+    background: ${T.surface};
+    color: ${T.text};
+    border: 1px solid ${T.border};
+    border-radius: 10px;
+    font-family: 'Josefin Sans', sans-serif;
   }
 `;
 
@@ -349,122 +415,500 @@ function toggleSavedItem(result, saved) {
 // ══════════════════════════════════════════════════════════════════
 // NAVBAR
 // ══════════════════════════════════════════════════════════════════
-function Navbar({ activeTab, onTab, onLogoClick }) {
+// ── iOS bottom tab bar ────────────────────────────────────────────
+const TAB_ICONS = {
+  Discover: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+      stroke={active ? T.accent : T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+  ),
+  Saved: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24"
+      fill={active ? T.accent : "none"}
+      stroke={active ? T.accent : T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+    </svg>
+  ),
+  History: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+      stroke={active ? T.accent : T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+  ),
+  Store: (active) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+      stroke={active ? T.accent : T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <path d="M16 10a4 4 0 0 1-8 0"/>
+    </svg>
+  ),
+};
+
+function Navbar({ activeTab, onTab }) {
   return (
     <nav style={{
-      position: "sticky", top: 0, zIndex: 200,
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "14px 28px",
-      background: `${T.bg}ee`,
-      backdropFilter: "blur(12px)",
-      borderBottom: `1px solid ${T.borderFaint}`,
+      position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 200,
+      background: "rgba(249,249,249,0.94)",
+      backdropFilter: "saturate(180%) blur(20px)",
+      WebkitBackdropFilter: "saturate(180%) blur(20px)",
+      borderTop: `1px solid ${T.border}`,
+      display: "flex",
+      paddingBottom: "env(safe-area-inset-bottom, 0px)",
     }}>
-      <button
-        onClick={onLogoClick}
-        style={{ display: "flex", alignItems: "center", gap: "10px", background: "none", border: "none", cursor: "pointer" }}
-      >
-        <div style={{
-          width: 32, height: 32,
-          background: `linear-gradient(135deg, ${T.accent}, ${T.accentDeep})`,
-          borderRadius: "8px",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: "0.75rem",
-          boxShadow: `0 2px 12px ${T.accentRing}`,
-        }}>✦</div>
-        <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.25rem", fontWeight: 600, color: T.text, letterSpacing: "0.02em" }}>
-          locus
-        </span>
-        <span style={{ fontSize: "0.65rem", color: T.textMuted, letterSpacing: "0.12em", textTransform: "uppercase", paddingLeft: "2px" }}>
-          shopping made easier
-        </span>
-      </button>
-
-      <div style={{ display: "flex", gap: "4px" }}>
-        {["Discover", "Saved", "History", "Store"].map(tab => (
+      {["Discover", "Saved", "History", "Store"].map(tab => {
+        const active = activeTab === tab;
+        const label = tab === "Store" ? "Studio" : tab;
+        return (
           <button
             key={tab}
-            className={`nav-link ${activeTab === tab ? "active" : ""}`}
             onClick={() => onTab(tab)}
-            style={{ position: "relative" }}
+            style={{
+              flex: 1, padding: "10px 0 12px",
+              background: "none", border: "none", cursor: "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+              color: active ? T.accent : T.textMuted,
+              transition: "color 0.15s",
+              WebkitTapHighlightColor: "transparent",
+            }}
           >
-            {tab}
-            {false && (
-              <span style={{
-                position: "absolute", top: 1, right: 1,
-                background: T.red, color: "#fff",
-                borderRadius: "50%", fontSize: "0.55rem", fontWeight: 700,
-                width: 14, height: 14,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                lineHeight: 1,
-              }}>{flagCount > 9 ? "9+" : flagCount}</span>
-            )}
+            {TAB_ICONS[tab](active)}
+            <span style={{ fontSize: "0.6rem", fontWeight: active ? 600 : 400, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              {label}
+            </span>
           </button>
-        ))}
-      </div>
+        );
+      })}
     </nav>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// FLOATING CLOTHES BACKGROUND
+// ══════════════════════════════════════════════════════════════════
+const CLOTH_EMOJIS = [
+  "👗","🧥","👜","👠","👒","👔","👗","🧣","👟","🕶️",
+  "🧤","👗","👜","🧥","👠","👗","👒","🧥","👗","👟",
+];
+
+function LocusLogo({ layout = "stacked", markSize = 48, fontSize = "1rem", color, accent, style }) {
+  const c = color ?? T.text;
+  const a = accent ?? T.accent;
+  const sw = 1.2;
+
+  const mark = (
+    <svg width={markSize} height={markSize} viewBox="0 0 48 48" fill="none">
+      <circle cx="24" cy="24" r="15" stroke={a} strokeWidth={sw}/>
+      <circle cx="24" cy="24" r="3" fill={a}/>
+      <line x1="24" y1="4"  x2="24" y2="10" stroke={a} strokeWidth={sw} strokeLinecap="round"/>
+      <line x1="24" y1="38" x2="24" y2="44" stroke={a} strokeWidth={sw} strokeLinecap="round"/>
+      <line x1="4"  y1="24" x2="10" y2="24" stroke={a} strokeWidth={sw} strokeLinecap="round"/>
+      <line x1="38" y1="24" x2="44" y2="24" stroke={a} strokeWidth={sw} strokeLinecap="round"/>
+    </svg>
+  );
+
+  const wordmark = (
+    <span style={{
+      fontFamily: "'Josefin Sans', sans-serif",
+      fontSize, fontWeight: 300, color: c,
+      letterSpacing: "0.4em",
+      textTransform: "uppercase",
+      paddingRight: "0.4em",
+    }}>locus</span>
+  );
+
+  if (layout === "stacked") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, ...style }}>
+        {mark}
+        {wordmark}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 10, ...style }}>
+      {mark}
+      {wordmark}
+    </div>
+  );
+}
+
+function FloatingClothes({ opacity = 1 }) {
+  const items = useMemo(() => CLOTH_EMOJIS.map((emoji, i) => {
+    const total = CLOTH_EMOJIS.length;
+    const slotW = 100 / total;
+    const jitter = (i % 3 - 1) * slotW * 0.35;
+    return {
+      id: i,
+      emoji,
+      left: `${Math.max(1, Math.min(96, slotW * i + slotW * 0.4 + jitter))}%`,
+      fontSize: `${1.5 + (i % 5) * 0.22}rem`,
+      duration: `${22 + (i % 6) * 3.5}s`,
+      delay: `${-((i / total) * (22 + (i % 6) * 3.5))}s`,
+      itemOpacity: (0.11 + (i % 4) * 0.022) * opacity,
+      anim: i % 2 === 0 ? "clothFloat" : "clothFloatR",
+    };
+  }), [opacity]);
+
+  return (
+    <div style={{
+      position: "absolute", inset: 0,
+      overflow: "hidden", pointerEvents: "none", zIndex: 0,
+    }}>
+      {items.map(item => (
+        <span
+          key={item.id}
+          style={{
+            position: "absolute",
+            left: item.left,
+            bottom: "-6%",
+            fontSize: item.fontSize,
+            opacity: item.itemOpacity,
+            animation: `${item.anim} ${item.duration} linear ${item.delay} infinite`,
+            filter: "brightness(1.05) saturate(1.1)",
+            userSelect: "none",
+            lineHeight: 1,
+            display: "block",
+            willChange: "transform",
+          }}
+        >
+          {item.emoji}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DISCOVER FEED  — horizontal strips on the home screen
+// ══════════════════════════════════════════════════════════════════
+function DiscoverCard({ item, isSaved, onToggleSave }) {
+  const [hovered, setHovered] = useState(false);
+  const raw      = item.image_url ?? "";
+  const imageURL = raw ? (raw.startsWith("http") ? raw : `${API}${raw}`) : null;
+  const catColor = CATEGORY_COLORS[item.category] || T.accent;
+
+  return (
+    <div
+      style={{
+        flex: "0 0 130px",
+        background: T.surface,
+        border: `1px solid ${hovered ? T.accent : T.border}`,
+        borderRadius: 12,
+        overflow: "hidden",
+        scrollSnapAlign: "start",
+        transition: "border-color 0.2s, transform 0.22s cubic-bezier(0.16,1,0.3,1), box-shadow 0.22s",
+        transform: hovered ? "translateY(-3px)" : "none",
+        boxShadow: hovered ? "0 8px 24px rgba(0,0,0,0.08)" : "none",
+        cursor: "pointer",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div style={{ aspectRatio: "3/4", background: T.bgDeep, position: "relative", overflow: "hidden" }}>
+        {imageURL
+          ? <img
+              src={imageURL}
+              alt={item.name || "product"}
+              style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.5s ease", transform: hovered ? "scale(1.05)" : "scale(1)" }}
+            />
+          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.2rem" }}>✦</div>
+        }
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleSave?.(item); }}
+          style={{
+            position: "absolute", bottom: 6, right: 6,
+            background: isSaved ? T.accent : "rgba(250,249,247,0.88)",
+            backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+            border: "none", borderRadius: "50%",
+            width: 26, height: 26, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: "0.72rem", color: isSaved ? "#fff" : T.textMuted,
+            transition: "background 0.2s, color 0.2s",
+          }}
+        >
+          {isSaved ? "♥" : "♡"}
+        </button>
+      </div>
+      <div style={{ padding: "8px 10px 10px" }}>
+        <div style={{ height: 2, borderRadius: 1, background: `${catColor}40`, marginBottom: 5 }} />
+        <div style={{
+          fontSize: "0.7rem", fontWeight: 500, color: T.text, lineHeight: 1.3,
+          overflow: "hidden", display: "-webkit-box",
+          WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+        }}>
+          {item.name || "Product"}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+          <span style={{ fontSize: "0.58rem", color: T.textMuted, letterSpacing: "0.01em" }}>{item.store || ""}</span>
+          {item.price && <span style={{ fontSize: "0.65rem", color: T.accent, fontWeight: 600 }}>{item.price}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiscoverSection({ title, subtitle, badge, items, saved, onToggleSave, loading }) {
+  const isItemSaved = (pid) => saved.some(s => s.productId === pid);
+
+  const wrapDiscover = (item) => ({
+    score: 0,
+    payload: {
+      product_id:   item.product_id,
+      name:         item.name,
+      item_name:    item.name,
+      image_url:    item.image_url,
+      store_name:   item.store,
+      store:        item.store,
+      mall_name:    item.mall,
+      price:        item.price,
+      category_tag: item.category,
+    },
+  });
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingLeft: 24, paddingRight: 24 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 2 }}>
+            <span style={{ fontSize: "0.55rem", letterSpacing: "0.18em", textTransform: "uppercase", color: T.textMuted }}>{subtitle}</span>
+            {badge && (
+              <span style={{
+                fontSize: "0.48rem", letterSpacing: "0.1em", textTransform: "uppercase",
+                background: T.accentBg, color: T.accent, borderRadius: 20,
+                padding: "2px 7px", border: `1px solid ${T.accentRing}`,
+              }}>
+                {badge}
+              </span>
+            )}
+          </div>
+          <div className="font-serif" style={{ fontSize: "1.1rem", fontWeight: 500, color: T.text, fontStyle: "italic" }}>
+            {title}
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="discover-scroll" style={{ paddingLeft: 24, paddingRight: 24 }}>
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} style={{ flex: "0 0 130px", scrollSnapAlign: "start" }}>
+              <div className="shimmer-box" style={{ borderRadius: 12, aspectRatio: "3/4" }} />
+              <div className="shimmer-box" style={{ borderRadius: 6, height: 10, marginTop: 8, width: "80%" }} />
+              <div className="shimmer-box" style={{ borderRadius: 6, height: 8, marginTop: 5, width: "50%" }} />
+            </div>
+          ))}
+        </div>
+      ) : items.length === 0 ? null : (
+        <div className="discover-scroll" style={{ paddingLeft: 24, paddingRight: 24 }}>
+          {items.map((item) => (
+            <DiscoverCard
+              key={item.product_id}
+              item={item}
+              isSaved={isItemSaved(item.product_id)}
+              onToggleSave={() => onToggleSave?.(wrapDiscover(item))}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
 // ══════════════════════════════════════════════════════════════════
 // LANDING
 // ══════════════════════════════════════════════════════════════════
-function LandingView({ onUpload, error }) {
-  const inputRef = useRef(null);
+const LANDING_CATEGORIES = ["Dress", "Jacket", "Bag", "Shoes", "Top", "Pants", "Sweater", "Hat"];
+
+function LandingView({ onUpload, error, history, saved, onToggleSave }) {
+  const inputRef  = useRef(null);
+  const cameraRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const [discover, setDiscover] = useState(null); // null = loading
 
   const handleFile = (file) => {
     if (file && file.type.startsWith("image/")) onUpload(file);
   };
 
+  // Fetch discover feed once on mount
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API}/discover?limit=15`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (!cancelled) setDiscover(data || { trending: [], women: [], men: [] }); })
+      .catch(() => { if (!cancelled) setDiscover({ trending: [], women: [], men: [] }); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Derive "For You" from search history — pull top results across recent searches
+  const forYou = useMemo(() => {
+    if (!history.length) return [];
+    const pool = [];
+    const seen = new Set();
+    for (const entry of history.slice(0, 8)) {
+      for (const r of (entry.results || []).slice(0, 3)) {
+        const p   = r.payload ?? {};
+        const pid = p.product_id || p.item_id || p.image_url;
+        if (!pid || seen.has(pid) || !p.image_url) continue;
+        seen.add(pid);
+        pool.push({
+          product_id: pid,
+          name:       p.name || p.item_name || "",
+          price:      p.price || "",
+          category:   p.category_tag || entry.category || "",
+          image_url:  p.image_url,
+          store:      p.store_name || p.store || "",
+          mall:       p.mall_name || p.mall || "",
+        });
+      }
+    }
+    return pool.slice(0, 15);
+  }, [history]);
+
+  const loading = discover === null;
+
   return (
-    <div style={{ minHeight: "calc(100dvh - 61px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 24px" }}>
-      <div className="fade-up" style={{ textAlign: "center", marginBottom: "48px" }}>
-        <div style={{ fontSize: "0.7rem", color: T.accent, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "20px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-          <span style={{ fontSize: "0.6rem" }}>✦</span>
-          AI-powered visual search
+    <div className="fade-in" style={{
+      minHeight: "100svh",
+      background: T.bg,
+      paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 32px)",
+    }}>
+      {/* Hero section — upload + branding */}
+      <div style={{
+        position: "relative",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        padding: "28px 28px 20px",
+        overflow: "hidden",
+      }}>
+        <FloatingClothes opacity={1} />
+
+        {/* Editorial branding */}
+        <div className="fade-up" style={{ textAlign: "center", marginBottom: 20, position: "relative", zIndex: 1 }}>
+          <LocusLogo layout="stacked" markSize={48} fontSize="2rem" style={{ marginBottom: 10 }} />
+          <p style={{ fontSize: "0.82rem", color: T.textMuted, lineHeight: 1.6, maxWidth: 220, margin: "0 auto" }}>
+            Photograph any piece. Find it in stores near you.
+          </p>
         </div>
-        <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "clamp(2.8rem, 8vw, 4.5rem)", fontWeight: 500, lineHeight: 1.1, color: T.text, letterSpacing: "-0.01em" }}>
-          Find what you{" "}<em style={{ color: T.accent, fontStyle: "italic" }}>see</em>
-        </h1>
-        <p style={{ marginTop: "18px", fontSize: "0.88rem", color: T.textMuted, lineHeight: 1.7, maxWidth: "400px", margin: "18px auto 0" }}>
-          Upload any photo and we'll match it against thousands of products across top stores.
-        </p>
+
+        {/* Upload actions */}
+        <div className="fade-up" style={{ width: "100%", maxWidth: 320, display: "flex", flexDirection: "row", gap: 8, position: "relative", zIndex: 1 }}>
+          <button className="btn-primary" style={{ flex: 1, height: 42, fontSize: "0.85rem" }} onClick={() => cameraRef.current?.click()}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            Take photo
+          </button>
+
+          <div
+            className={`upload-zone ${dragging ? "drag-over" : ""}`}
+            onClick={() => inputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "10px 12px", cursor: "pointer" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.textMuted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <span style={{ fontSize: "0.82rem", color: T.textMuted, fontWeight: 400 }}>
+              {dragging ? "Drop here" : "Library"}
+            </span>
+          </div>
+
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+            onChange={(e) => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = null; } }} />
+          <input ref={inputRef} type="file" accept="image/jpeg, image/png, image/webp, image/heic, image/*" style={{ display: "none" }}
+            onChange={(e) => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = null; } }} />
+        </div>
+
+
+        {error && (
+          <div className="fade-up" style={{
+            marginTop: 20, padding: "14px 18px",
+            background: "rgba(184,88,88,0.08)", border: "1px solid rgba(184,88,88,0.2)",
+            borderRadius: 10, fontSize: "0.9rem", color: T.red,
+            maxWidth: 340, width: "100%", textAlign: "center", position: "relative", zIndex: 1,
+          }}>
+            {error}
+          </div>
+        )}
+
       </div>
 
-      <div
-        className={`upload-zone fade-up ${dragging ? "drag-over" : ""}`}
-        style={{ animationDelay: "0.1s", width: "100%", maxWidth: "540px", padding: "56px 32px", textAlign: "center" }}
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
-      >
-        <div style={{ width: 56, height: 56, borderRadius: "50%", background: T.surfaceHov, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: "1.2rem" }}>↑</div>
-        <div style={{ fontSize: "0.95rem", fontWeight: 500, color: T.text, marginBottom: "8px" }}>Drop your photo here</div>
-        <div style={{ fontSize: "0.75rem", color: T.textMuted, marginBottom: "24px" }}>PNG · JPG · WEBP — we'll find matching products instantly</div>
-        <button className="btn-primary" onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}>
-          <span style={{ color: T.accent }}>✦</span>
-          Start searching
-        </button>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/jpeg, image/png, image/webp, image/heic, image/*"
-          style={{ position: "absolute", width: "1px", height: "1px", opacity: 0, pointerEvents: "none" }}
-          onChange={(e) => {
-            if (e.target.files && e.target.files[0]) {
-              handleFile(e.target.files[0]);
-              e.target.value = null;
-            }
-          }}
+      {/* ── Discover sections ─────────────────────────────────── */}
+      <div style={{ paddingTop: 4 }}>
+
+        {/* Divider */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, paddingLeft: 24, paddingRight: 24, marginBottom: 20 }}>
+          <div style={{ flex: 1, height: "1px", background: T.borderFaint }} />
+          <span style={{ fontSize: "0.48rem", letterSpacing: "0.2em", textTransform: "uppercase", color: T.textFaint, whiteSpace: "nowrap" }}>
+            what's happening
+          </span>
+          <div style={{ flex: 1, height: "1px", background: T.borderFaint }} />
+        </div>
+
+        {/* Trending Now */}
+        <DiscoverSection
+          title="Trending Now"
+          subtitle="This week"
+          badge="live"
+          items={discover?.trending ?? []}
+          saved={saved}
+          onToggleSave={onToggleSave}
+          loading={loading}
         />
-      </div>
 
-      {error && (
-        <div className="fade-up" style={{ marginTop: "20px", padding: "12px 18px", background: "rgba(201,112,112,0.08)", border: `1px solid rgba(201,112,112,0.2)`, borderRadius: "10px", fontSize: "0.75rem", color: T.red, maxWidth: "540px", width: "100%" }}>
-          ⚠ {error}
+        {/* For You — only show when user has history */}
+        {(forYou.length > 0 || loading) && (
+          <DiscoverSection
+            title="For You"
+            subtitle="Based on your searches"
+            items={forYou}
+            saved={saved}
+            onToggleSave={onToggleSave}
+            loading={false}
+          />
+        )}
+
+        {/* Section divider */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, paddingLeft: 24, paddingRight: 24, marginBottom: 32 }}>
+          <div style={{ flex: 1, height: "1px", background: T.borderFaint }} />
+          <span style={{ fontSize: "0.48rem", letterSpacing: "0.2em", textTransform: "uppercase", color: T.textFaint, whiteSpace: "nowrap" }}>
+            hot nearby
+          </span>
+          <div style={{ flex: 1, height: "1px", background: T.borderFaint }} />
         </div>
-      )}
+
+        {/* Hot Nearby — Women */}
+        <DiscoverSection
+          title="Women's Picks"
+          subtitle="Hot nearby · Women"
+          badge="women"
+          items={discover?.women ?? []}
+          saved={saved}
+          onToggleSave={onToggleSave}
+          loading={loading}
+        />
+
+        {/* Hot Nearby — Men */}
+        <DiscoverSection
+          title="Men's Picks"
+          subtitle="Hot nearby · Men"
+          badge="men"
+          items={discover?.men ?? []}
+          saved={saved}
+          onToggleSave={onToggleSave}
+          loading={loading}
+        />
+
+      </div>
     </div>
   );
 }
@@ -474,9 +918,20 @@ function LandingView({ onUpload, error }) {
 // ══════════════════════════════════════════════════════════════════
 function LoadingView({ label }) {
   return (
-    <div style={{ minHeight: "calc(100dvh - 61px)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px" }}>
-      <div style={{ width: 28, height: 28, border: `1.5px solid ${T.border}`, borderTop: `1.5px solid ${T.accent}`, borderRadius: "50%", animation: "spin 0.9s linear infinite" }} />
-      <span style={{ fontSize: "0.75rem", color: T.textMuted, letterSpacing: "0.05em" }}>{label}</span>
+    <div style={{
+      minHeight: "100svh", display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px))",
+      background: T.bg,
+      position: "relative",
+      overflow: "hidden",
+    }}>
+      <FloatingClothes opacity={0.6} />
+      <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 18, position: "relative", zIndex: 1 }}>
+        <LocusLogo layout="horizontal" markSize={22} fontSize="0.95rem" style={{ opacity: 0.7 }} />
+        <div style={{ width: 28, height: 28, border: `2px solid ${T.borderFaint}`, borderTop: `2px solid ${T.accent}`, borderRadius: "50%", animation: "spin 0.9s linear infinite" }} />
+        <span style={{ fontSize: "0.72rem", color: T.textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</span>
+      </div>
     </div>
   );
 }
@@ -642,11 +1097,11 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
   const hasBox = box && (box.x2 - box.x1) >= 10 && (box.y2 - box.y1) >= 10;
 
   return (
-    <div className="fade-in" style={{ minHeight: "calc(100dvh - 61px)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 28px", borderBottom: `1px solid ${T.borderFaint}` }}>
-        <button className="btn-ghost" onClick={onBack} style={{ fontSize: "1rem" }}>←</button>
-        <span style={{ fontSize: "0.75rem", color: T.textMuted, letterSpacing: "0.08em" }}>
-          {hasBox ? "LOOKS GOOD — HIT FIND OR REDRAW" : "DRAW A BOX AROUND THE ITEM"}
+    <div className="fade-in" style={{ minHeight: "100svh", background: T.bg }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 20px", borderBottom: `1px solid ${T.borderFaint}`, background: T.surface }}>
+        <button className="btn-ghost" onClick={onBack} style={{ padding: "6px 10px" }}>← Back</button>
+        <span style={{ fontSize: "0.85rem", fontWeight: 500, color: T.textMuted }}>
+          {hasBox ? "Looks good — tap Find or redraw" : "Draw a box around the item"}
         </span>
       </div>
 
@@ -682,14 +1137,14 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
                       <rect x={box.x1} y={box.y1} width={box.x2 - box.x1} height={box.y2 - box.y1} fill="black" />
                     </mask>
                   </defs>
-                  <rect x="0" y="0" width="100%" height="100%" fill="rgba(0,0,0,0.45)" mask="url(#crop-mask)" rx="12" />
+                  <rect x="0" y="0" width="100%" height="100%" fill="rgba(0,0,0,0.38)" mask="url(#crop-mask)" rx="12" />
                 </>
               )}
               {/* The box itself */}
               {box && (
                 <rect
                   x={box.x1} y={box.y1} width={box.x2 - box.x1} height={box.y2 - box.y1}
-                  fill="rgba(201,169,110,0.08)"
+                  fill="rgba(0,122,255,0.08)"
                   stroke={T.accent}
                   strokeWidth={2}
                   strokeDasharray={drawing ? "6 3" : "none"}
@@ -738,8 +1193,8 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
             onClick={handleFindItem}
           >
             {loading
-              ? <><div style={{ width: 12, height: 12, border: `1.5px solid ${T.border}`, borderTop: `1.5px solid ${T.accent}`, borderRadius: "50%", animation: "spin 0.9s linear infinite" }} /> Identifying…</>
-              : <><span style={{ color: T.accent }}>✦</span> Find this item</>
+              ? <><div style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.4)", borderTop: "2px solid #fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /> Identifying…</>
+              : <>Find this item</>}
             }
           </button>
         </div>
@@ -777,14 +1232,14 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
   const confColor = conf > 0.6 ? T.green : conf > 0.35 ? T.yellow : T.textMuted;
 
   return (
-    <div className="fade-in" style={{ minHeight: "calc(100dvh - 61px)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 28px", borderBottom: `1px solid ${T.borderFaint}` }}>
-        <button className="btn-ghost" onClick={onBack} style={{ fontSize: "1rem" }}>←</button>
-        <span style={{ fontSize: "0.75rem", color: T.textMuted, letterSpacing: "0.08em" }}>CONFIRM ITEM</span>
+    <div className="fade-in" style={{ minHeight: "100svh", background: T.bg }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 20px", borderBottom: `1px solid ${T.borderFaint}`, background: T.surface }}>
+        <button className="btn-ghost" onClick={onBack} style={{ padding: "6px 10px" }}>← Back</button>
+        <span style={{ fontSize: "0.9rem", fontWeight: 600, color: T.text }}>Confirm item</span>
       </div>
 
       {isNotFashion && (
-        <div style={{ margin: "24px 24px 0", padding: "18px 20px", background: "rgba(220,60,60,0.08)", border: "1px solid rgba(220,60,60,0.35)", borderRadius: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ margin: "24px 24px 0", padding: "18px 20px", background: "rgba(255,59,48,0.07)", border: "1px solid rgba(255,59,48,0.25)", borderRadius: 14, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#e05a5a" }}>Not a fashion item</div>
           <div style={{ fontSize: "0.75rem", color: T.textMuted, lineHeight: 1.6 }}>
             The selected area doesn't look like a clothing item or accessory (socks, underwear, belts, etc. aren't searchable).<br />
@@ -794,7 +1249,7 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
         </div>
       )}
 
-      <div style={{ flexDirection: "column", alignItems: "center", padding: "32px 24px", gap: 28, display: isNotFashion ? "none" : "flex" }}>
+      <div style={{ flexDirection: "column", alignItems: "center", padding: "28px 20px", paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 12px)", gap: 24, display: isNotFashion ? "none" : "flex" }}>
 
         <div style={{ display: "flex", gap: 20, alignItems: "flex-start", width: "100%", maxWidth: 480 }}>
           {/* Crop thumbnail */}
@@ -810,7 +1265,7 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
             <div>
               <div style={{ fontSize: "0.6rem", color: T.textMuted, letterSpacing: "0.1em", marginBottom: 6 }}>DETECTED AS</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.4rem", fontWeight: 600, color: T.text }}>
+                <span style={{ fontSize: "1.4rem", fontWeight: 700, color: T.text, letterSpacing: "-0.02em" }}>
                   {CATEGORY_LABELS[category] ?? "Unknown"}
                 </span>
                 {conf > 0 && (
@@ -832,7 +1287,7 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
                     width: "100%", background: T.surface, color: T.text,
                     border: `1px solid ${T.border}`, borderRadius: 8,
                     padding: "7px 32px 7px 10px", fontSize: "0.82rem",
-                    fontFamily: "'DM Sans', sans-serif", cursor: "pointer",
+                     cursor: "pointer",
                     appearance: "none", outline: "none",
                   }}
                 >
@@ -934,7 +1389,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
         onClick={onClose}
         style={{
           position: "fixed", inset: 0,
-          background: "rgba(0,0,0,0.72)",
+          background: "rgba(0,0,0,0.5)",
           backdropFilter: "blur(3px)",
           WebkitBackdropFilter: "blur(3px)",
           zIndex: 500,
@@ -1019,7 +1474,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
             aria-label="Close"
             style={{
               position: "absolute", top: 12, right: 12,
-              background: "rgba(13,12,10,0.72)",
+              background: "rgba(0,0,0,0.55)",
               backdropFilter: "blur(6px)",
               WebkitBackdropFilter: "blur(6px)",
               border: `1px solid ${T.border}`,
@@ -1031,14 +1486,14 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
               transition: "transform 0.15s, background 0.15s",
             }}
             onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,0,0,0.9)"; e.currentTarget.style.transform = "scale(1.06)"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "rgba(13,12,10,0.72)"; e.currentTarget.style.transform = "scale(1)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,0,0,0.55)"; e.currentTarget.style.transform = "scale(1)"; }}
           >×</button>
 
           {/* Match badge — floats top-left on image */}
           <div style={{
             position: "absolute", top: 12, left: 12,
             display: "flex", alignItems: "center", gap: 5,
-            background: "rgba(13,12,10,0.72)",
+            background: "rgba(0,0,0,0.55)",
             backdropFilter: "blur(6px)",
             WebkitBackdropFilter: "blur(6px)",
             border: `1px solid ${scoreColor}55`,
@@ -1069,11 +1524,11 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
             )}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14 }}>
               <h2 style={{
-                fontFamily: "'Cormorant Garamond', serif",
-                fontSize: "1.55rem",
-                fontWeight: 600,
+                fontSize: "1.35rem",
+                fontWeight: 700,
                 color: T.text,
                 lineHeight: 1.25,
+                letterSpacing: "-0.02em",
                 flex: 1,
                 margin: 0,
               }}>
@@ -1135,7 +1590,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                 cursor: "pointer",
                 color: saved ? T.accent : T.text,
                 fontSize: "0.82rem", fontWeight: 500,
-                fontFamily: "'DM Sans', sans-serif",
+                
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                 transition: "all 0.2s",
               }}
@@ -1156,7 +1611,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                 cursor: "pointer",
                 color: copied ? T.green : T.text,
                 fontSize: "0.82rem", fontWeight: 500,
-                fontFamily: "'DM Sans', sans-serif",
+                
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                 transition: "all 0.2s",
               }}
@@ -1187,7 +1642,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                   textDecoration: "none",
                   color: T.bgDeep,
                   fontSize: "0.85rem", fontWeight: 600,
-                  fontFamily: "'DM Sans', sans-serif",
+                  
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
                   transition: "filter 0.2s",
                 }}
@@ -1217,7 +1672,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                   doubleClickZoom={true}
                   touchZoom={true}
                 >
-                  <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
+                  <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
                   <Marker position={storeCoords}>
                     <Popup>
                       <strong style={{ color: T.accent }}>{payload.store}</strong>
@@ -1296,9 +1751,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
 // RESULT CARD
 // ══════════════════════════════════════════════════════════════════
 function ResultCard({ result, category, onFeedback, onCardClick, highlighted, judgeScore, saved, onToggleSave, onFlag }) {
-  const [vote, setVote]         = useState(null);
-  const [hoverStar, setHover]   = useState(null);
-  const [flagged, setFlagged]   = useState(false);
+  const [flagged, setFlagged] = useState(false);
 
   const score    = result.score ?? 0;
   const payload  = result.payload ?? {};
@@ -1306,67 +1759,73 @@ function ResultCard({ result, category, onFeedback, onCardClick, highlighted, ju
   const imageURL = raw ? (raw.startsWith("http") ? raw : `${API}${raw}`) : null;
 
   const displayScore = judgeScore ?? score;
-  const isJudged     = judgeScore !== null && judgeScore !== undefined;
   const scoreColor   = displayScore >= 0.80 ? T.green : displayScore >= 0.60 ? T.yellow : T.red;
-
-  const handleVote = async (stars) => {
-    if (stars === vote) return; // same rating clicked again — no-op
-    setVote(stars);
-    setHover(null);
-    await onFeedback(
-      payload.product_id || payload.item_id || payload.image_url,
-      stars,
-      payload.item_name || "",
-      payload.store     || "",
-      category          || "",
-      payload.image_url || "",
-    );
-  };
-
-  const fillUpTo = vote !== null ? vote : (hoverStar ?? 0);
+  const catColor     = CATEGORY_COLORS[payload.category_tag || category] || T.accent;
 
   return (
-    <div style={{
-      background: T.surface,
-      border: `1px solid ${highlighted ? T.accent : T.border}`,
-      borderRadius: "12px",
-      overflow: "hidden",
-      display: "flex",
-      flexDirection: "column",
-      transition: "border-color 0.2s",
-    }}>
-      <div
-        onClick={() => onCardClick?.(result)}
-        style={{ aspectRatio: "3/4", background: T.bgDeep, overflow: "hidden", position: "relative", cursor: "pointer" }}
-      >
+    <div
+      style={{
+        background: T.surface,
+        border: `1px solid ${highlighted ? T.accent : T.border}`,
+        borderRadius: "14px",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        transition: "border-color 0.2s, transform 0.22s cubic-bezier(0.16,1,0.3,1), box-shadow 0.22s cubic-bezier(0.16,1,0.3,1)",
+        cursor: "pointer",
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.transform = "translateY(-3px)";
+        e.currentTarget.style.boxShadow = "0 10px 32px rgba(0,0,0,0.08)";
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = "";
+        e.currentTarget.style.boxShadow = "";
+      }}
+      onClick={() => onCardClick?.(result)}
+    >
+      {/* Image */}
+      <div style={{ aspectRatio: "3/4", background: T.bgDeep, overflow: "hidden", position: "relative" }}>
         {imageURL
-          ? <img src={imageURL} alt={payload.item_name || "product"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ? <img
+              src={imageURL}
+              alt={payload.item_name || "product"}
+              style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.5s ease", display: "block" }}
+              onMouseEnter={e => { e.target.style.transform = "scale(1.05)"; }}
+              onMouseLeave={e => { e.target.style.transform = "scale(1)"; }}
+            />
           : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.5rem" }}>✦</div>
         }
-        <span style={{ position: "absolute", top: 8, right: 8, display: "flex", alignItems: "center", gap: 3, background: "rgba(0,0,0,0.55)", borderRadius: 5, padding: "2px 6px" }}>
-          <span style={{ fontSize: "0.72rem", fontWeight: 600, color: scoreColor }}>{Math.round(displayScore * 100)}%</span>
-          {isJudged
-            ? <span style={{ fontSize: "0.52rem", color: T.accent, border: `1px solid ${T.accent}`, borderRadius: 3, padding: "0px 3px", lineHeight: 1.6 }}>AI</span>
-            : <span style={{ fontSize: "0.52rem", color: T.textFaint }}>~</span>
-          }
-        </span>
+
+        {/* Match score — light frosted badge top-right */}
+        <div style={{
+          position: "absolute", top: 8, right: 8,
+          background: "rgba(250,249,247,0.88)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+          borderRadius: 20, padding: "3px 9px",
+        }}>
+          <span style={{ fontSize: "0.62rem", fontWeight: 600, color: scoreColor }}>{Math.round(displayScore * 100)}%</span>
+        </div>
+
+        {/* Save button — bottom right, frosted */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleSave?.(result); }}
           style={{
-            position: "absolute", top: 8, left: 8,
-            background: "rgba(0,0,0,0.55)",
-            border: `1px solid ${saved ? T.accent : "transparent"}`,
-            borderRadius: "50%",
-            width: 28, height: 28, cursor: "pointer",
+            position: "absolute", bottom: 8, right: 8,
+            background: saved ? T.accent : "rgba(250,249,247,0.88)",
+            backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+            border: "none", borderRadius: "50%",
+            width: 30, height: 30, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: "0.9rem", lineHeight: 1,
-            color: saved ? T.accent : T.textMuted,
-            transition: "color 0.2s, border-color 0.2s",
+            fontSize: "0.82rem",
+            color: saved ? "#fff" : T.textMuted,
+            transition: "background 0.2s, color 0.2s",
           }}
           title={saved ? "Unsave" : "Save"}
         >
           {saved ? "♥" : "♡"}
         </button>
+
+        {/* Flag button — bottom left */}
         {onFlag && (
           <button
             onClick={(e) => {
@@ -1381,49 +1840,38 @@ function ResultCard({ result, category, onFeedback, onCardClick, highlighted, ju
               );
             }}
             style={{
-              position: "absolute", top: 40, left: 8,
-              background: flagged ? "rgba(180,50,50,0.85)" : "rgba(0,0,0,0.55)",
+              position: "absolute", bottom: 8, left: 8,
+              background: flagged ? "rgba(180,50,50,0.85)" : "rgba(250,249,247,0.85)",
+              backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
               border: "none", borderRadius: "50%",
               width: 28, height: 28, cursor: flagged ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "0.8rem", lineHeight: 1,
+              fontSize: "0.72rem",
               color: flagged ? "#fff" : T.textMuted,
-              transition: "background 0.2s, color 0.2s",
+              transition: "background 0.2s",
             }}
             title={flagged ? "Flagged — hidden from search" : "Flag: hide this result"}
           >
             🚩
           </button>
         )}
-        <span style={{ position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", borderRadius: 4, padding: "2px 8px", fontSize: "0.6rem", color: T.textMuted, whiteSpace: "nowrap", pointerEvents: "none" }}>
-          tap to view
-        </span>
       </div>
 
-      <div style={{ padding: "12px 14px", display: "flex", flexDirection: "column", gap: "8px", flex: 1 }}>
-        <div style={{ fontSize: "0.78rem", fontWeight: 500, color: T.text, lineHeight: 1.4 }}>
+      {/* Info */}
+      <div style={{ padding: "11px 13px 13px", display: "flex", flexDirection: "column", gap: 5 }}>
+        {/* Category accent bar */}
+        <div style={{ height: 2, borderRadius: 1, background: `${catColor}38`, marginBottom: 1 }} />
+
+        <div style={{ fontSize: "0.77rem", fontWeight: 500, color: T.text, lineHeight: 1.35, letterSpacing: "-0.01em" }}>
           {payload.item_name || "Product"}
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: "0.68rem", color: T.textMuted }}>{payload.store || ""}</span>
-        </div>
-
-        <div style={{ display: "flex", gap: "1px", marginTop: "auto", paddingTop: "4px" }}>
-          {[1, 2, 3, 4, 5].map(star => (
-            <button
-              key={star}
-              className={`star-btn ${star <= fillUpTo ? "filled" : ""}`}
-              onMouseEnter={() => setHover(star)}
-              onMouseLeave={() => setHover(null)}
-              onClick={(e) => { e.stopPropagation(); handleVote(star); }}
-              title={`Rate ${star} star${star > 1 ? "s" : ""}`}
-            >
-              ★
-            </button>
-          ))}
-          {vote !== null && (
-            <span style={{ fontSize: "0.6rem", color: T.textMuted, marginLeft: "4px", alignSelf: "center" }}>
-              {vote >= 4 ? "great" : vote === 3 ? "ok" : "poor"}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 1 }}>
+          <span style={{ fontSize: "0.63rem", color: T.textMuted, letterSpacing: "0.02em" }}>
+            {payload.store || ""}
+          </span>
+          {payload.price && (
+            <span style={{ fontSize: "0.75rem", color: T.accent, fontWeight: 600 }}>
+              {payload.price}
             </span>
           )}
         </div>
@@ -1500,7 +1948,7 @@ function AttributePanel({ attributes, refineMode, onRefine }) {
                     border: `1px solid ${active ? T.accent : T.border}`,
                     background: active ? T.accentBg : "transparent",
                     color: active ? T.accent : T.textMuted,
-                    fontFamily: "'DM Sans', sans-serif",
+                    
                     transition: "all 0.15s",
                   }}
                 >
@@ -1574,32 +2022,32 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
   });
 
   return (
-    <div className="fade-in" style={{ minHeight: "calc(100dvh - 61px)", paddingBottom: "48px" }}>
+    <div className="fade-in" style={{ minHeight: "100svh", paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 24px)" }}>
 
       {/* ── Sticky header bar ── */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "14px 28px",
         borderBottom: `1px solid ${T.borderFaint}`,
-        position: "sticky", top: "61px", zIndex: 100,
-        background: `${T.bg}f0`, backdropFilter: "blur(10px)",
+        position: "sticky", top: 0, zIndex: 100,
+        background: "rgba(242,242,247,0.92)", backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-          <button className="btn-ghost" onClick={onReset} style={{ fontSize: "1rem" }}>←</button>
+          <button className="btn-ghost" onClick={onReset} style={{ padding: "6px 10px" }}>← Back</button>
           <div>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1rem", fontWeight: 600, color: T.text, textTransform: "capitalize" }}>
+            <div className="font-serif" style={{ fontSize: "1.2rem", fontWeight: 300, fontStyle: "italic", color: T.text, letterSpacing: "0.02em", textTransform: "capitalize", lineHeight: 1.2 }}>
               {selectedItem?.label || category || "Results"}
             </div>
-            <div style={{ fontSize: "0.68rem", color: T.textMuted }}>
+            <div style={{ fontSize: "0.63rem", color: T.textMuted, letterSpacing: "0.02em", marginTop: 2 }}>
               {displayResults.length} match{displayResults.length !== 1 ? "es" : ""}
               {storesInRadius.length > 0 && ` · ${storesInRadius.length} store${storesInRadius.length > 1 ? "s" : ""} nearby`}
             </div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "0.68rem", color: T.textMuted }}>radius</span>
-          <input type="range" min={1} max={50} value={radius} onChange={e => setRadius(Number(e.target.value))} style={{ width: 80 }} />
-          <span style={{ fontSize: "0.72rem", color: T.accent, minWidth: 36 }}>{radius} km</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span style={{ fontSize: "0.6rem", color: T.textFaint, letterSpacing: "0.06em", textTransform: "uppercase" }}>radius</span>
+          <input type="range" min={1} max={50} value={radius} onChange={e => setRadius(Number(e.target.value))} style={{ width: 76 }} />
+          <span style={{ fontSize: "0.7rem", color: T.accent, minWidth: 34, fontWeight: 500 }}>{radius} km</span>
         </div>
       </div>
 
@@ -1642,7 +2090,7 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
                 marginLeft: "auto", fontSize: "0.65rem", padding: "5px 12px",
                 border: `1px solid ${T.border}`, borderRadius: 20,
                 background: "transparent", color: T.textMuted,
-                cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                cursor: "pointer", 
                 flexShrink: 0,
               }}
             >
@@ -1661,7 +2109,7 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
         {/* Map */}
         <div style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${T.border}`, marginBottom: 28, height: 220 }}>
           <MapContainer center={userLL} zoom={11} style={{ height: "100%", width: "100%" }} zoomControl={false}>
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
+            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
             <MapRecenter center={userLL} />
             {storesInRadius.map(store => {
               const coords = STORE_COORDS[store] ?? userLL;
@@ -1685,9 +2133,9 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
           </div>
         )}
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-          <span style={{ fontSize: "0.7rem", color: T.textMuted, letterSpacing: "0.08em" }}>
-            MATCHES
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+          <span style={{ fontSize: "0.6rem", color: T.textMuted, letterSpacing: "0.14em", textTransform: "uppercase" }}>
+            Matches
             {highlightedStore && (
               <span style={{ color: T.accent, marginLeft: "8px" }}>
                 · {highlightedStore}
@@ -1763,19 +2211,19 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
 // CATEGORY COLOR MAP (shared by Saved + History views)
 // ══════════════════════════════════════════════════════════════════
 const CATEGORY_COLORS = {
-  top:        "#7a9eab",
-  pants:      "#8b7aab",
-  leggings:   "#8b7aab",
-  dress:      "#ab7a9e",
-  skirt:      "#ab7a9e",
-  shorts:     "#ab8b7a",
-  sweater:    "#7aab8a",
-  jacket:     "#7aab8a",
-  shoes:      "#c9a96e",
-  hat:        "#a8895a",
-  bag:        "#a8895a",
-  jumpsuit:   "#ab7a7a",
-  sports_bra: "#7a9eab",
+  top:        "#7A9AB0",
+  pants:      "#7878A0",
+  leggings:   "#7878A0",
+  dress:      "#B07898",
+  skirt:      "#C09498",
+  shorts:     "#B09470",
+  sweater:    "#7A9E8C",
+  jacket:     "#728880",
+  shoes:      "#A08868",
+  hat:        "#B0983C",
+  bag:        "#A07060",
+  jumpsuit:   "#9A6878",
+  sports_bra: "#6898B0",
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -1783,14 +2231,11 @@ const CATEGORY_COLORS = {
 // ══════════════════════════════════════════════════════════════════
 function SavedView({ saved, onOpenDetail, onToggleSave }) {
   return (
-    <div style={{ minHeight: "calc(100dvh - 61px)", padding: "32px 24px", maxWidth: 640, margin: "0 auto" }}>
+    <div style={{ minHeight: "100svh", padding: "24px 20px", paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 24px)", maxWidth: 640, margin: "0 auto" }}>
       <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: "0.65rem", color: T.accent, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 6 }}>
-            ♥ Saved Items
-          </div>
-          <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.6rem", fontWeight: 500, color: T.text }}>
-            Your wishlist
+          <h2 className="font-serif" style={{ fontSize: "2rem", fontWeight: 400, fontStyle: "italic", color: T.text, letterSpacing: "0.02em" }}>
+            Saved
           </h2>
         </div>
         {saved.length > 0 && (
@@ -1799,10 +2244,12 @@ function SavedView({ saved, onOpenDetail, onToggleSave }) {
       </div>
 
       {saved.length === 0 ? (
-        <div className="fade-up" style={{ textAlign: "center", padding: "80px 0", color: T.textMuted }}>
-          <div style={{ fontSize: "2rem", marginBottom: 16, opacity: 0.3 }}>♡</div>
-          <p style={{ fontSize: "0.88rem" }}>No saved items yet</p>
-          <p style={{ fontSize: "0.75rem", marginTop: 8, color: T.textFaint }}>Tap ♡ on any result to save it here</p>
+        <div className="fade-up" style={{ textAlign: "center", padding: "88px 0", color: T.textMuted }}>
+          <div className="font-serif" style={{ fontSize: "2.8rem", fontWeight: 300, fontStyle: "italic", color: T.textFaint, marginBottom: 16, lineHeight: 1 }}>
+            empty
+          </div>
+          <p style={{ fontSize: "0.82rem", color: T.textMuted }}>No saved items yet</p>
+          <p style={{ fontSize: "0.72rem", marginTop: 8, color: T.textFaint }}>Tap ♡ on any result to save it here</p>
         </div>
       ) : (
         <div className="results-grid">
@@ -1815,39 +2262,50 @@ function SavedView({ saved, onOpenDetail, onToggleSave }) {
             return (
               <div
                 key={productId}
-                style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", position: "relative", cursor: "pointer" }}
+                style={{
+                  background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14,
+                  overflow: "hidden", display: "flex", flexDirection: "column",
+                  position: "relative", cursor: "pointer",
+                  transition: "transform 0.22s cubic-bezier(0.16,1,0.3,1), box-shadow 0.22s cubic-bezier(0.16,1,0.3,1)",
+                }}
                 onClick={() => onOpenDetail(result)}
+                onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 10px 32px rgba(0,0,0,0.08)"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; }}
               >
-                {/* Unsave button */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); onToggleSave(result); }}
-                  style={{ position: "absolute", top: 8, left: 8, background: `${T.accent}22`, border: `1px solid ${T.accent}`, borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.9rem", color: T.accent, zIndex: 1 }}
-                  title="Unsave"
-                >♥</button>
-
                 {/* Image */}
                 <div style={{ aspectRatio: "3/4", background: T.bgDeep, overflow: "hidden" }}>
                   {imageURL
-                    ? <img src={imageURL} alt={payload.item_name || "product"} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ? <img src={imageURL} alt={payload.item_name || "product"} style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.5s ease" }}
+                        onMouseEnter={e => { e.target.style.transform = "scale(1.05)"; }}
+                        onMouseLeave={e => { e.target.style.transform = "scale(1)"; }}
+                      />
                     : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.5rem" }}>✦</div>
                   }
+                  {/* Unsave button — frosted, bottom-right */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onToggleSave(result); }}
+                    style={{
+                      position: "absolute", bottom: 8, right: 8, zIndex: 1,
+                      background: T.accent, border: "none", borderRadius: "50%",
+                      width: 30, height: 30, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "0.82rem", color: "#fff",
+                    }}
+                    title="Unsave"
+                  >♥</button>
                 </div>
 
                 {/* Info */}
-                <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ fontSize: "0.78rem", fontWeight: 500, color: T.text, lineHeight: 1.4 }}>
+                <div style={{ padding: "11px 13px 13px", display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ height: 2, borderRadius: 1, background: `${catColor}38`, marginBottom: 1 }} />
+                  <div style={{ fontSize: "0.77rem", fontWeight: 500, color: T.text, lineHeight: 1.35, letterSpacing: "-0.01em" }}>
                     {payload.item_name || "Product"}
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: "0.68rem", color: T.textMuted }}>{payload.store || ""}</span>
-                    {payload.price && <span style={{ fontSize: "0.72rem", color: T.accent, fontWeight: 600 }}>{payload.price}</span>}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 1 }}>
+                    <span style={{ fontSize: "0.63rem", color: T.textMuted, letterSpacing: "0.02em" }}>{payload.store || ""}</span>
+                    {payload.price && <span style={{ fontSize: "0.75rem", color: T.accent, fontWeight: 600 }}>{payload.price}</span>}
                   </div>
-                  {payload.category_tag && (
-                    <span style={{ fontSize: "0.6rem", color: catColor, background: `${catColor}18`, border: `1px solid ${catColor}35`, borderRadius: 20, padding: "1px 7px", alignSelf: "flex-start", textTransform: "capitalize" }}>
-                      {payload.category_tag.replace(/_/g, " ")}
-                    </span>
-                  )}
-                  <div style={{ fontSize: "0.6rem", color: T.textFaint, marginTop: 2 }}>
+                  <div style={{ fontSize: "0.58rem", color: T.textFaint, marginTop: 2, letterSpacing: "0.03em" }}>
                     Saved {timeAgo(savedAt)}
                   </div>
                 </div>
@@ -1865,7 +2323,7 @@ function SavedView({ saved, onOpenDetail, onToggleSave }) {
 // ══════════════════════════════════════════════════════════════════
 function HistoryCard({ entry, onRestore }) {
   const color = CATEGORY_COLORS[entry.category] || T.accent;
-  const thumbs = entry.results.slice(0, 3).map(r => r.payload?.image_url).filter(Boolean);
+  const thumbs = entry.results.slice(0, 4).map(r => r.payload?.image_url).filter(Boolean);
 
   return (
     <div
@@ -1873,38 +2331,46 @@ function HistoryCard({ entry, onRestore }) {
       style={{
         background: T.surface,
         border: `1px solid ${T.border}`,
-        borderRadius: "12px",
-        padding: "14px",
+        borderRadius: "14px",
+        padding: "14px 16px",
         display: "flex",
         gap: "14px",
-        alignItems: "flex-start",
+        alignItems: "center",
         cursor: "pointer",
-        transition: "border-color 0.2s, background 0.2s",
+        transition: "border-color 0.2s, transform 0.2s, box-shadow 0.2s",
       }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = T.surfaceHov; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.background = T.surface; }}
+      onMouseEnter={e => {
+        e.currentTarget.style.borderColor = T.accent;
+        e.currentTarget.style.transform = "translateY(-1px)";
+        e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.06)";
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.borderColor = T.border;
+        e.currentTarget.style.transform = "";
+        e.currentTarget.style.boxShadow = "";
+      }}
     >
-      {/* Crop thumbnail */}
-      <div style={{ width: 56, height: 56, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: T.bgDeep, border: `1px solid ${T.borderFaint}` }}>
+      {/* Crop thumbnail — portrait aspect */}
+      <div style={{ width: 48, height: 64, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: T.bgDeep, border: `1px solid ${T.borderFaint}` }}>
         {entry.cropImageBase64
           ? <img src={entry.cropImageBase64} alt="search crop" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.2rem" }}>✦</div>
+          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1rem" }}>✦</div>
         }
       </div>
 
       {/* Info */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 7 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: "0.65rem", fontWeight: 500, color, background: `${color}1a`, border: `1px solid ${color}40`, borderRadius: 20, padding: "2px 8px", textTransform: "capitalize", letterSpacing: "0.03em" }}>
+          <span style={{ fontSize: "0.6rem", fontWeight: 500, color, background: `${color}15`, border: `1px solid ${color}35`, borderRadius: 20, padding: "2px 9px", textTransform: "capitalize", letterSpacing: "0.04em" }}>
             {entry.category?.replace(/_/g, " ") || "unknown"}
           </span>
-          <span style={{ fontSize: "0.65rem", color: T.textMuted }}>{timeAgo(entry.timestamp)}</span>
+          <span style={{ fontSize: "0.62rem", color: T.textFaint, letterSpacing: "0.02em" }}>{timeAgo(entry.timestamp)}</span>
         </div>
 
         {/* Result mini-thumbnails */}
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           {thumbs.map((url, i) => (
-            <div key={i} style={{ width: 32, height: 40, borderRadius: 4, overflow: "hidden", background: T.bgDeep, flexShrink: 0 }}>
+            <div key={i} style={{ width: 28, height: 36, borderRadius: 5, overflow: "hidden", background: T.bgDeep, flexShrink: 0, border: `1px solid ${T.borderFaint}` }}>
               <img
                 src={url.startsWith("http") ? url : `${API}${url}`}
                 alt=""
@@ -1913,36 +2379,31 @@ function HistoryCard({ entry, onRestore }) {
               />
             </div>
           ))}
-          <span style={{ fontSize: "0.65rem", color: T.textMuted, marginLeft: 4 }}>
+          <span style={{ fontSize: "0.62rem", color: T.textMuted, marginLeft: 5 }}>
             {entry.results.length} result{entry.results.length !== 1 ? "s" : ""}
           </span>
         </div>
       </div>
 
       {/* Arrow */}
-      <span style={{ color: T.textFaint, fontSize: "0.9rem", flexShrink: 0, alignSelf: "center" }}>›</span>
+      <span style={{ color: T.textFaint, fontSize: "1rem", flexShrink: 0 }}>›</span>
     </div>
   );
 }
 
 function HistoryView({ history, onRestore, onClear }) {
   return (
-    <div style={{ minHeight: "calc(100dvh - 61px)", padding: "32px 24px", maxWidth: 640, margin: "0 auto" }}>
+    <div style={{ minHeight: "100svh", padding: "24px 20px", paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 24px)", maxWidth: 640, margin: "0 auto" }}>
       <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
-          <div style={{ fontSize: "0.65rem", color: T.accent, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 6 }}>
-            ✦ Search History
-          </div>
-          <h2 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.6rem", fontWeight: 500, color: T.text }}>
-            Your searches
+          <h2 className="font-serif" style={{ fontSize: "2rem", fontWeight: 400, fontStyle: "italic", color: T.text, letterSpacing: "0.02em" }}>
+            History
           </h2>
         </div>
         {history.length > 0 && (
           <button
             onClick={onClear}
-            style={{ fontSize: "0.72rem", color: T.textMuted, background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "color 0.2s, border-color 0.2s" }}
-            onMouseEnter={e => { e.currentTarget.style.color = T.red; e.currentTarget.style.borderColor = T.red; }}
-            onMouseLeave={e => { e.currentTarget.style.color = T.textMuted; e.currentTarget.style.borderColor = T.border; }}
+            style={{ fontSize: "0.9rem", color: T.red, background: "none", border: "none", cursor: "pointer", fontWeight: 400 }}
           >
             Clear all
           </button>
@@ -1950,10 +2411,12 @@ function HistoryView({ history, onRestore, onClear }) {
       </div>
 
       {history.length === 0 ? (
-        <div className="fade-up" style={{ textAlign: "center", padding: "80px 0", color: T.textMuted }}>
-          <div style={{ fontSize: "2rem", marginBottom: 16, opacity: 0.3 }}>✦</div>
-          <p style={{ fontSize: "0.88rem" }}>No searches yet</p>
-          <p style={{ fontSize: "0.75rem", marginTop: 8, color: T.textFaint }}>Your search history will appear here</p>
+        <div className="fade-up" style={{ textAlign: "center", padding: "88px 0", color: T.textMuted }}>
+          <div className="font-serif" style={{ fontSize: "2.8rem", fontWeight: 300, fontStyle: "italic", color: T.textFaint, marginBottom: 16, lineHeight: 1 }}>
+            empty
+          </div>
+          <p style={{ fontSize: "0.82rem", color: T.textMuted }}>No searches yet</p>
+          <p style={{ fontSize: "0.72rem", marginTop: 8, color: T.textFaint }}>Your search history will appear here</p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -2050,7 +2513,7 @@ function RatingStatsPanel() {
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 24 }}>
         <h2 style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontWeight: 700, letterSpacing: "-0.02em",
           fontSize: "1.6rem", fontWeight: 600, color: T.text,
         }}>
           Ratings Overview
@@ -2307,7 +2770,7 @@ function AdminFlagsView({ onFlagsChange }) {
             </span>
           )}
           <h2 style={{
-            fontFamily: "'Cormorant Garamond', serif",
+            fontWeight: 700, letterSpacing: "-0.02em",
             fontSize: "1.6rem", fontWeight: 600, color: T.text,
           }}>
             Low-Quality Match Flags
@@ -2406,7 +2869,7 @@ function AdminFlagsView({ onFlagsChange }) {
                         background: T.accentBg, border: `1px solid ${T.accentRing}`,
                         color: T.accent, borderRadius: 6, fontSize: "0.7rem",
                         cursor: isBusy ? "default" : "pointer",
-                        fontFamily: "'DM Sans', sans-serif",
+                        
                       }}
                     >
                       Dismiss
@@ -2420,7 +2883,7 @@ function AdminFlagsView({ onFlagsChange }) {
                         border: "1px solid rgba(201,112,112,0.25)",
                         color: T.red, borderRadius: 6, fontSize: "0.7rem",
                         cursor: isBusy ? "default" : "pointer",
-                        fontFamily: "'DM Sans', sans-serif",
+                        
                       }}
                     >
                       Delete
@@ -2734,7 +3197,8 @@ export default function App() {
   return (
     <>
       <StyleInjector />
-      <Navbar activeTab={activeTab} onTab={setActiveTab} onLogoClick={reset} />
+      {/* Content sits above the fixed bottom tab bar */}
+      <div style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
 
       {activeTab === "Store" ? (
         <StoreDashboardView />
@@ -2758,7 +3222,7 @@ export default function App() {
         />
       ) : (
         <>
-          {view === "landing"    && <LandingView onUpload={handleUpload} error={error} />}
+          {view === "landing"    && <LandingView onUpload={handleUpload} error={error} history={history} saved={saved} onToggleSave={handleToggleSave} />}
           {view === "drawing"    && <DrawView imageURL={imageURL} imageFile={imageFile} onConfirm={handleDrawConfirm} onBack={reset} />}
           {view === "confirming" && <ConfirmView cropBlob={cropBlob} predictedCategory={predictedCategory} allScores={allScores} onSearch={handleConfirm} onBack={() => setView("drawing")} />}
           {view === "searching"  && <LoadingView label="Finding matches…" />}
@@ -2785,6 +3249,8 @@ export default function App() {
           )}
         </>
       )}
+      </div>
+      <Navbar activeTab={activeTab} onTab={setActiveTab} />
     </>
   );
 }
