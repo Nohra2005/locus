@@ -1,8 +1,8 @@
 {
-  "title": "Locus — Admin Dashboard",
+  "title": "Locus \u00e2\u20ac\u201d Admin Dashboard",
   "uid": "locus-main",
   "schemaVersion": 38,
-  "version": 4,
+  "version": 6,
   "refresh": "15s",
   "timezone": "browser",
   "tags": [
@@ -66,7 +66,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ DOWN",
+                  "text": "\u00e2\u0153\u2022 DOWN",
                   "color": "red"
                 }
               }
@@ -75,7 +75,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -139,7 +139,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ DOWN",
+                  "text": "\u00e2\u0153\u2022 DOWN",
                   "color": "red"
                 }
               }
@@ -148,7 +148,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -212,7 +212,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ DOWN",
+                  "text": "\u00e2\u0153\u2022 DOWN",
                   "color": "red"
                 }
               }
@@ -221,7 +221,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -284,7 +284,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ DOWN",
+                  "text": "\u00e2\u0153\u2022 DOWN",
                   "color": "red"
                 }
               }
@@ -293,7 +293,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -322,7 +322,7 @@
       "id": 57,
       "type": "stat",
       "title": "Visual Engine",
-      "description": "up=1 only after CLIP finishes loading — goes green ~30–60s after container start.",
+      "description": "up=1 only after CLIP finishes loading \u00e2\u20ac\u201d goes green ~30\u00e2\u20ac\u201c60s after container start.",
       "gridPos": {
         "x": 12,
         "y": 1,
@@ -357,7 +357,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "⌛ LOADING",
+                  "text": "\u00e2\u0152\u203a LOADING",
                   "color": "yellow"
                 }
               }
@@ -366,7 +366,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ READY",
+                  "text": "\u00e2\u0153\u201c READY",
                   "color": "green"
                 }
               }
@@ -429,7 +429,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ DOWN",
+                  "text": "\u00e2\u0153\u2022 DOWN",
                   "color": "red"
                 }
               }
@@ -438,7 +438,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -502,7 +502,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -562,7 +562,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -598,7 +598,7 @@
     {
       "id": 101,
       "type": "stat",
-      "title": "Searches — Last Minute",
+      "title": "Searches \u00e2\u20ac\u201d Last Minute",
       "description": "Total search requests in the last 60 seconds.",
       "gridPos": {
         "x": 0,
@@ -651,7 +651,7 @@
     {
       "id": 102,
       "type": "stat",
-      "title": "Errors — Last Minute",
+      "title": "Errors \u00e2\u20ac\u201d Last Minute",
       "description": "4xx + 5xx HTTP errors in the last 60 seconds.",
       "gridPos": {
         "x": 4,
@@ -823,7 +823,7 @@
       "id": 105,
       "type": "stat",
       "title": "Feedback: Positive vs Negative",
-      "description": "Positive (4-5★) vs negative (1-2★) feedback counts side by side.",
+      "description": "Positive (4-5\u00e2\u02dc\u2026) vs negative (1-2\u00e2\u02dc\u2026) feedback counts side by side.",
       "gridPos": {
         "x": 16,
         "y": 5,
@@ -896,7 +896,7 @@
       "id": 106,
       "type": "stat",
       "title": "Last Retraining",
-      "description": "Judge score delta (new − old) of the last completed retraining run. Green = model was promoted. Red = rejected.",
+      "description": "Judge score delta (new \u00e2\u02c6\u2019 old) of the last completed retraining run. Green = model was promoted. Red = rejected.",
       "gridPos": {
         "x": 20,
         "y": 5,
@@ -910,7 +910,7 @@
       "targets": [
         {
           "expr": "locus_judge_delta",
-          "legendFormat": "Δjudge"
+          "legendFormat": "\u00ce\u201djudge"
         }
       ],
       "options": {
@@ -952,7 +952,7 @@
     {
       "id": 200,
       "type": "row",
-      "title": "Gemini Judge — Search Quality",
+      "title": "Gemini Judge \u00e2\u20ac\u201d Search Quality",
       "collapsed": false,
       "gridPos": {
         "x": 0,
@@ -1218,7 +1218,7 @@
     {
       "id": 206,
       "type": "timeseries",
-      "title": "VSS@5 Trend — Across Eval Runs",
+      "title": "VSS@5 Trend \u00e2\u20ac\u201d Across Eval Runs",
       "description": "Should improve after each successful LoRA promotion.",
       "gridPos": {
         "x": 0,
@@ -1264,7 +1264,7 @@
     {
       "id": 207,
       "type": "stat",
-      "title": "Judge Score Old → New",
+      "title": "Judge Score Old \u00e2\u2020\u2019 New",
       "description": "Gemini judge avg score: old deployed model vs new candidate from last retrain.",
       "gridPos": {
         "x": 16,
@@ -1338,7 +1338,7 @@
     {
       "id": 1101,
       "type": "timeseries",
-      "title": "CLIP Confidence — P50 & P90 (per /vectorize call)",
+      "title": "CLIP Confidence \u00e2\u20ac\u201d P50 & P90 (per /vectorize call)",
       "description": "Tracks how confident CLIP is in its top category label. Sustained P50 < 0.4 or a sudden drop indicates model drift or distribution shift.",
       "gridPos": {
         "x": 0,
@@ -1428,7 +1428,7 @@
     {
       "id": 1102,
       "type": "stat",
-      "title": "CLIP Confidence — Current Median",
+      "title": "CLIP Confidence \u00e2\u20ac\u201d Current Median",
       "description": "P50 CLIP category confidence over the last 5 minutes. Below 0.35 = consider retraining.",
       "gridPos": {
         "x": 16,
@@ -1695,7 +1695,7 @@
       "id": 304,
       "type": "stat",
       "title": "Baseline hit@5",
-      "description": "hit@5 of the currently deployed model. New models must beat this − 0.02 to be promoted.",
+      "description": "hit@5 of the currently deployed model. New models must beat this \u00e2\u02c6\u2019 0.02 to be promoted.",
       "gridPos": {
         "x": 18,
         "y": 34,
@@ -1734,7 +1734,7 @@
     {
       "id": 305,
       "type": "stat",
-      "title": "Latest Δjudge",
+      "title": "Latest \u00ce\u201djudge",
       "description": "Judge score improvement of the last retrain vs baseline. Positive = new model is better.",
       "gridPos": {
         "x": 0,
@@ -1749,7 +1749,7 @@
       "targets": [
         {
           "expr": "locus_judge_delta",
-          "legendFormat": "Δjudge"
+          "legendFormat": "\u00ce\u201djudge"
         }
       ],
       "options": {
@@ -1826,7 +1826,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ REJECTED",
+                  "text": "\u00e2\u0153\u2022 REJECTED",
                   "color": "red"
                 }
               }
@@ -1835,7 +1835,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ PROMOTED",
+                  "text": "\u00e2\u0153\u201c PROMOTED",
                   "color": "green"
                 }
               }
@@ -1939,7 +1939,7 @@
     {
       "id": 309,
       "type": "timeseries",
-      "title": "Recall@K Trend — Across Eval Runs",
+      "title": "Recall@K Trend \u00e2\u20ac\u201d Across Eval Runs",
       "description": "Recall at top-5, 10, 25 improving over time as models are retrained.",
       "gridPos": {
         "x": 0,
@@ -2844,7 +2844,7 @@
       "id": 511,
       "type": "stat",
       "title": "Positive / Negative",
-      "description": "Count of positive (4-5★) vs negative (1-2★) training signals.",
+      "description": "Count of positive (4-5\u00e2\u02dc\u2026) vs negative (1-2\u00e2\u02dc\u2026) training signals.",
       "gridPos": {
         "x": 16,
         "y": 71,
@@ -2917,7 +2917,7 @@
       "id": 512,
       "type": "stat",
       "title": "Ready to Train",
-      "description": "Green when positive + negative ratings ≥ 50 (LoRA training threshold).",
+      "description": "Green when positive + negative ratings \u00e2\u2030\u00a5 50 (LoRA training threshold).",
       "gridPos": {
         "x": 20,
         "y": 71,
@@ -2988,7 +2988,7 @@
     {
       "id": 513,
       "type": "bargauge",
-      "title": "Star Distribution — All",
+      "title": "Star Distribution \u00e2\u20ac\u201d All",
       "description": "Rating count per star level (users + AI judge combined).",
       "gridPos": {
         "x": 0,
@@ -3003,23 +3003,23 @@
       "targets": [
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"5\"}",
-          "legendFormat": "5 ★"
+          "legendFormat": "5 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"4\"}",
-          "legendFormat": "4 ★"
+          "legendFormat": "4 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"3\"}",
-          "legendFormat": "3 ★"
+          "legendFormat": "3 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"2\"}",
-          "legendFormat": "2 ★"
+          "legendFormat": "2 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"1\"}",
-          "legendFormat": "1 ★"
+          "legendFormat": "1 \u00e2\u02dc\u2026"
         }
       ],
       "options": {
@@ -3040,7 +3040,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "5 ★"
+              "options": "5 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3055,7 +3055,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "4 ★"
+              "options": "4 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3070,7 +3070,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "3 ★"
+              "options": "3 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3085,7 +3085,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "2 ★"
+              "options": "2 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3100,7 +3100,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "1 ★"
+              "options": "1 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3118,7 +3118,7 @@
     {
       "id": 514,
       "type": "bargauge",
-      "title": "Star Distribution — Users Only",
+      "title": "Star Distribution \u00e2\u20ac\u201d Users Only",
       "description": "Rating count per star from actual shoppers only.",
       "gridPos": {
         "x": 8,
@@ -3133,23 +3133,23 @@
       "targets": [
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"5\"}",
-          "legendFormat": "5 ★"
+          "legendFormat": "5 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"4\"}",
-          "legendFormat": "4 ★"
+          "legendFormat": "4 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"3\"}",
-          "legendFormat": "3 ★"
+          "legendFormat": "3 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"2\"}",
-          "legendFormat": "2 ★"
+          "legendFormat": "2 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"1\"}",
-          "legendFormat": "1 ★"
+          "legendFormat": "1 \u00e2\u02dc\u2026"
         }
       ],
       "options": {
@@ -3170,7 +3170,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "5 ★"
+              "options": "5 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3185,7 +3185,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "4 ★"
+              "options": "4 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3200,7 +3200,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "3 ★"
+              "options": "3 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3215,7 +3215,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "2 ★"
+              "options": "2 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3230,7 +3230,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "1 ★"
+              "options": "1 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3248,7 +3248,7 @@
     {
       "id": 515,
       "type": "bargauge",
-      "title": "Star Distribution — AI Judge Only",
+      "title": "Star Distribution \u00e2\u20ac\u201d AI Judge Only",
       "description": "Rating count per star from automated AI quality judge.",
       "gridPos": {
         "x": 16,
@@ -3263,23 +3263,23 @@
       "targets": [
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"5\"}",
-          "legendFormat": "5 ★"
+          "legendFormat": "5 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"4\"}",
-          "legendFormat": "4 ★"
+          "legendFormat": "4 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"3\"}",
-          "legendFormat": "3 ★"
+          "legendFormat": "3 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"2\"}",
-          "legendFormat": "2 ★"
+          "legendFormat": "2 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"1\"}",
-          "legendFormat": "1 ★"
+          "legendFormat": "1 \u00e2\u02dc\u2026"
         }
       ],
       "options": {
@@ -3300,7 +3300,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "5 ★"
+              "options": "5 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3315,7 +3315,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "4 ★"
+              "options": "4 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3330,7 +3330,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "3 ★"
+              "options": "3 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3345,7 +3345,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "2 ★"
+              "options": "2 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3360,7 +3360,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "1 ★"
+              "options": "1 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3379,7 +3379,7 @@
       "id": 516,
       "type": "bargauge",
       "title": "Training Signal Breakdown",
-      "description": "Ratings grouped into positive (4-5★), neutral (3★), negative (1-2★) training signals.",
+      "description": "Ratings grouped into positive (4-5\u00e2\u02dc\u2026), neutral (3\u00e2\u02dc\u2026), negative (1-2\u00e2\u02dc\u2026) training signals.",
       "gridPos": {
         "x": 0,
         "y": 83,
@@ -3393,15 +3393,15 @@
       "targets": [
         {
           "expr": "locus_rating_by_signal_total{signal=\"positive\"}",
-          "legendFormat": "Positive (4-5★)"
+          "legendFormat": "Positive (4-5\u00e2\u02dc\u2026)"
         },
         {
           "expr": "locus_rating_by_signal_total{signal=\"neutral\"}",
-          "legendFormat": "Neutral (3★)"
+          "legendFormat": "Neutral (3\u00e2\u02dc\u2026)"
         },
         {
           "expr": "locus_rating_by_signal_total{signal=\"negative\"}",
-          "legendFormat": "Negative (1-2★)"
+          "legendFormat": "Negative (1-2\u00e2\u02dc\u2026)"
         }
       ],
       "options": {
@@ -3422,7 +3422,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Positive (4-5★)"
+              "options": "Positive (4-5\u00e2\u02dc\u2026)"
             },
             "properties": [
               {
@@ -3437,7 +3437,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Neutral (3★)"
+              "options": "Neutral (3\u00e2\u02dc\u2026)"
             },
             "properties": [
               {
@@ -3452,7 +3452,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Negative (1-2★)"
+              "options": "Negative (1-2\u00e2\u02dc\u2026)"
             },
             "properties": [
               {
@@ -3814,7 +3814,7 @@
       "id": 604,
       "type": "stat",
       "title": "Corrupt Items Flagged",
-      "description": "Products with corrupt_flag_count ≥ 1. A second flag triggers auto-deletion.",
+      "description": "Products with corrupt_flag_count \u00e2\u2030\u00a5 1. A second flag triggers auto-deletion.",
       "gridPos": {
         "x": 12,
         "y": 91,
@@ -3926,7 +3926,7 @@
       "id": 606,
       "type": "stat",
       "title": "Stores with Missing Info",
-      "description": "Stores where products are missing store name, image URL, or coordinates. Requires backend endpoint — noted for later.",
+      "description": "Stores where products are missing store name, image URL, or coordinates. Requires backend endpoint \u00e2\u20ac\u201d noted for later.",
       "gridPos": {
         "x": 20,
         "y": 91,
@@ -4295,7 +4295,7 @@
     {
       "id": 706,
       "type": "timeseries",
-      "title": "Attribute Tagger — Request Rate & Failures",
+      "title": "Attribute Tagger \u00e2\u20ac\u201d Request Rate & Failures",
       "gridPos": {
         "x": 12,
         "y": 118,
@@ -4352,7 +4352,7 @@
     {
       "id": 707,
       "type": "timeseries",
-      "title": "Attribute Tagger — P95 Latency",
+      "title": "Attribute Tagger \u00e2\u20ac\u201d P95 Latency",
       "gridPos": {
         "x": 0,
         "y": 125,
@@ -4878,7 +4878,7 @@
       "id": 1003,
       "type": "bargauge",
       "title": "Website Clicks per Store",
-      "description": "Times a user clicked 'View on store →' — intent to buy.",
+      "description": "Times a user clicked 'View on store \u00e2\u2020\u2019' \u00e2\u20ac\u201d intent to buy.",
       "gridPos": {
         "x": 0,
         "y": 161,
@@ -4919,7 +4919,7 @@
       "id": 1004,
       "type": "bargauge",
       "title": "Directions Clicks per Store",
-      "description": "Times a user clicked 'Get directions →' — intent to visit in person.",
+      "description": "Times a user clicked 'Get directions \u00e2\u2020\u2019' \u00e2\u20ac\u201d intent to visit in person.",
       "gridPos": {
         "x": 8,
         "y": 161,
@@ -5092,7 +5092,7 @@
       "targets": [
         {
           "expr": "topk(10, sum by (store, item_name) (locus_store_item_impressions_total))",
-          "legendFormat": "{{store}} — {{item_name}}"
+          "legendFormat": "{{store}} \u00e2\u20ac\u201d {{item_name}}"
         }
       ],
       "options": {
@@ -5235,9 +5235,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red",    "value": 0   },
-              { "color": "yellow", "value": 10  },
-              { "color": "green",  "value": 50  }
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "green",
+                "value": 50
+              }
             ]
           },
           "color": {
@@ -5249,7 +5258,7 @@
     {
       "id": 1011,
       "type": "table",
-      "title": "Store Inventory — Items by Store & Category",
+      "title": "Store Inventory \u00e2\u20ac\u201d Items by Store & Category",
       "description": "All stores currently in the system with a breakdown of indexed items per category. Refreshed every 60s from Qdrant.",
       "gridPos": {
         "x": 0,
@@ -5284,28 +5293,34 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time":     true,
+              "Time": true,
               "__name__": true,
               "instance": true,
-              "job":      true
+              "job": true
             },
             "renameByName": {
-              "store":    "Store",
+              "store": "Store",
               "category": "Category",
-              "Value":    "Items Indexed"
+              "Value": "Items Indexed"
             },
             "indexByName": {
-              "store":    0,
+              "store": 0,
               "category": 1,
-              "Value":    2
+              "Value": 2
             }
           }
         }
       ],
       "options": {
         "sortBy": [
-          { "displayName": "Store",         "desc": false },
-          { "displayName": "Items Indexed", "desc": true  }
+          {
+            "displayName": "Store",
+            "desc": false
+          },
+          {
+            "displayName": "Items Indexed",
+            "desc": true
+          }
         ],
         "footer": {
           "show": false
@@ -5317,7 +5332,10 @@
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Items Indexed" },
+            "matcher": {
+              "id": "byName",
+              "options": "Items Indexed"
+            },
             "properties": [
               {
                 "id": "custom.displayMode",
@@ -5328,16 +5346,692 @@
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    { "color": "red",    "value": 0  },
-                    { "color": "yellow", "value": 10 },
-                    { "color": "green",  "value": 50 }
+                    {
+                      "color": "red",
+                      "value": 0
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 10
+                    },
+                    {
+                      "color": "green",
+                      "value": 50
+                    }
                   ]
                 }
               },
               {
                 "id": "color",
-                "value": { "mode": "thresholds" }
+                "value": {
+                  "mode": "thresholds"
+                }
               }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 1200,
+      "type": "row",
+      "title": "Store Admin — Registry & Management",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 205,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 1210,
+      "type": "stat",
+      "title": "Registered Stores",
+      "description": "Total store accounts registered in the Locus portal.",
+      "gridPos": {
+        "x": 0,
+        "y": 206,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_stores_registered_total",
+          "legendFormat": "Stores",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": 0
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 1211,
+      "type": "stat",
+      "title": "Stores with Products",
+      "description": "Stores that have at least 1 product indexed in Qdrant.",
+      "gridPos": {
+        "x": 4,
+        "y": 206,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "count(locus_store_items_total > 0)",
+          "legendFormat": "Active",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 1212,
+      "type": "stat",
+      "title": "Empty Stores (0 Products)",
+      "description": "Registered stores that have not uploaded any products yet.",
+      "gridPos": {
+        "x": 8,
+        "y": 206,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_stores_registered_total - count(locus_store_items_total > 0) or locus_stores_registered_total",
+          "legendFormat": "Empty",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 1230,
+      "type": "stat",
+      "title": "Onboarding Rate",
+      "description": "Percentage of registered stores that have at least 1 product indexed.",
+      "gridPos": {
+        "x": 12,
+        "y": 206,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "count(locus_store_items_total > 0) / locus_stores_registered_total * 100",
+          "legendFormat": "Onboarded %",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "yellow", "value": 50 },
+              { "color": "green", "value": 80 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 1231,
+      "type": "stat",
+      "title": "Missing Info",
+      "description": "Stores where product data is incomplete — missing name, image URL, or location.",
+      "gridPos": {
+        "x": 16,
+        "y": 206,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_stores_missing_info_total",
+          "legendFormat": "Missing",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 3 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 1213,
+      "type": "text",
+      "title": "Admin API",
+      "gridPos": {
+        "x": 20,
+        "y": 206,
+        "w": 4,
+        "h": 5
+      },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"font-family:monospace;font-size:11px;line-height:1.6;padding:4px\"><b>Admin API</b> <span style=\"color:#888;font-size:10px\">(X-Admin-Key required)</span><br/><br/><span style=\"color:#6bf\">GET</span> /admin/stores<br/><span style=\"color:#f96\">POST</span> /admin/stores/{id}/reset-password<br/><span style=\"color:#f66\">DEL</span> /admin/stores/{id}<br/><br/><a href=\"http://localhost:8000/admin/stores\" target=\"_blank\" style=\"background:#1e6fd9;color:#fff;padding:2px 8px;border-radius:3px;text-decoration:none;font-size:10px\">Store List</a> <a href=\"http://localhost:8000/docs\" target=\"_blank\" style=\"background:#444;color:#fff;padding:2px 8px;border-radius:3px;text-decoration:none;font-size:10px\">API Docs</a></div>"
+      }
+    },
+    {
+      "id": 1220,
+      "type": "table",
+      "title": "Store Directory - All Registered Accounts",
+      "description": "All store accounts. Refreshed every 30s. Email is first — click any address to open a mailto link.",
+      "gridPos": {
+        "x": 0,
+        "y": 211,
+        "w": 24,
+        "h": 12
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_store_info > 0",
+          "instant": true,
+          "legendFormat": "__auto",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "Value #A": true,
+              "Value": true
+            },
+            "indexByName": {
+              "email": 0,
+              "store_name": 1,
+              "mall": 2,
+              "phone": 3,
+              "store_id": 4
+            },
+            "renameByName": {
+              "email": "Email",
+              "store_name": "Store Name",
+              "mall": "Mall / Location",
+              "phone": "Phone",
+              "store_id": "Store ID"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "string"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Email"
+            },
+            "properties": [
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "dark-blue"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 260
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Send email",
+                    "url": "mailto:${__value.text}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Store Name"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 180
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Email",
+            "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 1243,
+      "type": "table",
+      "title": "Store Emails — Quick Reference",
+      "description": "Focused view: store name and email only. Sorted alphabetically. Click email to open mailto.",
+      "gridPos": {
+        "x": 0,
+        "y": 233,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_store_info > 0",
+          "instant": true,
+          "legendFormat": "__auto",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "Value #A": true,
+              "Value": true,
+              "mall": true,
+              "phone": true,
+              "store_id": true
+            },
+            "indexByName": {
+              "store_name": 0,
+              "email": 1
+            },
+            "renameByName": {
+              "store_name": "Store",
+              "email": "Email"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "string"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Email"
+            },
+            "properties": [
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "dark-blue"
+                }
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Send email",
+                    "url": "mailto:${__value.text}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Store",
+            "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 1240,
+      "type": "bargauge",
+      "title": "Products per Store",
+      "description": "Total indexed products per registered store. Red = empty, green = well-stocked (10+).",
+      "gridPos": {
+        "x": 0,
+        "y": 223,
+        "w": 14,
+        "h": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(locus_store_items_total)",
+          "legendFormat": "{{store_name}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 10 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 1241,
+      "type": "piechart",
+      "title": "Stores by Mall / Location",
+      "description": "Distribution of registered stores across mall locations.",
+      "gridPos": {
+        "x": 14,
+        "y": 223,
+        "w": 5,
+        "h": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "count by (mall) (locus_store_info > 0)",
+          "legendFormat": "{{mall}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "pieType": "donut",
+        "displayLabels": ["name", "value"],
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 1242,
+      "type": "piechart",
+      "title": "Onboarding Status",
+      "description": "Active stores (have products) vs Empty stores (no products uploaded yet).",
+      "gridPos": {
+        "x": 19,
+        "y": 223,
+        "w": 5,
+        "h": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "count(locus_store_items_total > 0)",
+          "legendFormat": "Active",
+          "refId": "A",
+          "instant": true
+        },
+        {
+          "expr": "locus_stores_registered_total - count(locus_store_items_total > 0) or vector(0)",
+          "legendFormat": "Empty",
+          "refId": "B",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "pieType": "donut",
+        "displayLabels": ["name", "percent"],
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Active" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Empty" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
             ]
           }
         ]

@@ -5,13 +5,14 @@ import io
 import json as _json
 import os
 import pathlib
+import random
 import uuid
 from datetime import datetime
 from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -29,6 +30,7 @@ from qdrant_client.http.models import Distance, PointStruct, VectorParams
 import time as _time_module
 
 from judge import run_judge
+from auth import router as auth_router, verify_token, optional_token, _load_users, pwd_context
 
 # ── Per-search judge score store ──────────────────────────────────────────────
 # search_id → {product_id: float_score}  written incrementally by run_judge.
@@ -435,6 +437,20 @@ locus_store_category_items = Gauge(
     ["store", "category"],
 )
 
+# Store registry metrics — refreshed every 60s from users.json
+locus_store_info = Gauge(
+    "locus_store_info",
+    "Store registration info (value=1); metadata carried as labels",
+    ["store_name", "email", "mall", "phone", "store_id"],
+)
+locus_stores_registered = Gauge(
+    "locus_stores_registered_total",
+    "Total number of registered store accounts",
+)
+_known_store_label_sets: set[tuple] = set()  # tracks label combos so deleted stores can be zeroed
+
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "locus_admin_secret_2026")
+
 _cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
@@ -442,6 +458,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
 
 _MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
@@ -662,7 +680,44 @@ async def _refresh_admin_metrics():
             locus_low_score_flags_metric.set(len(low_hits))
         except Exception:
             pass
+        try:
+            _refresh_store_registry_metrics()
+        except Exception:
+            pass
         await asyncio.sleep(30)
+
+
+def _refresh_store_registry_metrics() -> None:
+    """Refresh locus_store_info and locus_stores_registered from users.json."""
+    global _known_store_label_sets
+    users = _load_users()
+    current: set[tuple] = set()
+    for email, u in users.items():
+        labels = (
+            u.get("store_name", ""),
+            email,
+            u.get("mall", ""),
+            u.get("phone", ""),
+            u.get("store_id", ""),
+        )
+        locus_store_info.labels(
+            store_name=labels[0],
+            email=labels[1],
+            mall=labels[2],
+            phone=labels[3],
+            store_id=labels[4],
+        ).set(1)
+        current.add(labels)
+    for stale in _known_store_label_sets - current:
+        try:
+            locus_store_info.labels(
+                store_name=stale[0], email=stale[1],
+                mall=stale[2], phone=stale[3], store_id=stale[4],
+            ).set(0)
+        except Exception:
+            pass
+    _known_store_label_sets = current
+    locus_stores_registered.set(len(users))
 
 
 @app.on_event("startup")
@@ -1222,6 +1277,73 @@ async def store_catalogue(store_name: str, limit: int = 100, offset: int = 0):
     return {"products": paginated, "total": total, "offset": offset, "limit": limit}
 
 
+@app.get("/discover")
+async def discover(limit: int = 15):
+    """
+    Return random product samples for the home screen discover feed.
+    Three buckets: trending (all categories), women-oriented, men-oriented.
+    Items with low_score_flag=True are excluded.
+    """
+    WOMEN_CATS = ["dress", "skirt", "jumpsuit", "bag", "sports_bra", "leggings", "top"]
+    MEN_CATS   = ["pants", "jacket", "sweater", "hat", "shorts", "shoes", "top"]
+    ALL_CATS   = ["dress", "skirt", "jumpsuit", "bag", "pants", "jacket", "sweater",
+                  "hat", "shorts", "shoes", "top", "sports_bra", "leggings"]
+
+    async def _sample_cats(categories: list, n: int) -> list:
+        pool: list[dict] = []
+        per_cat = max(3, (n * 3) // len(categories))
+        for cat in categories:
+            try:
+                hits, _ = await asyncio.to_thread(
+                    client.scroll,
+                    collection_name=COLLECTION_NAME,
+                    scroll_filter=models.Filter(
+                        must=[
+                            models.FieldCondition(key="category_tag", match=models.MatchValue(value=cat)),
+                        ],
+                        must_not=[
+                            models.FieldCondition(key="low_score_flag", match=models.MatchValue(value=True)),
+                        ],
+                    ),
+                    limit=60,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+            except Exception:
+                continue
+            for point in random.sample(hits, min(per_cat, len(hits))):
+                p = point.payload
+                if not p.get("image_url"):
+                    continue
+                pool.append({
+                    "product_id": p.get("product_id", str(point.id)),
+                    "name":       p.get("name", ""),
+                    "price":      p.get("price", ""),
+                    "category":   p.get("category_tag", cat),
+                    "image_url":  p.get("image_url", ""),
+                    "store":      p.get("store_name", ""),
+                    "mall":       p.get("mall_name", ""),
+                })
+        random.shuffle(pool)
+        seen: set = set()
+        out: list = []
+        for item in pool:
+            pid = item["product_id"]
+            if pid not in seen:
+                seen.add(pid)
+                out.append(item)
+            if len(out) >= n:
+                break
+        return out
+
+    trending, women, men = await asyncio.gather(
+        _sample_cats(ALL_CATS,   limit),
+        _sample_cats(WOMEN_CATS, limit),
+        _sample_cats(MEN_CATS,   limit),
+    )
+    return {"trending": trending, "women": women, "men": men}
+
+
 @app.delete("/store-catalogue/item/{item_id}")
 async def delete_catalogue_item(item_id: str):
     try:
@@ -1232,6 +1354,68 @@ async def delete_catalogue_item(item_id: str):
         return {"status": "deleted", "id": item_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/store-stats")
+async def store_stats(payload=Depends(verify_token)):
+    """Return aggregate stats for the authenticated store."""
+    store_name = payload["store_name"]
+    try:
+        results, _ = client.scroll(
+            collection_name=COLLECTION_NAME,
+            scroll_filter=models.Filter(must=[
+                models.FieldCondition(key="store_name", match=models.MatchValue(value=store_name))
+            ]),
+            limit=5000,
+            with_payload=True,
+            with_vectors=False,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    seen: dict[str, dict] = {}
+    category_counts: dict[str, int] = {}
+    rating_sum = 0
+    rating_count = 0
+    week_ago = datetime.utcnow().timestamp() - 7 * 86400
+
+    for point in results:
+        p          = point.payload
+        product_id = p.get("product_id", str(point.id))
+        if product_id in seen:
+            continue
+        seen[product_id] = {
+            "id":           str(point.id),
+            "name":         p.get("name", ""),
+            "price":        p.get("price", ""),
+            "category_tag": p.get("category_tag", ""),
+            "image_url":    p.get("image_url", ""),
+            "updated_at":   p.get("updated_at", ""),
+        }
+        cat = p.get("category_tag") or "other"
+        category_counts[cat] = category_counts.get(cat, 0) + 1
+        rc = p.get("rating_count", 0) or 0
+        rs = p.get("rating_sum", 0) or 0
+        rating_count += rc
+        rating_sum   += rs
+
+    total       = len(seen)
+    avg_rating  = round(rating_sum / rating_count, 2) if rating_count else None
+
+    recent = sorted(
+        seen.values(),
+        key=lambda x: x.get("updated_at", ""),
+        reverse=True,
+    )[:10]
+
+    return {
+        "store_name":      store_name,
+        "total_products":  total,
+        "avg_rating":      avg_rating,
+        "rating_count":    rating_count,
+        "categories":      category_counts,
+        "recent_products": recent,
+    }
 
 
 # ── Classify crop (query-time: user drew a box, CLIP predicts category) ────────
@@ -1878,6 +2062,72 @@ async def confirm_remove_flagged_item(body: LowScoreFlagRequest):
     _write_low_score_flags([f for f in flags if f.get("product_id") != pid])
     print(f"[LOW_SCORE] DELETED product {pid[:60]} by admin request")
     return {"status": "deleted", "product_id": pid}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SUPER-ADMIN — STORE MANAGEMENT
+# Protected by X-Admin-Key header (ADMIN_API_KEY env var).
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _require_admin(request: Request) -> None:
+    key = request.headers.get("X-Admin-Key", "")
+    if not key or key != ADMIN_API_KEY:
+        raise HTTPException(status_code=403, detail="Admin access required — provide X-Admin-Key header")
+
+
+@app.get("/admin/stores")
+async def admin_list_stores(request: Request):
+    """Return all registered stores with account info (no passwords)."""
+    _require_admin(request)
+    users = _load_users()
+    stores = []
+    for email, u in users.items():
+        stores.append({
+            "store_id":   u.get("store_id", ""),
+            "store_name": u.get("store_name", ""),
+            "email":      email,
+            "mall":       u.get("mall", ""),
+            "phone":      u.get("phone", ""),
+            "created_at": u.get("created_at", ""),
+        })
+    stores.sort(key=lambda s: s["created_at"], reverse=True)
+    return {"stores": stores, "total": len(stores)}
+
+
+class AdminPasswordResetRequest(BaseModel):
+    new_password: str
+
+
+@app.post("/admin/stores/{store_id}/reset-password")
+async def admin_reset_store_password(store_id: str, body: AdminPasswordResetRequest, request: Request):
+    """Reset a store account password by store_id."""
+    _require_admin(request)
+    if len(body.new_password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    from auth import _save_users
+    users = _load_users()
+    for email, u in users.items():
+        if u.get("store_id") == store_id:
+            u["password"] = pwd_context.hash(body.new_password)
+            _save_users(users)
+            return {"status": "reset", "store_id": store_id, "email": email}
+    raise HTTPException(404, "Store not found")
+
+
+@app.delete("/admin/stores/{store_id}")
+async def admin_delete_store(store_id: str, request: Request):
+    """Remove a store account. Does not delete Qdrant products."""
+    _require_admin(request)
+    from auth import _save_users
+    users = _load_users()
+    target_email = next((e for e, u in users.items() if u.get("store_id") == store_id), None)
+    if not target_email:
+        raise HTTPException(404, "Store not found")
+    del users[target_email]
+    _save_users(users)
+    _refresh_store_registry_metrics()
+    print(f"[ADMIN] Deleted store account {target_email} (id={store_id})")
+    return {"status": "deleted", "store_id": store_id, "email": target_email}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
