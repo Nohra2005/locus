@@ -111,5 +111,37 @@
     "store_name": "Forever21",
     "judge_score": 0.05,
     "flagged_at": "2026-05-01T08:12:24.118999"
+  },
+  {
+    "product_id": "b402af02-1813-52a5-b035-917d76f7cab7",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00487395-04-1_front.jpg?v=1751579399",
+    "name": "Cap Puff Sleeve Crop Top",
+    "store_name": "Forever21",
+    "judge_score": 0.1,
+    "flagged_at": "2026-05-01T09:37:01.927935"
+  },
+  {
+    "product_id": "2dc0579f-88f4-5481-97fe-3d6def159bc3",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00487611-02-1_front.jpg?v=1751579440",
+    "name": "Crew Neck Cropped Tee",
+    "store_name": "Forever21",
+    "judge_score": 0.3,
+    "flagged_at": "2026-05-01T09:37:02.394232"
+  },
+  {
+    "product_id": "223f6ce3-c543-5fab-b5df-afb01d11a899",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00489785-02-1_front.jpg?v=1773437700",
+    "name": "Cotton Tank Top",
+    "store_name": "Forever21",
+    "judge_score": 0.1,
+    "flagged_at": "2026-05-01T15:07:04.224043"
+  },
+  {
+    "product_id": "350a1d3b-8e7c-5db3-84a9-77e587d7819d",
+    "image_url": "https://cdn.shopify.com/s/files/1/0283/6715/9393/files/655774178_x_5472ebb0-9a21-4f9a-98b9-0389ca493799.jpg?v=1770466494",
+    "name": "PARATY BURGUNDY SLEEVELESS WOOL CARDIGAN",
+    "store_name": "Maison123",
+    "judge_score": 0.35,
+    "flagged_at": "2026-05-01T15:25:06.940327"
   }
 ]

@@ -969,6 +969,8 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
   const [box,         setBox]         = useState(null); // rendered coords {x1,y1,x2,y2}
   const [resizing,    setResizing]    = useState(null); // null | "tl" | "tr" | "bl" | "br"
   const [loading,     setLoading]     = useState(false);
+  const [showTutorial, setShowTutorial] = useState(true);
+  const TUTORIAL_VIDEO = "/draw-hint.mp4"; // drop your video here: frontend/public/draw-hint.mp4
 
   const measureRendered = (el) => {
     const { width: cw, height: ch } = el.getBoundingClientRect();
@@ -1101,7 +1103,7 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
       <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "16px 20px", borderBottom: `1px solid ${T.borderFaint}`, background: T.surface }}>
         <button className="btn-ghost" onClick={onBack} style={{ padding: "6px 10px" }}>← Back</button>
         <span style={{ fontSize: "0.85rem", fontWeight: 500, color: T.textMuted }}>
-          {hasBox ? "Looks good — tap Find or redraw" : "Draw a box around the item"}
+          {hasBox ? "Looks good — tap Find or redraw" : "Draw a tight box around the item"}
         </span>
       </div>
 
@@ -1153,6 +1155,32 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
               )}
             </svg>
           )}
+          {/* Tight-box hint overlay — shown until user starts drawing */}
+          {!drawing && !box && imgRendered.w > 0 && (
+            <div style={{
+              position: "absolute", inset: 0,
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)",
+              borderRadius: 12,
+              pointerEvents: "none",
+              gap: 10,
+            }}>
+              <div style={{
+                background: "rgba(0,0,0,0.7)", borderRadius: 16, padding: "18px 24px",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+                maxWidth: 280, textAlign: "center",
+              }}>
+                <span style={{ fontSize: "2rem", lineHeight: 1 }}>✂️</span>
+                <span style={{ fontSize: "1.05rem", color: "#fff", fontWeight: 700, lineHeight: 1.3 }}>
+                  Draw a tight box around the item
+                </span>
+                <span style={{ fontSize: "0.78rem", color: "rgba(255,255,255,0.75)", lineHeight: 1.5 }}>
+                  Hug the edges as closely as possible — don't leave extra background inside the box.
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Draggable corner handles — HTML divs so pointer events work on mobile */}
           {hasBox && !drawing && (
             [
@@ -1181,6 +1209,7 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
           )}
         </div>
 
+
         <div style={{ width: "100%", maxWidth: 640, marginTop: 16, display: "flex", gap: 10 }}>
           {hasBox && (
             <button className="btn-ghost" style={{ flexShrink: 0 }} onClick={() => { setBox(null); setStartPt(null); setResizing(null); }}>
@@ -1195,14 +1224,55 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
             {loading
               ? <><div style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.4)", borderTop: "2px solid #fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} /> Identifying…</>
               : <>Find this item</>}
-            }
           </button>
         </div>
 
         <p style={{ marginTop: 12, fontSize: "0.7rem", color: T.textFaint, textAlign: "center" }}>
-          Drag to draw a box · works on mobile too
+          Drag to draw · adjust corners · works on mobile
         </p>
       </div>
+
+      {/* Tutorial modal */}
+      {showTutorial && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.72)", backdropFilter: "blur(8px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 24,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{
+            background: T.surface, borderRadius: 20, padding: "24px 20px",
+            width: "100%", maxWidth: 360,
+            maxHeight: "88svh", overflowY: "auto",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 16,
+            boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
+          }}>
+            <div style={{ textAlign: "center", flexShrink: 0 }}>
+              <p style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: T.text }}>How to select an item</p>
+              <p style={{ margin: "6px 0 0", fontSize: "0.78rem", color: T.textMuted }}>
+                Draw a box that hugs the item tightly — no extra background.
+              </p>
+            </div>
+
+            <video
+              src={TUTORIAL_VIDEO}
+              autoPlay loop muted playsInline
+              style={{ width: "100%", borderRadius: 12, background: "#000", maxHeight: "50svh", objectFit: "cover" }}
+            />
+
+            <button
+              className="btn-primary"
+              style={{ width: "100%", padding: "12px 0", fontSize: "0.9rem", flexShrink: 0 }}
+              onClick={() => setShowTutorial(false)}
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2513,8 +2583,8 @@ function RatingStatsPanel() {
       {/* ── Header ── */}
       <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 24 }}>
         <h2 style={{
-          fontWeight: 700, letterSpacing: "-0.02em",
-          fontSize: "1.6rem", fontWeight: 600, color: T.text,
+          fontWeight: 600, letterSpacing: "-0.02em",
+          fontSize: "1.6rem", color: T.text,
         }}>
           Ratings Overview
         </h2>
@@ -2760,6 +2830,12 @@ function AdminFlagsView({ onFlagsChange }) {
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          <h2 style={{
+            fontWeight: 600, letterSpacing: "-0.02em",
+            fontSize: "1.6rem", color: T.text, margin: 0,
+          }}>
+            Low-Quality Match Flags
+          </h2>
           {flags.length > 0 && (
             <span style={{
               background: "rgba(201,112,112,0.12)", border: "1px solid rgba(201,112,112,0.3)",
@@ -2769,17 +2845,11 @@ function AdminFlagsView({ onFlagsChange }) {
               {flags.length} warning{flags.length !== 1 ? "s" : ""}
             </span>
           )}
-          <h2 style={{
-            fontWeight: 700, letterSpacing: "-0.02em",
-            fontSize: "1.6rem", fontWeight: 600, color: T.text,
-          }}>
-            Low-Quality Match Flags
-          </h2>
         </div>
         <p style={{ color: T.textMuted, fontSize: "0.82rem", lineHeight: 1.5 }}>
           {flags.length === 0
             ? "No issues detected — all top-3 results are meeting quality thresholds."
-            : `${flags.length} item${flags.length !== 1 ? "s" : ""} were flagged because Gemini judge scored them below ${Math.round(40)}% in a top-3 position. They are hidden from search results until reviewed.`}
+            : `${flags.length} item${flags.length !== 1 ? "s" : ""} were flagged because Gemini judge scored them below 40% in a top-3 position. They are hidden from search results until reviewed.`}
         </p>
       </div>
 
@@ -2868,8 +2938,8 @@ function AdminFlagsView({ onFlagsChange }) {
                         flex: 1, padding: "5px 0",
                         background: T.accentBg, border: `1px solid ${T.accentRing}`,
                         color: T.accent, borderRadius: 6, fontSize: "0.7rem",
+                        fontFamily: "'DM Sans', sans-serif",
                         cursor: isBusy ? "default" : "pointer",
-                        
                       }}
                     >
                       Dismiss
@@ -2882,8 +2952,8 @@ function AdminFlagsView({ onFlagsChange }) {
                         background: "rgba(201,112,112,0.08)",
                         border: "1px solid rgba(201,112,112,0.25)",
                         color: T.red, borderRadius: 6, fontSize: "0.7rem",
+                        fontFamily: "'DM Sans', sans-serif",
                         cursor: isBusy ? "default" : "pointer",
-                        
                       }}
                     >
                       Delete
