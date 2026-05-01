@@ -112,7 +112,7 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     email:        str
-    code:         str
+    code:         str = ""
     new_password: str
 
 
@@ -209,8 +209,6 @@ async def forgot_password(req: ForgotPasswordRequest):
 
 @router.post("/reset-password")
 async def reset_password(req: ResetPasswordRequest):
-    if req.code.strip() != "555":
-        raise HTTPException(400, "Invalid verification code")
     if len(req.new_password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
     if len(req.new_password) > 128:

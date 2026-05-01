@@ -171,10 +171,6 @@ function AuthPage({ onAuth }) {
 
       } else if (mode === "forgot") {
         await apiPost("/auth/forgot-password", { email: email.trim() });
-        goTo("verify");
-
-      } else if (mode === "verify") {
-        if (code.trim() !== "555") { setError("Invalid code. Please try again."); return; }
         goTo("newpass");
 
       } else if (mode === "newpass") {
@@ -200,14 +196,14 @@ function AuthPage({ onAuth }) {
   const subMap = {
     login:   "Sign in to manage your store's catalogue.",
     register:"Create a retailer account to list your products.",
-    forgot:  "Enter your account email and we'll send you a verification code.",
+    forgot:  "Enter your account email to reset your password.",
     verify:  `We sent a code to ${email || "your email"}. Enter it below to continue.`,
     newpass: "Choose a new password for your account.",
   };
   const btnMap = {
     login:   { idle: "Sign in",           busy: "Signing in…" },
     register:{ idle: "Create account",    busy: "Creating account…" },
-    forgot:  { idle: "Send code",         busy: "Sending…" },
+    forgot:  { idle: "Continue",           busy: "Verifying…" },
     verify:  { idle: "Verify",            busy: "Verifying…" },
     newpass: { idle: "Reset password",    busy: "Saving…" },
   };

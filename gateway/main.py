@@ -2104,12 +2104,15 @@ async def admin_reset_store_password(store_id: str, body: AdminPasswordResetRequ
     _require_admin(request)
     if len(body.new_password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
-    from auth import _save_users
+    from auth import _save_users, _hash_password
     users = _load_users()
     for email, u in users.items():
         if u.get("store_id") == store_id:
-            u["password"] = pwd_context.hash(body.new_password)
-            _save_users(users)
+            u["password"] = _hash_password(body.new_password)
+            try:
+                _save_users(users)
+            except Exception as exc:
+                raise HTTPException(500, f"Failed to save users: {exc}")
             return {"status": "reset", "store_id": store_id, "email": email}
     raise HTTPException(404, "Store not found")
 
