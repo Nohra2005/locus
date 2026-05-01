@@ -45,6 +45,7 @@ OPENROUTER_API_KEY   = os.getenv("OPENROUTER_API_KEY", "")
 
 SCRIPT_DIR           = Path(__file__).parent
 GOLDEN_DATASET_PATH  = SCRIPT_DIR / "golden_dataset.json"
+GOLDEN_IMAGES_DIR    = SCRIPT_DIR / "golden_images"
 VISUAL_ENGINE_MODELS = Path(os.getenv(
     "VISUAL_ENGINE_MODELS",
     SCRIPT_DIR.parent / "visual_engine" / "models"
@@ -279,7 +280,12 @@ def _run_judge_eval(
             query_url = query_url.replace("http://localhost:8000", GATEWAY_URL.rstrip("/"), 1)
 
         try:
-            img_bytes = _fetch_image_bytes(query_url)
+            filename = query_url.split("/")[-1]
+            local_path = GOLDEN_IMAGES_DIR / filename
+            if local_path.exists():
+                img_bytes = local_path.read_bytes()
+            else:
+                img_bytes = _fetch_image_bytes(query_url)
             pil_img   = Image.open(io.BytesIO(img_bytes)).convert("RGB")
             vector    = _embed_with_model(model, processor, pil_img)
             query_b64 = base64.b64encode(img_bytes).decode("utf-8")

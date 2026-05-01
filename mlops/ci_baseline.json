@@ -1,0 +1,18 @@
+{
+  "score": 0.539,
+  "n_queries": 26,
+  "model": "openai/gpt-4o",
+  "per_category": {
+    "bag": 0.8,
+    "dress": 0.475,
+    "hat": 0.4583,
+    "jacket": 0.4444,
+    "jumpsuit": 0.6167,
+    "leggings": 0.7833,
+    "pants": 0.7,
+    "shoes": 0.4,
+    "skirt": 0.4667,
+    "sweater": 0.5833,
+    "top": 0.6111
+  }
+}

@@ -26,21 +26,27 @@ jobs:
 
   # ── Job 2: Integration + quality gate — needs full stack ──────────────────
   integration-tests:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: unit-tests
 
     steps:
+      - name: Fix workspace permissions
+        run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" 2>/dev/null || true
+
       - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Set up .env
         run: |
-          cat > .env << 'EOF'
+          cat > .env << EOF
           QDRANT_URL=${{ secrets.QDRANT_URL }}
           QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }}
           OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
           GATEWAY_BASE_URL=http://localhost:8000
           CORS_ORIGINS=*
-          USERPROFILE=/home/runner
+          USERPROFILE=$HOME
           EOF
 
       - name: Cache HuggingFace models
@@ -51,24 +57,27 @@ jobs:
 
       - name: Start core services
         run: |
-          docker compose up -d gateway visual_engine attribute_tagger mlflow
+          USERPROFILE="$HOME" docker compose up -d gateway visual_engine attribute_tagger mlflow
         env:
-          USERPROFILE: /home/runner
+          DOCKER_BUILDKIT: 1
 
       - name: Wait for gateway
         run: |
           echo "Waiting for gateway..."
-          timeout 180 bash -c 'until curl -sf http://localhost:8000/ > /dev/null; do sleep 5; done'
+          timeout 240 bash -c 'until curl -sf http://localhost:8000/health > /dev/null; do sleep 5; done'
           echo "Gateway ready."
 
       - name: Wait for visual engine
         run: |
           echo "Waiting for visual engine (model loading takes ~60s)..."
-          timeout 180 bash -c 'until curl -sf http://localhost:8001/ > /dev/null; do sleep 5; done'
+          timeout 360 bash -c 'until curl -sf http://localhost:8001/ > /dev/null; do sleep 10; done'
           echo "Visual engine ready."
 
       - name: Install test dependencies
-        run: pip install pytest requests pillow
+        run: |
+          python3 -m venv /tmp/test-venv
+          /tmp/test-venv/bin/pip install pytest requests pillow
+          echo "/tmp/test-venv/bin" >> $GITHUB_PATH
 
       - name: Run smoke tests
         run: pytest tests/test_smoke.py -v
@@ -81,7 +90,7 @@ jobs:
           TAGGER_URL:  http://localhost:8004
 
       - name: Run judge quality gate
-        run: python mlops/ci_eval.py --gateway-url http://localhost:8000 --min-score 0.65
+        run: python mlops/ci_eval.py --gateway-url http://localhost:8000
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 

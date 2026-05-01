@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const API = "http://localhost:8000";
+const API = "";
 
 const T = {
   bg:          "#080808",

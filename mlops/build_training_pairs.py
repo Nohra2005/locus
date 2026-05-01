@@ -20,6 +20,8 @@ Usage:
   QDRANT_URL=... QDRANT_API_KEY=... python build_training_pairs.py
 """
 
+import hashlib
+import itertools
 import json
 import os
 import time
@@ -42,6 +44,7 @@ FEEDBACK_COL      = "locus_feedback"
 CACHE_DIR         = Path(os.getenv("PAIRS_CACHE_DIR", "pairs_cache"))
 MAX_PRODUCTS      = int(os.getenv("MAX_PRODUCTS", 400))   # cap to keep training time <2h on CPU
 TARGET_SIZE       = (224, 224)
+GATEWAY_URL       = os.getenv("GATEWAY_URL", "http://localhost:8000").rstrip("/")
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -54,6 +57,8 @@ def _get_qdrant_client():
 
 def _fetch_image(url: str, timeout: int = 15) -> Optional[Image.Image]:
     """Download an image from URL. Returns None on failure."""
+    if url.startswith("http://localhost:"):
+        url = url.replace("http://localhost:8000", GATEWAY_URL, 1)
     try:
         req = urllib.request.Request(
             url, headers={"User-Agent": "Mozilla/5.0 (Locus-Trainer/1.0)"}
@@ -249,6 +254,151 @@ def build_pairs(max_products: int = MAX_PRODUCTS) -> Path:
     print(f"  Manifest saved to  : {manifest_path}")
 
     return manifest_path
+
+
+def build_accessory_cross_pairs(
+    output_dir: Path,
+    client,
+    max_pairs_per_bucket: int = 150,
+    weight: float = 2.0,
+) -> list[dict]:
+    """
+    Generate cross-product contrastive pairs for accessory fine-tuning.
+
+    Within-bucket pairs (e.g. sneaker vs sneaker) teach CLIP that all sneakers
+    are more similar to each other than to heels or boots. Bags and hats each
+    form their own single bucket.
+
+    Returns a list of {"anchor_path", "positive_path", "weight"} dicts — the
+    same format lora_trainer.py reads from pairs_manifest.json.
+
+    Seed offset base 1_000_000 avoids collision with build_pairs() seeds which
+    top out at ~40 000 (400 products × 100).
+    """
+    output_dir.mkdir(exist_ok=True)
+
+    # ── Scroll accessories from Qdrant ────────────────────────────────────────
+    def _scroll_category(cat_tag: str) -> list[dict]:
+        items: list[dict] = []
+        offset = None
+        while True:
+            from qdrant_client.http import models as qdrant_models
+            results, next_offset = client.scroll(
+                collection_name=COLLECTION_NAME,
+                scroll_filter=qdrant_models.Filter(must=[
+                    qdrant_models.FieldCondition(
+                        key="category_tag",
+                        match=qdrant_models.MatchValue(value=cat_tag),
+                    )
+                ]),
+                with_vectors=False,
+                with_payload=True,
+                limit=200,
+                offset=offset,
+            )
+            if not results:
+                break
+            for p in results:
+                payload = p.payload or {}
+                items.append({
+                    "id":        str(p.id),
+                    "name":      payload.get("name", ""),
+                    "image_url": payload.get("image_url", ""),
+                    "shoe_style": payload.get("shoe_style", "other") or "other",
+                })
+            if next_offset is None:
+                break
+            offset = next_offset
+        return items
+
+    print("[ACC-PAIRS] Scrolling shoes, bags, hats from Qdrant…")
+    shoes = _scroll_category("shoes")
+    bags  = _scroll_category("bag")
+    hats  = _scroll_category("hat")
+    print(f"[ACC-PAIRS]  shoes={len(shoes)}  bags={len(bags)}  hats={len(hats)}")
+
+    # ── Group shoes by shoe_style, exclude "other" ────────────────────────────
+    shoe_buckets: dict[str, list[dict]] = {}
+    for item in shoes:
+        style = item["shoe_style"]
+        if style == "other":
+            continue
+        shoe_buckets.setdefault(style, []).append(item)
+
+    all_buckets: dict[str, list[dict]] = {
+        f"shoes_{s}": items for s, items in shoe_buckets.items()
+    }
+    all_buckets["bags"] = bags
+    all_buckets["hats"] = hats
+
+    for name, items in sorted(all_buckets.items()):
+        print(f"[ACC-PAIRS]  bucket '{name}': {len(items)} products")
+
+    # ── Download original images and generate pairs ───────────────────────────
+    pairs: list[dict] = []
+    overall_pair_idx  = 0  # running counter for deterministic seed generation
+
+    for bucket_name, items in all_buckets.items():
+        # Download images; skip items whose images cannot be fetched
+        downloaded: list[dict] = []
+        for item in items:
+            url = item.get("image_url", "")
+            if not url:
+                continue
+            pid_hash = hashlib.md5(item["id"].encode()).hexdigest()[:8]
+            dest     = output_dir / f"acc_orig_{pid_hash}.jpg"
+            if dest.exists():
+                downloaded.append({**item, "path": dest})
+                continue
+            img = _fetch_image(url)
+            if img is None:
+                continue
+            img = img.resize(TARGET_SIZE, Image.BILINEAR)
+            img.save(dest, "JPEG", quality=90)
+            time.sleep(0.05)
+            downloaded.append({**item, "path": dest})
+
+        if len(downloaded) < 2:
+            print(f"[ACC-PAIRS]  [SKIP] '{bucket_name}': only {len(downloaded)} downloadable items")
+            continue
+
+        print(f"[ACC-PAIRS]  '{bucket_name}': {len(downloaded)} images ready")
+
+        # Generate all within-bucket pairs, shuffle, cap at max_pairs_per_bucket
+        item_pairs = list(itertools.combinations(range(len(downloaded)), 2))
+        rng = random.Random(42 + hash(bucket_name) % 10_000)
+        rng.shuffle(item_pairs)
+        item_pairs = item_pairs[:max_pairs_per_bucket]
+
+        for i, j in item_pairs:
+            item_i = downloaded[i]
+            item_j = downloaded[j]
+            orig_i = item_i["path"]
+            orig_j = item_j["path"]
+
+            # (aug_j, orig_i) — teach: augmented j is a positive for item i
+            aug_seed_a = 1_000_000 + overall_pair_idx * 2
+            aug_j_path = output_dir / f"acc_aug_{hashlib.md5(item_j['id'].encode()).hexdigest()[:8]}_{aug_seed_a}.jpg"
+            if not aug_j_path.exists():
+                _augment(Image.open(orig_j).convert("RGB"), seed=aug_seed_a).save(
+                    aug_j_path, "JPEG", quality=85
+                )
+            pairs.append({"anchor_path": str(aug_j_path), "positive_path": str(orig_i), "weight": weight})
+
+            # Symmetric (aug_i, orig_j)
+            aug_seed_b = 1_000_000 + overall_pair_idx * 2 + 1
+            aug_i_path = output_dir / f"acc_aug_{hashlib.md5(item_i['id'].encode()).hexdigest()[:8]}_{aug_seed_b}.jpg"
+            if not aug_i_path.exists():
+                _augment(Image.open(orig_i).convert("RGB"), seed=aug_seed_b).save(
+                    aug_i_path, "JPEG", quality=85
+                )
+            pairs.append({"anchor_path": str(aug_i_path), "positive_path": str(orig_j), "weight": weight})
+
+            overall_pair_idx += 1
+
+    print(f"[ACC-PAIRS] Generated {len(pairs)} cross-product accessory pairs "
+          f"across {len(all_buckets)} buckets")
+    return pairs
 
 
 if __name__ == "__main__":

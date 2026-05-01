@@ -49,6 +49,8 @@ gateway/flagged.json
 mlops/lora_runs/
 mlops/pairs_cache/
 visual_engine/models/
+mlops/.last_retrain_ts
+gateway/reindex_checkpoint.json
 
 # ── Frontend build ────────────────────────────────────────────────────────────
 frontend/dist/

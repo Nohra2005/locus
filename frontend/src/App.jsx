@@ -12,7 +12,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl:     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
-const API = "http://localhost:8000";
+const API = "";
 
 const STORE_COORDS = {
   "Zara":          [33.88685, 35.51308],

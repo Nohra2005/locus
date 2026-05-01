@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import httpx
 from bs4 import BeautifulSoup
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -38,8 +39,21 @@ _judge_scores:     dict[str, dict[str, float]] = {}
 _judge_timestamps: dict[str, float]            = {}
 _JUDGE_TTL = 300  # 5 minutes
 
-LOW_SCORE_THRESHOLD  = 0.40   # Gemini judge score below this in top-3 → low-quality flag
+LOW_SCORE_THRESHOLD           = 0.40   # Gemini judge score below this in top-3 → low-quality flag (clothing)
+LOW_SCORE_THRESHOLD_ACCESSORY = 0.10   # Accessories have fewer catalog items; only flag clearly broken items
 LOW_SCORE_FLAGS_PATH = "/app/low_score_flags.json"
+
+# Style hint phrases passed to visual_engine /vectorize for accessory queries.
+# Used to mix CLIP text embeddings into the query vector (hybrid visual+text).
+_SHOE_STYLE_HINTS = {
+    "sneaker": "sneaker trainer running shoe athletic casual footwear",
+    "boot":    "ankle boot chelsea boot combat boot knee high boot",
+    "heel":    "high heel stiletto pump court shoe kitten heel formal",
+    "sandal":  "sandal flat mule loafer ballet flat espadrille open toe",
+    "other":   "shoe footwear",
+}
+_BAG_HINT = "handbag shoulder bag tote crossbody clutch purse"
+_HAT_HINT = "hat cap headwear beret fedora bucket hat beanie"
 
 
 def _cleanup_judge_scores() -> None:
@@ -174,9 +188,13 @@ async def _audit_corrupt_items(
                 print(f"[CORRUPT] Set payload failed for {pid[:60]}: {exc}")
 
 
+_ACCESSORY_CATEGORIES_SET = {"shoes", "bag", "hat"}
+
+
 async def _audit_low_score_top3(
     top3_matches: list,
     scores_dict: dict,
+    search_category: str = "",
 ) -> None:
     """
     After Gemini judge scores arrive, checks each of the top-3 results.
@@ -186,7 +204,15 @@ async def _audit_low_score_top3(
     Metadata is read directly from the match dict passed in — the same dict that
     run_judge used to assign scores — so the judge score is always linked to the
     correct item regardless of any reranking that may have occurred.
+
+    Accessories (shoes/bag/hat) use a much lower threshold (LOW_SCORE_THRESHOLD_ACCESSORY)
+    because CLIP retrieval is noisier for accessories — a cross-style shoe match (e.g.
+    sneaker returned for a heel query) scores 0.3-0.4 with Gemini but is still a valid
+    catalog item. Flagging it would shrink the already-small accessory pool.
     """
+    is_accessory  = search_category in _ACCESSORY_CATEGORIES_SET
+    flag_threshold = LOW_SCORE_THRESHOLD_ACCESSORY if is_accessory else LOW_SCORE_THRESHOLD
+
     top3_pids = [m["product_id"] for m in top3_matches]
     deadline  = _time_module.monotonic() + 90
     while _time_module.monotonic() < deadline:
@@ -203,14 +229,14 @@ async def _audit_low_score_top3(
         score = scores_dict.get(pid)
         if score is None:
             continue
-        if score >= LOW_SCORE_THRESHOLD:
+        if score >= flag_threshold:
             continue
         if pid in flagged_pids:
             print(f"[LOW_SCORE] {pid[:60]} already flagged (score={score:.3f}) — skipping")
             continue
 
         print(f"[LOW_SCORE] FLAGGING top-3 match '{match.get('name', '')}' "
-              f"({pid[:60]}) judge={score:.3f} < {LOW_SCORE_THRESHOLD}")
+              f"({pid[:60]}) judge={score:.3f} < {flag_threshold}")
 
         try:
             scroll_hits, _ = await asyncio.to_thread(
@@ -457,6 +483,8 @@ LINK_MONITOR_INTERVAL    = 432000  # 5 days in seconds (matches docker-compose s
 
 GOLDEN_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/golden-dataset/images", StaticFiles(directory=str(GOLDEN_IMAGES_DIR)), name="golden_images")
+if pathlib.Path("frontend/dist/assets").exists():
+    app.mount("/assets", StaticFiles(directory="frontend/dist/assets"), name="spa_assets")
 
 if QDRANT_URL:
     print(f"[QDRANT] Connecting to cloud: {QDRANT_URL}")
@@ -781,8 +809,8 @@ def startup_event():
 
 
 @app.get("/")
-def read_root():
-    return {"status": "online", "service": "Locus Gateway"}
+async def read_root():
+    return FileResponse("frontend/dist/index.html")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1449,11 +1477,23 @@ async def search_items(
         crop_bytes = image_bytes
         print("[SEARCH] No bbox — using full image")
 
+    # Compute style hint for accessories so the visual engine can apply hybrid vector mixing.
+    _style_hint = ""
+    _effective_search = search_label or ""
+    if _effective_search == "shoes":
+        _style_hint = _SHOE_STYLE_HINTS.get(shoe_style or "other", "shoe footwear")
+    elif _effective_search == "bag":
+        _style_hint = _BAG_HINT
+    elif _effective_search == "hat":
+        _style_hint = _HAT_HINT
+    if _style_hint:
+        print(f"[SEARCH] style_hint='{_style_hint[:60]}' for category='{_effective_search}'")
+
     async with httpx.AsyncClient() as http:
         vis_response = await http.post(
             f"{VISUAL_URL}/vectorize",
             files={"file": (file.filename, crop_bytes, "image/jpeg")},
-            data={"yolo_label": search_label, "darken": "false"},
+            data={"yolo_label": search_label, "darken": "false", "style_hint": _style_hint},
             timeout=60.0,
         )
         vis_response.raise_for_status()
@@ -1590,7 +1630,7 @@ async def search_items(
                 query_vector=vector,
                 query_filter=query_filter,
                 limit=100,
-                search_params=models.SearchParams(hnsw_ef=256),
+                search_params=models.SearchParams(hnsw_ef=512),
             )
             break
         except Exception as _e:
@@ -1609,7 +1649,7 @@ async def search_items(
             query_vector=vector,
             query_filter=fallback_filter,
             limit=100,
-            search_params=models.SearchParams(hnsw_ef=256),
+            search_params=models.SearchParams(hnsw_ef=512),
         )
 
     # ── Corrupt image detection ───────────────────────────────────────────────
@@ -1691,6 +1731,7 @@ async def search_items(
             _audit_low_score_top3,
             matches[:3],
             scores_dict,
+            effective_label or detected_category or "",
         )
 
     return {
@@ -3348,3 +3389,8 @@ async def _run_link_check_subprocess():
         print(f"[LINK CHECK] Pipeline finished (exit={proc.returncode}):\n{stdout.decode()[-2000:]}")
     finally:
         _link_check_running = False
+
+
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    return FileResponse("frontend/dist/index.html")

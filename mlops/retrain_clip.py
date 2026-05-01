@@ -40,7 +40,7 @@ OPENROUTER_API_KEY   = os.getenv("OPENROUTER_API_KEY", "")
 EXPERIMENT_NAME      = "locus_lora_retraining"
 
 # Trigger thresholds
-MIN_FEEDBACK_PAIRS   = int(os.getenv("MIN_FEEDBACK_PAIRS", 50))   # lower for dev/demo
+FEEDBACK_RATE        = float(os.getenv("FEEDBACK_RATE", 0.10))    # retrain when N% of catalog is rated
 MIN_ACS_THRESHOLD    = float(os.getenv("MIN_ACS_THRESHOLD", 0.70))
 
 # Paths
@@ -61,12 +61,12 @@ def _get_qdrant_client():
     return QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
 
 
-def _count_feedback_pairs() -> int:
-    """Count the number of actionable feedback pairs (positive + negative) in Qdrant."""
+def _count_feedback_and_catalog() -> tuple[int, int]:
+    """Return (feedback_pairs, catalog_size) from Qdrant."""
     try:
         client = _get_qdrant_client()
         from qdrant_client.http import models as qmodels
-        pos_count = client.count(
+        feedback = client.count(
             collection_name=FEEDBACK_COL,
             count_filter=qmodels.Filter(must=[
                 qmodels.FieldCondition(
@@ -76,10 +76,11 @@ def _count_feedback_pairs() -> int:
             ]),
             exact=True,
         ).count
-        return pos_count
+        catalog = client.count(collection_name="locus_items", exact=False).count
+        return feedback, catalog
     except Exception as e:
-        print(f"[RETRAIN] Could not count feedback: {e}")
-        return 0
+        print(f"[RETRAIN] Could not count feedback/catalog: {e}")
+        return 0, 0
 
 
 def _cleanup_stale_runs() -> None:
@@ -130,11 +131,12 @@ def _check_triggers(force: bool) -> tuple[bool, str]:
     if force:
         return True, "forced via --force flag"
 
-    n_pairs = _count_feedback_pairs()
-    print(f"[RETRAIN] Feedback pairs in Qdrant: {n_pairs} (threshold: {MIN_FEEDBACK_PAIRS})")
+    n_pairs, catalog_size = _count_feedback_and_catalog()
+    threshold = max(1, int(catalog_size * FEEDBACK_RATE))
+    print(f"[RETRAIN] Feedback pairs: {n_pairs} / catalog: {catalog_size} / threshold: {threshold} ({FEEDBACK_RATE*100:.0f}%)")
 
-    if n_pairs >= MIN_FEEDBACK_PAIRS:
-        return True, f"feedback threshold met ({n_pairs} >= {MIN_FEEDBACK_PAIRS})"
+    if catalog_size > 0 and n_pairs >= threshold:
+        return True, f"feedback rate met ({n_pairs}/{catalog_size} = {n_pairs/catalog_size*100:.1f}% >= {FEEDBACK_RATE*100:.0f}%)"
 
     # Check ACS@5 drift via latest vss_cache.json written by metrics_exporter
     vss_cache = SCRIPT_DIR / "vss_cache.json"
@@ -148,7 +150,7 @@ def _check_triggers(force: bool) -> tuple[bool, str]:
         except Exception:
             pass
 
-    return False, f"no trigger condition met (pairs={n_pairs}, threshold={MIN_FEEDBACK_PAIRS})"
+    return False, f"no trigger condition met (pairs={n_pairs}, threshold={threshold})"
 
 
 def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
@@ -195,9 +197,26 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
 
         # ── Step 2: Build training pairs ──────────────────────────────────
         print("\n[RETRAIN] Step 2/5: Building training pairs...")
-        from build_training_pairs import build_pairs
+        import random as _random
+        from build_training_pairs import build_pairs, build_accessory_cross_pairs
         manifest_path = build_pairs()
-        n_pairs = sum(1 for _ in open(manifest_path)) - 2  # rough count
+
+        # Merge accessory cross-product pairs (oversampled 2× for effective weight ≈2×)
+        acc_client = _get_qdrant_client()
+        acc_pairs  = build_accessory_cross_pairs(PAIRS_CACHE_DIR, acc_client)
+        print(f"[RETRAIN] {len(acc_pairs)} accessory cross-product pairs — merging (2× oversample)")
+        if acc_pairs:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            manifest.extend(acc_pairs)
+            manifest.extend(acc_pairs)  # duplicate = effective weight ≈2× without changing trainer
+            _random.shuffle(manifest)
+            with open(manifest_path, "w") as f:
+                json.dump(manifest, f, indent=2)
+            mlflow.log_param("accessory_cross_pairs", len(acc_pairs))
+
+        with open(manifest_path) as f:
+            n_pairs = len(json.load(f))
         mlflow.log_param("training_pairs", n_pairs)
 
         # ── Step 3: Train ─────────────────────────────────────────────────
@@ -242,6 +261,24 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
             mlflow.log_param("outcome", "promoted")
             mlflow.set_tag("promoted", "true")
             print(f"\n✅ PROMOTED — new adapter deployed (delta={delta:+.4f})")
+
+            # Update CI baseline to reflect the new model's performance level
+            gateway_url = os.getenv("GATEWAY_URL", "http://localhost:8000")
+            print(f"\n[BASELINE] Recomputing CI baseline against {gateway_url} ...")
+            try:
+                import subprocess
+                result_bl = subprocess.run(
+                    [sys.executable, str(Path(__file__).parent / "ci_eval.py"),
+                     "--gateway-url", gateway_url, "--set-baseline"],
+                    capture_output=True, text=True, timeout=600,
+                )
+                print(result_bl.stdout)
+                if result_bl.returncode == 0:
+                    print("[BASELINE] Baseline updated successfully.")
+                else:
+                    print(f"[BASELINE] Warning: baseline update failed:\n{result_bl.stderr}")
+            except Exception as e:
+                print(f"[BASELINE] Warning: could not update baseline: {e}")
         elif promoted and skip_promote:
             mlflow.log_param("outcome", "promoted-pending-deploy")
             mlflow.set_tag("promoted", "pending")

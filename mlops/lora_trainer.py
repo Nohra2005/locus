@@ -43,8 +43,8 @@ LORA_ALPHA        = 8       # scaling = alpha / r = 2.0
 LORA_DROPOUT      = 0.05
 TEMPERATURE       = 0.07
 LEARNING_RATE     = 1e-4
-BATCH_SIZE        = 8
-GRAD_ACCUM_STEPS  = 4       # effective batch = 32
+BATCH_SIZE        = int(os.getenv("BATCH_SIZE", 4))
+GRAD_ACCUM_STEPS  = int(os.getenv("GRAD_ACCUM_STEPS", 4))  # effective batch = BATCH_SIZE * GRAD_ACCUM_STEPS
 MAX_STEPS         = int(os.getenv("MAX_TRAIN_STEPS", 300))
 LOG_EVERY         = int(os.getenv("LOG_EVERY_STEPS", 20))  # log loss to MLflow every N steps
 # ─────────────────────────────────────────────────────────────────────────────

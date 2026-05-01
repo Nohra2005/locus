@@ -40,6 +40,71 @@
     "flagged_at": "2026-04-24T05:16:37.985507"
   },
   {
+    "product_id": "4ed29674-45d1-522c-bf87-93091a8324c5",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00490643-01-1_front.jpg?v=1751579944",
+    "name": "Pinstriped Wide-Leg Pants",
+    "store_name": "Forever21",
+    "judge_score": 0.35,
+    "flagged_at": "2026-04-27T11:44:09.316865"
+  },
+  {
+    "product_id": "14cb6dd1-5606-56d2-9bdf-c5343613370d",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00492511-01-1_front.jpg?v=1751580248",
+    "name": "Faux Shearling-Trim Moto Jacket",
+    "store_name": "Forever21",
+    "judge_score": 0.35,
+    "flagged_at": "2026-04-27T11:49:50.416048"
+  },
+  {
+    "product_id": "c049bced-8051-58f2-a9cf-a352befd88d6",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00442372-02-1_front.jpg?v=1751572181",
+    "name": "Transparent-Strap Stiletto Heels",
+    "store_name": "Forever21",
+    "judge_score": 0.0,
+    "flagged_at": "2026-04-27T14:03:11.094640"
+  },
+  {
+    "product_id": "789e83df-78b0-52e4-8a4e-773d7c9a35d2",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/00504587-01-1_front..jpg?v=1756145430",
+    "name": "Wide-Brim Straw Sun Hat",
+    "store_name": "Forever21",
+    "judge_score": null,
+    "flagged_at": "2026-04-27T14:08:51.891947",
+    "manual": true
+  },
+  {
+    "product_id": "fe9b77e8-bccc-55dc-b31b-498e25cf1296",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00493728-04-1_front.jpg?v=1751580455",
+    "name": "Ribbed Foldover Beanie",
+    "store_name": "Forever21",
+    "judge_score": 0.01,
+    "flagged_at": "2026-04-27T17:08:00.483270"
+  },
+  {
+    "product_id": "1d0aa9b6-e9fd-58a6-b3af-5ccf3ccfc492",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00458538-02-1_front.jpg?v=1751574810",
+    "name": "Floral Headwrap",
+    "store_name": "Forever21",
+    "judge_score": 0.01,
+    "flagged_at": "2026-04-27T18:43:46.659209"
+  },
+  {
+    "product_id": "b409b69a-ad63-5d88-8da9-bf8ab0a7eca6",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00481519-01-1_front.jpg?v=1751578183",
+    "name": "Active Raglan Hooded Top",
+    "store_name": "Forever21",
+    "judge_score": 0.35,
+    "flagged_at": "2026-04-29T03:27:44.343850"
+  },
+  {
+    "product_id": "ae20b948-4956-5fa9-a675-f75b6f96e71c",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00496448-01-1_front.jpg?v=1751580912",
+    "name": "Studded Faux Leather Moto Jacket",
+    "store_name": "Forever21",
+    "judge_score": 0.35,
+    "flagged_at": "2026-04-30T20:18:01.013308"
+  },
+  {
     "product_id": "5481af89-e808-5883-8faf-327c72b8d049",
     "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00486596-01-1_front.jpg?v=1751579149",
     "name": "Crochet Sweater-Knit Tank Top",

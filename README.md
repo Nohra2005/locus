@@ -58,7 +58,30 @@ To design and develop a clothing recommendation system that returns similar item
 * **Robustness:** System successfully rejects low confidence predictions (with 45% resemblance and less).
 * **Speed:** End-to-end processing must take maximum 15s.
 
-## 7. Assumptions & Risks
+## 7. Secrets Management
+
+Locus uses three API keys: `QDRANT_API_KEY`, `OPENROUTER_API_KEY`, and `GOOGLE_API_KEY`. Each is never committed to the repository. The table below shows how they are injected per environment.
+
+| Environment | Mechanism | Where defined |
+|---|---|---|
+| Local dev | `.env` file (git-ignored) | Copy `.env.example`, fill values |
+| Docker Compose | `env_file: .env` in each service | Same `.env` file, loaded at runtime |
+| GitHub Actions CI | GitHub repository Secrets | Settings → Secrets → Actions |
+| Kubernetes (Azure VM) | `locus-secrets` Secret object | `kubectl create secret generic locus-secrets --from-env-file=.env` |
+
+**Kubernetes secret creation (one-time, run on the VM):**
+```bash
+kubectl create secret generic locus-secrets \
+  --from-literal=QDRANT_API_KEY=<value> \
+  --from-literal=OPENROUTER_API_KEY=<value> \
+  --from-literal=GOOGLE_API_KEY=<value>
+```
+
+Pods read secrets via `secretKeyRef` in `k8s/deployment.yaml` — keys are injected as environment variables and never written to disk or logs.
+
+**Key rotation:** rotate a key by updating the GitHub Secret and re-running the retrain/deploy workflow, or by patching the K8s secret with `kubectl create secret generic locus-secrets --from-literal=KEY=<new> --dry-run=client -o yaml | kubectl apply -f -` and restarting the affected deployment.
+
+## 8. Assumptions & Risks
 * **Assumption:** User photos will have reasonable lighting and resolution.
 * **Risk 1: Background Removal Failure.**
     * **Issue:** `rembg` might fail on white-on-white images or complex textures.
