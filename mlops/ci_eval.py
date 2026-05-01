@@ -37,7 +37,7 @@ GOLDEN_IMAGES_DIR   = SCRIPT_DIR / "golden_images"
 BASELINE_PATH       = SCRIPT_DIR / "ci_baseline.json"
 OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
 _OPENROUTER_URL     = "https://openrouter.ai/api/v1/chat/completions"
-_MODEL              = "google/gemini-2.0-flash-001"
+_MODEL              = "openai/gpt-4o"
 
 # How many points below baseline triggers a failure (e.g. 0.04 = 4 percentage points)
 REGRESSION_TOLERANCE = 0.04
@@ -69,14 +69,10 @@ _last_call = 0.0
 
 def _judge(query_b64: str, result_url: str, gateway_url: str) -> float | None:
     global _last_call
-    with _lock:
-        gap = _last_call + 2.0 - time.monotonic()
-        if gap > 0:
-            time.sleep(gap)
-        _last_call = time.monotonic()
 
     result_url = result_url.replace("http://localhost:8000", gateway_url)
 
+    # Image fetch is a one-time attempt — failure is a missing image, not a rate-limit issue
     try:
         r = requests.get(result_url, timeout=10)
         r.raise_for_status()
@@ -95,20 +91,33 @@ def _judge(query_b64: str, result_url: str, gateway_url: str) -> float | None:
         "max_tokens": 10,
         "temperature": 0.0,
     }
-    try:
-        r = requests.post(
-            _OPENROUTER_URL,
-            json=payload,
-            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
-            timeout=30,
-        )
-        r.raise_for_status()
-        text = r.json()["choices"][0]["message"]["content"].strip()
-        m = re.search(r"\d+\.\d+|\d+", text)
-        return float(m.group()) if m else None
-    except Exception as e:
-        print(f"    [WARN] Judge call failed: {e}")
-        return None
+
+    MAX_RETRIES = 3
+    for attempt in range(MAX_RETRIES):
+        with _lock:
+            gap = _last_call + 2.0 - time.monotonic()
+            if gap > 0:
+                time.sleep(gap)
+            _last_call = time.monotonic()
+        try:
+            r = requests.post(
+                _OPENROUTER_URL,
+                json=payload,
+                headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
+                timeout=30,
+            )
+            r.raise_for_status()
+            text = r.json()["choices"][0]["message"]["content"].strip()
+            m = re.search(r"\d+\.\d+|\d+", text)
+            return float(m.group()) if m else None
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                wait = 5.0 * (attempt + 1)  # 5s, then 10s
+                print(f"    [RETRY {attempt + 1}] judge failed ({e}), waiting {wait:.0f}s")
+                time.sleep(wait)
+            else:
+                print(f"    [WARN] Judge call failed after {MAX_RETRIES} attempts: {e}")
+                return None
 
 
 def run_eval(gateway_url: str) -> tuple[float, int, dict[str, float]]:
@@ -142,7 +151,7 @@ def run_eval(gateway_url: str) -> tuple[float, int, dict[str, float]]:
                 f"{gateway_url}/search",
                 files={"file": ("q.jpg", io.BytesIO(image_bytes), "image/jpeg")},
                 data=search_data,
-                timeout=30,
+                timeout=60,
             )
             r.raise_for_status()
             matches = r.json().get("matches", [])[:3]
@@ -154,18 +163,23 @@ def run_eval(gateway_url: str) -> tuple[float, int, dict[str, float]]:
             print(f"  [WARN] no results for '{query_name}'")
             continue
 
-        scores = []
+        scores: list[float] = []
+        total_calls = 0
         for m in matches:
             result_img_url = m.get("image_url", "")
             if not result_img_url:
                 continue
+            total_calls += 1
             score = _judge(query_b64, result_img_url, gateway_url)
             if score is not None:
                 scores.append(score)
 
         if scores:
             avg = sum(scores) / len(scores)
-            print(f"  '{query_name}' [{category}]: {len(scores)} scores, avg={avg:.3f}")
+            success_note = ""
+            if total_calls > 0 and len(scores) / total_calls < 0.5:
+                success_note = f"  [WARN: only {len(scores)}/{total_calls} judge calls succeeded]"
+            print(f"  '{query_name}' [{category}]: {len(scores)}/{total_calls} scores, avg={avg:.3f}{success_note}")
             all_scores.extend(scores)
             category_scores.setdefault(category, []).extend(scores)
             evaluated += 1
@@ -200,18 +214,23 @@ def main():
     score, evaluated, per_category = run_eval(args.gateway_url)
 
     print(f"\n[CI EVAL] Evaluated {evaluated}/{n_queries} queries")
-    print(f"[CI EVAL] Per-category averages:")
-    for cat, avg in sorted(per_category.items()):
-        print(f"           {cat:12s}  {avg:.3f}")
     print(f"[CI EVAL] Overall avg judge score: {score:.4f}")
 
     if evaluated == 0:
-        print("❌ FAIL — no queries could be evaluated")
+        print("[FAIL] no queries could be evaluated")
         sys.exit(1)
 
     if args.set_baseline:
-        baseline = {"score": round(score, 4), "n_queries": evaluated, "model": _MODEL}
-        BASELINE_PATH.write_text(json.dumps(baseline, indent=2) + "\n", encoding="utf-8")
+        baseline_doc = {
+            "score":        round(score, 4),
+            "n_queries":    evaluated,
+            "model":        _MODEL,
+            "per_category": {cat: round(v, 4) for cat, v in sorted(per_category.items())},
+        }
+        BASELINE_PATH.write_text(json.dumps(baseline_doc, indent=2) + "\n", encoding="utf-8")
+        print(f"\n[CI EVAL] Per-category (new baseline):")
+        for cat, avg in sorted(per_category.items()):
+            print(f"           {cat:12s}  {avg:.3f}")
         print(f"\n[OK] Baseline saved to {BASELINE_PATH.name}: {score:.4f} (n={evaluated})")
         sys.exit(0)
 
@@ -220,11 +239,20 @@ def main():
         print("\n[WARN] No baseline file found. Run with --set-baseline first.")
         print("       Falling back to fixed threshold 0.65.")
         threshold = 0.65
+        baseline  = None
+        baseline_per_cat: dict[str, float] = {}
     else:
-        baseline_data = json.loads(BASELINE_PATH.read_text())
-        baseline      = baseline_data["score"]
-        threshold     = round(baseline - args.tolerance, 4)
+        baseline_data    = json.loads(BASELINE_PATH.read_text())
+        baseline         = baseline_data["score"]
+        baseline_per_cat = baseline_data.get("per_category", {})
+        threshold        = round(baseline - args.tolerance, 4)
         print(f"\n[CI EVAL] Baseline: {baseline:.4f}  tolerance: -{args.tolerance:.2f}  threshold: {threshold:.4f}")
+
+    print(f"\n[CI EVAL] Per-category vs baseline:")
+    for cat, avg in sorted(per_category.items()):
+        b     = baseline_per_cat.get(cat)
+        delta = f"  (delta {avg - b:+.3f})" if b is not None else ""
+        print(f"           {cat:12s}  {avg:.3f}{delta}")
 
     if score >= threshold:
         print(f"[PASS] {score:.4f} >= {threshold:.4f}")

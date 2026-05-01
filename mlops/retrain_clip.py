@@ -197,9 +197,26 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
 
         # ── Step 2: Build training pairs ──────────────────────────────────
         print("\n[RETRAIN] Step 2/5: Building training pairs...")
-        from build_training_pairs import build_pairs
+        import random as _random
+        from build_training_pairs import build_pairs, build_accessory_cross_pairs
         manifest_path = build_pairs()
-        n_pairs = sum(1 for _ in open(manifest_path)) - 2  # rough count
+
+        # Merge accessory cross-product pairs (oversampled 2× for effective weight ≈2×)
+        acc_client = _get_qdrant_client()
+        acc_pairs  = build_accessory_cross_pairs(PAIRS_CACHE_DIR, acc_client)
+        print(f"[RETRAIN] {len(acc_pairs)} accessory cross-product pairs — merging (2× oversample)")
+        if acc_pairs:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            manifest.extend(acc_pairs)
+            manifest.extend(acc_pairs)  # duplicate = effective weight ≈2× without changing trainer
+            _random.shuffle(manifest)
+            with open(manifest_path, "w") as f:
+                json.dump(manifest, f, indent=2)
+            mlflow.log_param("accessory_cross_pairs", len(acc_pairs))
+
+        with open(manifest_path) as f:
+            n_pairs = len(json.load(f))
         mlflow.log_param("training_pairs", n_pairs)
 
         # ── Step 3: Train ─────────────────────────────────────────────────
