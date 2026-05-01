@@ -98,6 +98,20 @@ def shoe_style_from_label(prompt_label: str) -> str:
 # =============================================================================
 _ACCESSORY_CATEGORIES = {"shoes", "hat", "bag"}
 
+# Style hint phrases for CLIP text encoder — used to sharpen accessory query vectors.
+# Fashion-CLIP's text space separates these well even when visual space does not.
+_SHOE_STYLE_HINTS = {
+    "sneaker": "sneaker trainer running shoe athletic casual footwear",
+    "boot":    "ankle boot chelsea boot combat boot knee high boot",
+    "heel":    "high heel stiletto pump court shoe kitten heel formal",
+    "sandal":  "sandal flat mule loafer ballet flat espadrille open toe",
+    "other":   "shoe footwear",
+}
+_BAG_HINT = "handbag shoulder bag tote crossbody clutch purse"
+_HAT_HINT = "hat cap headwear beret fedora bucket hat beanie"
+
+_HYBRID_ALPHA = 0.3  # weight for text component in hybrid vector (0 = visual-only)
+
 CATEGORY_ALIASES = {
     "top":        ["top", "shirt"],
     "sports_bra": ["sports_bra", "top", "shirt"],
@@ -404,7 +418,7 @@ class LocusVisualizer:
     # =========================================================================
     # PUBLIC: process_image() — search time, pre-cropped bytes
     # =========================================================================
-    def process_image(self, image_bytes, yolo_label="", darken=False, query_mode=False):
+    def process_image(self, image_bytes, yolo_label="", darken=False, query_mode=False, style_hint=""):
         t0 = time.time()
         try:
             input_image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
@@ -413,6 +427,18 @@ class LocusVisualizer:
 
             clip_input    = ImageEnhance.Brightness(input_image).enhance(0.3) if darken else input_image
             vector, category_tag, category_scores = self._clip_embed(clip_input, yolo_label, query_mode=query_mode)
+
+            # Hybrid vector at query time: mix visual + CLIP text(style_hint) for accessories.
+            if yolo_label in _ACCESSORY_CATEGORIES and style_hint and style_hint.strip():
+                try:
+                    text_vec = torch.tensor(self.encode_text(style_hint.strip()), dtype=torch.float32)
+                    vis_vec  = torch.tensor(vector, dtype=torch.float32)
+                    mixed    = (1.0 - _HYBRID_ALPHA) * vis_vec + _HYBRID_ALPHA * text_vec
+                    mixed    = mixed / mixed.norm(p=2)
+                    vector   = mixed.tolist()
+                    print(f"[HYBRID-QRY] style_hint='{style_hint[:50]}' mixed (α={_HYBRID_ALPHA})")
+                except Exception as _he:
+                    print(f"[HYBRID-QRY] fallback to visual-only: {_he}")
 
             buf = io.BytesIO()
             input_image.save(buf, format="PNG")
@@ -529,6 +555,20 @@ class LocusVisualizer:
                 crop.thumbnail((512, 512))
 
             vector_normal, _, _ = self._clip_embed(crop, final_category)
+
+            # Hybrid vector for accessories: mix visual + CLIP text(title).
+            # CLIP text space cleanly separates heel vs sneaker; visual space does not.
+            # Only applied when a title is available; falls back silently to visual-only.
+            if final_category in _ACCESSORY_CATEGORIES and title and title.strip():
+                try:
+                    text_vec      = torch.tensor(self.encode_text(title.strip()), dtype=torch.float32)
+                    vis_vec       = torch.tensor(vector_normal, dtype=torch.float32)
+                    mixed         = (1.0 - _HYBRID_ALPHA) * vis_vec + _HYBRID_ALPHA * text_vec
+                    mixed         = mixed / mixed.norm(p=2)
+                    vector_normal = mixed.tolist()
+                    print(f"[HYBRID-IDX] '{title[:50]}' ({final_category}): visual+text mixed (α={_HYBRID_ALPHA})")
+                except Exception as _he:
+                    print(f"[HYBRID-IDX] fallback to visual-only: {_he}")
 
             print(f"[INDEX]    '{title}' done in {time.time()-t0:.2f}s  "
                   f"cat={final_category}  box={box_source}")

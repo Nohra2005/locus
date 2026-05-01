@@ -56,14 +56,16 @@ async def detect(file: UploadFile = File(...)):
 
 @app.post("/vectorize")
 async def vectorize(
-    file:       UploadFile = File(...),
-    yolo_label: str        = Form(""),
-    darken:     str        = Form("false"),
-    query:      str        = Form("false"),
+    file:        UploadFile = File(...),
+    yolo_label:  str        = Form(""),
+    darken:      str        = Form("false"),
+    query:       str        = Form("false"),
+    style_hint:  str        = Form(""),
 ):
     """
     Search time. Expects ALREADY CROPPED image bytes — gateway crops before calling.
     Pass query=true when classifying a user-drawn crop (enables person-wearing prompts).
+    Pass style_hint with a descriptive phrase for accessories to enable hybrid vector mixing.
     """
     image_data    = await file.read()
     should_darken = darken.lower() == "true"
@@ -75,6 +77,7 @@ async def vectorize(
         yolo_label=yolo_label,
         darken=should_darken,
         query_mode=query_mode,
+        style_hint=style_hint,
     )
 
     if not vector:
