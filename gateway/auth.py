@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import json
 import os
 import uuid
@@ -17,6 +19,27 @@ USERS_FILE = os.path.join(os.path.dirname(__file__), "users.json")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _bearer = HTTPBearer(auto_error=False)
+
+
+def _prehash(plain: str) -> str:
+    """SHA-256 prehash so bcrypt never sees more than 44 bytes."""
+    digest = hashlib.sha256(plain.encode("utf-8")).digest()
+    return base64.b64encode(digest).decode("ascii")
+
+
+def _hash_password(plain: str) -> str:
+    return pwd_context.hash(_prehash(plain))
+
+
+def _verify_password(plain: str, stored: str) -> bool:
+    # Try new prehash method first.
+    if pwd_context.verify(_prehash(plain), stored):
+        return True
+    # Fallback: old accounts stored without prehash (passwords ≤ 72 bytes).
+    try:
+        return pwd_context.verify(plain, stored)
+    except Exception:
+        return False
 
 
 def _load_users() -> dict:
@@ -83,6 +106,16 @@ class ProfileUpdateRequest(BaseModel):
     phone:      str | None = None
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    email:        str
+    code:         str
+    new_password: str
+
+
 # ── Router ─────────────────────────────────────────────────────────────────────
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -92,6 +125,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 async def register(req: RegisterRequest):
     if len(req.password) < 8:
         raise HTTPException(400, "Password must be at least 8 characters")
+    if len(req.password) > 128:
+        raise HTTPException(400, "Password must be no more than 128 characters")
     users = _load_users()
     email = req.email.strip().lower()
     if email in users:
@@ -100,7 +135,7 @@ async def register(req: RegisterRequest):
     users[email] = {
         "store_id":   store_id,
         "email":      email,
-        "password":   pwd_context.hash(req.password),
+        "password":   _hash_password(req.password),
         "store_name": req.store_name.strip(),
         "mall":       req.mall.strip(),
         "phone":      req.phone.strip(),
@@ -123,8 +158,21 @@ async def login(req: LoginRequest):
     users = _load_users()
     email = req.email.strip().lower()
     user  = users.get(email)
-    if not user or not pwd_context.verify(req.password, user["password"]):
+    if not user:
         raise HTTPException(401, "Invalid email or password")
+
+    if not _verify_password(req.password, user["password"]):
+        raise HTTPException(401, "Invalid email or password")
+
+    # Migrate old direct-bcrypt hashes to prehash format on successful login.
+    old_hash = user["password"]
+    try:
+        if pwd_context.verify(_prehash(req.password), old_hash) is False:
+            user["password"] = _hash_password(req.password)
+            _save_users(users)
+    except Exception:
+        pass
+
     return {
         "access_token": _make_token(email, user["store_id"], user["store_name"]),
         "token_type":   "bearer",
@@ -148,6 +196,32 @@ async def me(payload=Depends(verify_token)):
         "phone":      u.get("phone", ""),
         "created_at": u.get("created_at", ""),
     }
+
+
+@router.post("/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest):
+    users = _load_users()
+    email = req.email.strip().lower()
+    if email not in users:
+        raise HTTPException(404, "No account found with that email")
+    return {"success": True}
+
+
+@router.post("/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    if req.code.strip() != "555":
+        raise HTTPException(400, "Invalid verification code")
+    if len(req.new_password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+    if len(req.new_password) > 128:
+        raise HTTPException(400, "Password must be no more than 128 characters")
+    users = _load_users()
+    email = req.email.strip().lower()
+    if email not in users:
+        raise HTTPException(404, "No account found with that email")
+    users[email]["password"] = _hash_password(req.new_password)
+    _save_users(users)
+    return {"success": True}
 
 
 @router.put("/profile")

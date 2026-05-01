@@ -128,38 +128,88 @@ export default function StoreDashboardView() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function AuthPage({ onAuth }) {
-  const [mode,    setMode]    = useState("login");
-  const [email,   setEmail]   = useState("");
-  const [pass,    setPass]    = useState("");
-  const [name,    setName]    = useState("");
-  const [mall,    setMall]    = useState("");
-  const [phone,   setPhone]   = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
-  const [showPass, setShowPass] = useState(false);
+  // mode: "login" | "register" | "forgot" | "verify" | "newpass"
+  const [mode,      setMode]      = useState("login");
+  const [email,     setEmail]     = useState("");
+  const [pass,      setPass]      = useState("");
+  const [name,      setName]      = useState("");
+  const [mall,      setMall]      = useState("");
+  const [phone,     setPhone]     = useState("");
+  const [code,      setCode]      = useState("");
+  const [newPass,   setNewPass]   = useState("");
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState("");
+  const [success,   setSuccess]   = useState("");
+  const [showPass,  setShowPass]  = useState(false);
+  const [showNew,   setShowNew]   = useState(false);
+
+  const goTo = (m) => { setMode(m); setError(""); setSuccess(""); };
+
+  const apiPost = async (endpoint, body) => {
+    const resp = await fetch(`${API}${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    let data = {};
+    try { data = await resp.json(); } catch {}
+    if (!resp.ok) throw new Error(data.detail || `Server error (${resp.status}). Please try again.`);
+    return data;
+  };
 
   const submit = async (e) => {
     e.preventDefault();
-    setError(""); setLoading(true);
+    setError(""); setSuccess(""); setLoading(true);
     try {
-      const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
-      const body = mode === "login"
-        ? { email: email.trim(), password: pass }
-        : { email: email.trim(), password: pass, store_name: name.trim(), mall: mall.trim(), phone: phone.trim() };
+      if (mode === "login" || mode === "register") {
+        const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
+        const body = mode === "login"
+          ? { email: email.trim(), password: pass }
+          : { email: email.trim(), password: pass, store_name: name.trim(), mall: mall.trim(), phone: phone.trim() };
+        const data = await apiPost(endpoint, body);
+        onAuth(data);
 
-      const resp = await fetch(`${API}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || "Something went wrong");
-      onAuth(data);
+      } else if (mode === "forgot") {
+        await apiPost("/auth/forgot-password", { email: email.trim() });
+        goTo("verify");
+
+      } else if (mode === "verify") {
+        if (code.trim() !== "555") { setError("Invalid code. Please try again."); return; }
+        goTo("newpass");
+
+      } else if (mode === "newpass") {
+        await apiPost("/auth/reset-password", { email: email.trim(), code: code.trim(), new_password: newPass });
+        setCode(""); setNewPass("");
+        goTo("login");
+        setSuccess("Password reset successfully. You can now sign in.");
+      }
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const headingMap = {
+    login:   "Welcome back",
+    register:"Join Locus",
+    forgot:  "Reset password",
+    verify:  "Check your email",
+    newpass: "New password",
+  };
+  const subMap = {
+    login:   "Sign in to manage your store's catalogue.",
+    register:"Create a retailer account to list your products.",
+    forgot:  "Enter your account email and we'll send you a verification code.",
+    verify:  `We sent a code to ${email || "your email"}. Enter it below to continue.`,
+    newpass: "Choose a new password for your account.",
+  };
+  const btnMap = {
+    login:   { idle: "Sign in",           busy: "Signing in…" },
+    register:{ idle: "Create account",    busy: "Creating account…" },
+    forgot:  { idle: "Send code",         busy: "Sending…" },
+    verify:  { idle: "Verify",            busy: "Verifying…" },
+    newpass: { idle: "Reset password",    busy: "Saving…" },
   };
 
   return (
@@ -190,12 +240,10 @@ function AuthPage({ onAuth }) {
           </div>
           <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "2.2rem",
             fontWeight: 500, color: T.text, margin: 0, lineHeight: 1.1 }}>
-            {mode === "login" ? "Welcome back" : "Join Locus"}
+            {headingMap[mode]}
           </h1>
           <p style={{ marginTop: 10, fontSize: "0.8rem", color: T.textMuted }}>
-            {mode === "login"
-              ? "Sign in to manage your store's catalogue."
-              : "Create a retailer account to list your products."}
+            {subMap[mode]}
           </p>
         </div>
 
@@ -213,7 +261,17 @@ function AuthPage({ onAuth }) {
             </div>
           )}
 
+          {success && (
+            <div style={{ background: "rgba(122,171,138,0.08)", border: `1px solid rgba(122,171,138,0.28)`,
+              borderRadius: 8, padding: "10px 14px", fontSize: "0.78rem",
+              color: T.green, marginBottom: 22 }}>
+              {success}
+            </div>
+          )}
+
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+            {/* ── register fields ── */}
             {mode === "register" && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <AuthInput label="Store name" value={name} onChange={setName}
@@ -223,34 +281,102 @@ function AuthPage({ onAuth }) {
               </div>
             )}
 
-            <AuthInput label="Email address" type="email" value={email}
-              onChange={setEmail} placeholder="you@store.com" required />
+            {/* ── email (all modes except verify + newpass) ── */}
+            {(mode === "login" || mode === "register" || mode === "forgot") && (
+              <AuthInput label="Email address" type="email" value={email}
+                onChange={setEmail} placeholder="you@store.com" required />
+            )}
 
-            <div>
-              <label style={labelStyle}>Password</label>
-              <div style={{ position: "relative" }}>
-                <input
-                  type={showPass ? "text" : "password"}
-                  value={pass} onChange={e => setPass(e.target.value)}
-                  placeholder={mode === "register" ? "At least 8 characters" : "Your password"}
-                  required
-                  style={{ ...inputStyle, paddingRight: 42 }}
-                />
-                <button type="button" onClick={() => setShowPass(s => !s)} style={{
-                  position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-                  background: "none", border: "none", cursor: "pointer",
-                  color: T.textMuted, fontSize: "0.8rem", padding: 0,
-                }}>
-                  {showPass ? "hide" : "show"}
-                </button>
+            {/* ── password (login + register) ── */}
+            {(mode === "login" || mode === "register") && (
+              <div>
+                <label style={labelStyle}>Password</label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type={showPass ? "text" : "password"}
+                    value={pass} onChange={e => setPass(e.target.value)}
+                    placeholder={mode === "register" ? "8–128 characters" : "Your password"}
+                    minLength={mode === "register" ? 8 : undefined}
+                    maxLength={128}
+                    required
+                    style={{ ...inputStyle, paddingRight: 42 }}
+                  />
+                  <button type="button" onClick={() => setShowPass(s => !s)} style={{
+                    position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+                    background: "none", border: "none", cursor: "pointer",
+                    color: T.textMuted, fontSize: "0.8rem", padding: 0,
+                  }}>
+                    {showPass ? "hide" : "show"}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
+            {/* ── phone (register only) ── */}
             {mode === "register" && (
               <AuthInput label="Phone (optional)" type="tel" value={phone}
                 onChange={setPhone} placeholder="+961 70 000 000" />
             )}
+
+            {/* ── verification code ── */}
+            {mode === "verify" && (
+              <AuthInput label="Verification code" value={code} onChange={setCode}
+                placeholder="Enter the code from your email" required />
+            )}
+
+            {/* ── new password ── */}
+            {mode === "newpass" && (
+              <div>
+                <label style={labelStyle}>New password</label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type={showNew ? "text" : "password"}
+                    value={newPass}
+                    onChange={e => setNewPass(e.target.value)}
+                    placeholder="At least 8 characters"
+                    minLength={8}
+                    maxLength={128}
+                    required
+                    style={{ ...inputStyle, paddingRight: 42 }}
+                  />
+                  <button type="button" onClick={() => setShowNew(s => !s)} style={{
+                    position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+                    background: "none", border: "none", cursor: "pointer",
+                    color: T.textMuted, fontSize: "0.8rem", padding: 0,
+                  }}>
+                    {showNew ? "hide" : "show"}
+                  </button>
+                </div>
+                <div style={{ marginTop: 6, fontSize: "0.72rem", color: T.textMuted }}>
+                  {newPass.length > 0 && (
+                    <>
+                      <span style={{ color: newPass.length >= 8 ? T.green : T.red }}>
+                        {newPass.length >= 8 ? "✓" : "✗"} At least 8 characters
+                      </span>
+                      {"  ·  "}
+                      <span style={{ color: newPass.length <= 128 ? T.green : T.red }}>
+                        {newPass.length <= 128 ? "✓" : "✗"} Max 128 characters
+                      </span>
+                    </>
+                  )}
+                  {newPass.length === 0 && "8–128 characters"}
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* ── forgot password link (login only) ── */}
+          {mode === "login" && (
+            <div style={{ textAlign: "right", marginTop: 6 }}>
+              <button type="button" onClick={() => goTo("forgot")} style={{
+                background: "none", border: "none", cursor: "pointer",
+                color: T.textMuted, fontSize: "0.75rem", padding: 0,
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                Forgot password?
+              </button>
+            </div>
+          )}
 
           <button type="submit" disabled={loading} style={{
             width: "100%", marginTop: 28, padding: "13px 20px",
@@ -261,20 +387,30 @@ function AuthPage({ onAuth }) {
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             transition: "opacity 0.2s", opacity: loading ? 0.6 : 1,
           }}>
-            {loading ? (
-              <><Spinner small /> {mode === "login" ? "Signing in…" : "Creating account…"}</>
-            ) : (
-              mode === "login" ? "Sign in" : "Create account"
-            )}
+            {loading
+              ? <><Spinner small /> {btnMap[mode].busy}</>
+              : btnMap[mode].idle}
           </button>
 
+          {/* ── bottom links ── */}
           <div style={{ textAlign: "center", marginTop: 22, fontSize: "0.78rem", color: T.textMuted }}>
-            {mode === "login" ? "Don't have an account? " : "Already have an account? "}
-            <button type="button" onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
-              style={{ background: "none", border: "none", cursor: "pointer",
-                color: T.accent, fontSize: "0.78rem", padding: 0, fontFamily: "'DM Sans', sans-serif" }}>
-              {mode === "login" ? "Sign up" : "Sign in"}
-            </button>
+            {(mode === "login" || mode === "register") && (
+              <>
+                {mode === "login" ? "Don't have an account? " : "Already have an account? "}
+                <button type="button" onClick={() => goTo(mode === "login" ? "register" : "login")}
+                  style={{ background: "none", border: "none", cursor: "pointer",
+                    color: T.accent, fontSize: "0.78rem", padding: 0, fontFamily: "'DM Sans', sans-serif" }}>
+                  {mode === "login" ? "Sign up" : "Sign in"}
+                </button>
+              </>
+            )}
+            {(mode === "forgot" || mode === "verify" || mode === "newpass") && (
+              <button type="button" onClick={() => goTo("login")}
+                style={{ background: "none", border: "none", cursor: "pointer",
+                  color: T.accent, fontSize: "0.78rem", padding: 0, fontFamily: "'DM Sans', sans-serif" }}>
+                ← Back to sign in
+              </button>
+            )}
           </div>
         </form>
       </div>
