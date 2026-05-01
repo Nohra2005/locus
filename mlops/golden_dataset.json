@@ -1252,19 +1252,12 @@
     "query_name": "black cap",
     "query_category_tag": "hat",
     "relevant_product_ids": [
-      "ee3da7e3-9516-543c-96eb-5a79a7a25fe8",
       "4327840b-94d7-5d68-ae2c-e48292064a21",
       "e97d4fbc-496c-5ed2-862d-768c7d26acbe",
       "2818e90d-e5f5-5880-860a-13ac59dd8767",
       "83266ad5-4d9f-5c43-be32-626fc4e22369"
     ],
     "relevant_info": [
-      {
-        "product_id": "ee3da7e3-9516-543c-96eb-5a79a7a25fe8",
-        "name": "black cap",
-        "image_url": "http://localhost:8000/golden-dataset/images/9b373d3ff9ddc0942036.jpeg",
-        "store_name": "golden_dataset"
-      },
       {
         "product_id": "4327840b-94d7-5d68-ae2c-e48292064a21",
         "name": "black cap",
@@ -1678,5 +1671,149 @@
     "n_relevant": 5,
     "annotated_by": "vector_neighbors",
     "created_at": "2026-04-30T16:02:44.862026+00:00"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/4bafba6bc66653c5ba26.jpeg",
+    "query_name": "Slouchy Ribbed Knit Beanie",
+    "query_category_tag": "hat",
+    "relevant_product_ids": [
+      "4bafba6b-c666-53c5-ba26-35698bb89d4e",
+      "bb65586f-db68-5df7-9952-c74453cb8a7f",
+      "d3f2be8e-e5ce-526e-b12f-b084a4b2e6f5",
+      "b2828101-fc49-55fa-bfd9-fd6965c8f44a",
+      "95508757-3c68-59a3-bd25-c4b791e33e9d"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "4bafba6b-c666-53c5-ba26-35698bb89d4e",
+        "name": "Slouchy Ribbed Knit Beanie",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00497439-06-1_front.jpg?v=1751581080",
+        "store_name": "qdrant"
+      },
+      {
+        "product_id": "bb65586f-db68-5df7-9952-c74453cb8a7f",
+        "name": "Ribbed Knit Beanie",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00501776-01-1_front.jpg?v=1751582319",
+        "store_name": "Forever21"
+      },
+      {
+        "product_id": "d3f2be8e-e5ce-526e-b12f-b084a4b2e6f5",
+        "name": "Ribbed Foldover Beanie",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00493728-04-1_front.jpg?v=1751580455",
+        "store_name": "Forever21"
+      },
+      {
+        "product_id": "b2828101-fc49-55fa-bfd9-fd6965c8f44a",
+        "name": "Ribbed Foldover Beanie",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-01360093-01-1_front.jpg?v=1751598270",
+        "store_name": "Forever21"
+      },
+      {
+        "product_id": "95508757-3c68-59a3-bd25-c4b791e33e9d",
+        "name": "Long Knitted Beanie Hat",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/860096_source_1670874382_866a05b3-4d3f-47d0-8604-6becb4136a26.jpg?v=1753200921",
+        "store_name": "Forever21"
+      }
+    ],
+    "source": "add_hat_queries",
+    "n_relevant": 5,
+    "annotated_by": "vector_neighbors",
+    "created_at": "2026-05-01T07:29:22.413053+00:00"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/3a44a625c1d751ae9492.jpeg",
+    "query_name": "Classic Beret",
+    "query_category_tag": "hat",
+    "relevant_product_ids": [
+      "3a44a625-c1d7-51ae-9492-8d27e65e5fa8",
+      "4bafba6b-c666-53c5-ba26-35698bb89d4e",
+      "c0390d74-62e4-5858-b42d-4bb44b10c33d",
+      "286897eb-586d-5142-8ac8-7a280be5f7dc",
+      "b0a16a82-8183-5ce5-89f3-b049d1dcbbeb"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "3a44a625-c1d7-51ae-9492-8d27e65e5fa8",
+        "name": "Classic Beret",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-01337025-03-1_front.jpg?v=1751595486",
+        "store_name": "qdrant"
+      },
+      {
+        "product_id": "4bafba6b-c666-53c5-ba26-35698bb89d4e",
+        "name": "Slouchy Ribbed Knit Beanie",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00497439-06-1_front.jpg?v=1751581080",
+        "store_name": "Forever21"
+      },
+      {
+        "product_id": "c0390d74-62e4-5858-b42d-4bb44b10c33d",
+        "name": "Merino Wool Beanie",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/841837_source_1669755461_a0a70e35-b6be-4f9e-a220-c0905a847252.jpg?v=1753200963",
+        "store_name": "Forever21"
+      },
+      {
+        "product_id": "286897eb-586d-5142-8ac8-7a280be5f7dc",
+        "name": "HELENA WOOL MIX CHECKED CAP",
+        "image_url": "https://cdn.shopify.com/s/files/1/0283/6715/9393/files/655554683_x.jpg?v=1757517777",
+        "store_name": "Maison123"
+      },
+      {
+        "product_id": "b0a16a82-8183-5ce5-89f3-b049d1dcbbeb",
+        "name": "Long Knitted Beanie Hat",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/860095_source_1670874375_4feff80c-c41c-4ea2-a51b-5cfce01baedd.jpg?v=1753200922",
+        "store_name": "Forever21"
+      }
+    ],
+    "source": "add_hat_queries",
+    "n_relevant": 5,
+    "annotated_by": "vector_neighbors",
+    "created_at": "2026-05-01T07:29:22.972852+00:00"
+  },
+  {
+    "query_image_url": "http://localhost:8000/golden-dataset/images/0b470a2e86e9597da48d.jpeg",
+    "query_name": "Nirvana Baseball Trucker Cap",
+    "query_category_tag": "hat",
+    "relevant_product_ids": [
+      "0b470a2e-86e9-597d-a48d-dbb273103c77",
+      "17368b23-d826-587b-8d43-a6246e2a28bd",
+      "c963b9a2-7c3a-59e5-9e97-5ac2a7bb35f8",
+      "66e2cfd2-9db4-5ce1-a748-d7ae8d416473",
+      "717cae34-c0ee-59a0-99ce-0a67bf21b46e"
+    ],
+    "relevant_info": [
+      {
+        "product_id": "0b470a2e-86e9-597d-a48d-dbb273103c77",
+        "name": "Nirvana Baseball Trucker Cap",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00479444-03-1_front.jpg?v=1751577890",
+        "store_name": "qdrant"
+      },
+      {
+        "product_id": "17368b23-d826-587b-8d43-a6246e2a28bd",
+        "name": "Lover Friend Trucker Cap",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00464216-01-1_front.jpg?v=1751576086",
+        "store_name": "Forever21"
+      },
+      {
+        "product_id": "c963b9a2-7c3a-59e5-9e97-5ac2a7bb35f8",
+        "name": "Motley Crue Graphic Trucker Hat",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00481549-01-1_front.jpg?v=1751578189",
+        "store_name": "Forever21"
+      },
+      {
+        "product_id": "66e2cfd2-9db4-5ce1-a748-d7ae8d416473",
+        "name": "Los Angeles Baseball Trucker Cap",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00494075-01-1_front.jpg?v=1751580519",
+        "store_name": "Forever21"
+      },
+      {
+        "product_id": "717cae34-c0ee-59a0-99ce-0a67bf21b46e",
+        "name": "Kids Trucker Hat (Girls + Boys)",
+        "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00461293-02-1_front.jpg?v=1751575499",
+        "store_name": "Forever21"
+      }
+    ],
+    "source": "add_hat_queries",
+    "n_relevant": 5,
+    "annotated_by": "vector_neighbors",
+    "created_at": "2026-05-01T07:29:23.659795+00:00"
   }
 ]

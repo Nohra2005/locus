@@ -60,12 +60,10 @@ services:
       - "8001:8001"
     volumes:
       - ./visual_engine:/app
-      - ${USERPROFILE}/.cache/huggingface:/root/.cache/huggingface
-      - ${USERPROFILE}/.cache/clip:/root/.cache/clip
+      - hf_cache:/root/.cache/huggingface
+      - clip_cache:/root/.cache/clip
     environment:
       - TRANSFORMERS_CACHE=/root/.cache/huggingface
-      - TRANSFORMERS_OFFLINE=1
-      - HF_DATASETS_OFFLINE=1
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -148,6 +146,9 @@ services:
       - gateway
       - visual_engine
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
   # ── 7. MLops Automated Retraining ────────────────────────────────
   # Runs retrain_clip.py on a 48h schedule.
@@ -163,7 +164,7 @@ services:
     volumes:
       - ./mlops:/mlops
       - ./visual_engine:/visual_engine
-      - ${USERPROFILE}/.cache/huggingface:/root/.cache/huggingface
+      - hf_cache:/root/.cache/huggingface
     environment:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_API_KEY=${QDRANT_API_KEY}
@@ -236,3 +237,5 @@ volumes:
   qdrant_data:  # uncomment qdrant service block above to use local mode
   mlflow_data:
   grafana_data:
+  hf_cache:
+  clip_cache:

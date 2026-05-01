@@ -18,6 +18,7 @@ import io
 import json
 import math
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -107,7 +108,7 @@ def _first_hit(result_ids: list[str], relevant: set[str]) -> int | None:
 
 # ── Evaluation loop ───────────────────────────────────────────────────────────
 
-def run(gateway_url: str, ks: list[int], ndcg_k: int) -> dict:
+def run(gateway_url: str, ks: list[int], ndcg_k: int, delay: float = 0.0) -> dict:
     dataset  = json.loads(GOLDEN_DATASET_PATH.read_text())
     per_query: list[dict] = []
     cat_data: dict[str, list[dict]] = {}
@@ -135,6 +136,8 @@ def run(gateway_url: str, ks: list[int], ndcg_k: int) -> dict:
         print(f"  [{i+1:02d}] {cat:12s} | {name[:48]}", end="", flush=True)
 
         result_ids = _search(image_bytes, gateway_url, cat, shoe_style)
+        if delay > 0:
+            time.sleep(delay)
 
         first_rank = _first_hit(result_ids, rel_ids)
         mrr_score  = _mrr(result_ids, rel_ids)
@@ -210,7 +213,7 @@ def print_report(data: dict) -> None:
 
     hits_at5  = sum(1 for r in results if r["recall"].get(5, 0) > 0)
     success_r = hits_at5 / n_eval if n_eval else 0.0
-    print(f"\nSuccess rate (≥1 hit in top 5):  {hits_at5}/{n_eval}  ({success_r:.1%})")
+    print(f"\nSuccess rate (>=1 hit in top 5):  {hits_at5}/{n_eval}  ({success_r:.1%})")
 
     # ── Rank distribution ─────────────────────────────────────────────────────
     ranks  = [r["first_rank"] for r in results if r["first_rank"] is not None]
@@ -229,7 +232,7 @@ def print_report(data: dict) -> None:
     header  = f"\n{'CATEGORY':<14}"
     for k in show_ks:
         header += f"  R@{k:<2}"
-    header += f"  {'MRR':>5}  NDCG@{ndcg_k}  {'1st≤5':>5}  N"
+    header += f"  {'MRR':>5}  NDCG@{ndcg_k}  {'1st<=5':>6}  N"
     print(header)
     print("-" * (14 + 6 * len(show_ks) + 5 + 8 + 6 + 4))
 
@@ -274,16 +277,19 @@ def main() -> None:
                         help="K for NDCG computation (default: 5)")
     parser.add_argument("--json",        metavar="FILE", default=None,
                         help="Also write raw results as JSON to this file")
+    parser.add_argument("--delay",       type=float, default=0.0,
+                        help="Seconds to sleep between queries (use 7 to stay under 10/min rate limit)")
     args = parser.parse_args()
 
     ks   = [int(x.strip()) for x in args.k.split(",")]
-    data = run(args.gateway_url, ks, args.ndcg_k)
-    print_report(data)
+    data = run(args.gateway_url, ks, args.ndcg_k, delay=args.delay)
 
     if args.json:
         out = Path(args.json)
         out.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
         print(f"\n[EVAL] Raw results saved to {out}")
+
+    print_report(data)
 
     evaluated = data["evaluated"]
     if evaluated == 0:

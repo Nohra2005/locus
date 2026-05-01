@@ -54,6 +54,19 @@ _BAG_HINT = "handbag shoulder bag tote crossbody clutch purse"
 _HAT_HINT = "hat cap headwear beret fedora bucket hat beanie"
 
 
+def _shoe_style_from_name(name: str) -> str:
+    lwr = name.lower()
+    if any(k in lwr for k in ("sneaker", "trainer", "running", "platform", "wedge", "clog", "chunky")):
+        return "sneaker"
+    if any(k in lwr for k in ("boot", "bottine", "botte")):
+        return "boot"
+    if any(k in lwr for k in ("heel", "pump", "stiletto", "kitten")):
+        return "heel"
+    if any(k in lwr for k in ("sandal", "loafer", "flat", "mule", "espadrille", "ballet")):
+        return "sandal"
+    return "other"
+
+
 def _cleanup_judge_scores() -> None:
     cutoff = _time_module.monotonic() - _JUDGE_TTL
     stale  = [sid for sid, ts in _judge_timestamps.items() if ts < cutoff]
@@ -1083,7 +1096,6 @@ async def track_event(req: TrackEventRequest):
 # ── Detect ─────────────────────────────────────────────────────────────────────
 
 @app.post("/detect")
-@limiter.limit("5/minute")
 async def detect_items(request: Request, file: UploadFile = File(...)):
     image_bytes = await file.read()
     async with httpx.AsyncClient() as http:
@@ -1264,7 +1276,6 @@ async def classify_crop(
 # ── Search ─────────────────────────────────────────────────────────────────────
 
 @app.post("/search")
-@limiter.limit("10/minute")
 async def search_items(
     request:            Request,
     background_tasks:   BackgroundTasks,
@@ -2799,7 +2810,12 @@ async def rebuild_golden_dataset():
                     vis = await http.post(
                         f"{VISUAL_URL}/vectorize",
                         files={"file": ("img.jpg", img_bytes, "image/jpeg")},
-                        data={"yolo_label": cat, "darken": "false"},
+                        data={"yolo_label": cat, "darken": "false", "style_hint": (
+                        _HAT_HINT if cat == "hat" else
+                        _BAG_HINT if cat == "bag" else
+                        _SHOE_STYLE_HINTS.get(_shoe_style_from_name(item_name)) if cat == "shoes" else
+                        ""
+                    )},
                         timeout=60.0,
                     )
                     vis.raise_for_status()
@@ -2810,22 +2826,21 @@ async def rebuild_golden_dataset():
                         failed += 1
                         continue
 
+                    payload = {
+                        "name":         item_name,
+                        "store_name":   "golden_dataset",
+                        "mall_name":    "golden_dataset",
+                        "image_url":    img_url,
+                        "category_tag": cat,
+                        "price":        "",
+                        "product_id":   pid,
+                        "is_golden":    True,
+                    }
+                    if cat == "shoes":
+                        payload["shoe_style"] = _shoe_style_from_name(item_name)
                     client.upsert(
                         collection_name=COLLECTION_NAME,
-                        points=[PointStruct(
-                            id=pid,
-                            vector=vector,
-                            payload={
-                                "name":         item_name,
-                                "store_name":   "golden_dataset",
-                                "mall_name":    "golden_dataset",
-                                "image_url":    img_url,
-                                "category_tag": cat,
-                                "price":        "",
-                                "product_id":   pid,
-                                "is_golden":    True,
-                            },
-                        )]
+                        points=[PointStruct(id=pid, vector=vector, payload=payload)]
                     )
                     indexed += 1
                 except Exception as e:
