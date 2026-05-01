@@ -42,6 +42,7 @@ mlops/vss_cache.json
 # ── Gateway runtime state ─────────────────────────────────────────────────────
 # Written at runtime by the gateway process — not source code.
 gateway/flagged.json
+gateway/users.json
 
 # ── LoRA retraining artifacts ─────────────────────────────────────────────────
 # Training runs, cached image pairs, and promoted model weights are large

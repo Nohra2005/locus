@@ -2,7 +2,7 @@
   "title": "Locus \u00e2\u20ac\u201d Admin Dashboard",
   "uid": "locus-main",
   "schemaVersion": 38,
-  "version": 5,
+  "version": 6,
   "refresh": "15s",
   "timezone": "browser",
   "tags": [
@@ -5375,7 +5375,7 @@
     {
       "id": 1200,
       "type": "row",
-      "title": "Store Management - Registered Accounts",
+      "title": "Store Admin — Registry & Management",
       "collapsed": false,
       "gridPos": {
         "x": 0,
@@ -5547,25 +5547,118 @@
       }
     },
     {
-      "id": 1213,
-      "type": "text",
-      "title": "Admin API - Store Management",
+      "id": 1230,
+      "type": "stat",
+      "title": "Onboarding Rate",
+      "description": "Percentage of registered stores that have at least 1 product indexed.",
       "gridPos": {
         "x": 12,
         "y": 206,
-        "w": 12,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "count(locus_store_items_total > 0) / locus_stores_registered_total * 100",
+          "legendFormat": "Onboarded %",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "yellow", "value": 50 },
+              { "color": "green", "value": 80 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 1231,
+      "type": "stat",
+      "title": "Missing Info",
+      "description": "Stores where product data is incomplete — missing name, image URL, or location.",
+      "gridPos": {
+        "x": 16,
+        "y": 206,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_stores_missing_info_total",
+          "legendFormat": "Missing",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 3 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 1213,
+      "type": "text",
+      "title": "Admin API",
+      "gridPos": {
+        "x": 20,
+        "y": 206,
+        "w": 4,
         "h": 5
       },
       "options": {
         "mode": "html",
-        "content": "<div style=\"font-family:monospace;font-size:12px;line-height:1.7;padding:6px\"><b style=\"font-size:13px\">Store Admin API</b> <span style=\"color:#888\">(X-Admin-Key header required)</span><br/><br/><span style=\"color:#6bf\">GET</span>  /admin/stores - list all stores and account info<br/><span style=\"color:#f96\">POST</span> /admin/stores/{store_id}/reset-password - reset a store password<br/><span style=\"color:#f66\">DEL</span>  /admin/stores/{store_id} - remove store account<br/><br/><a href=\"http://localhost:8000/admin/stores\" target=\"_blank\" style=\"background:#1e6fd9;color:#fff;padding:3px 10px;border-radius:4px;text-decoration:none\">Open Store List</a>  <a href=\"http://localhost:8000/docs\" target=\"_blank\" style=\"background:#444;color:#fff;padding:3px 10px;border-radius:4px;text-decoration:none\">API Docs</a></div>"
+        "content": "<div style=\"font-family:monospace;font-size:11px;line-height:1.6;padding:4px\"><b>Admin API</b> <span style=\"color:#888;font-size:10px\">(X-Admin-Key required)</span><br/><br/><span style=\"color:#6bf\">GET</span> /admin/stores<br/><span style=\"color:#f96\">POST</span> /admin/stores/{id}/reset-password<br/><span style=\"color:#f66\">DEL</span> /admin/stores/{id}<br/><br/><a href=\"http://localhost:8000/admin/stores\" target=\"_blank\" style=\"background:#1e6fd9;color:#fff;padding:2px 8px;border-radius:3px;text-decoration:none;font-size:10px\">Store List</a> <a href=\"http://localhost:8000/docs\" target=\"_blank\" style=\"background:#444;color:#fff;padding:2px 8px;border-radius:3px;text-decoration:none;font-size:10px\">API Docs</a></div>"
       }
     },
     {
       "id": 1220,
       "type": "table",
       "title": "Store Directory - All Registered Accounts",
-      "description": "All store accounts. Refreshed every 30s. Shows email, mall, phone, store ID. Passwords are never exposed.",
+      "description": "All store accounts. Refreshed every 30s. Email is first — click any address to open a mailto link.",
       "gridPos": {
         "x": 0,
         "y": 211,
@@ -5607,15 +5700,15 @@
               "Value": true
             },
             "indexByName": {
-              "store_name": 0,
-              "email": 1,
+              "email": 0,
+              "store_name": 1,
               "mall": 2,
               "phone": 3,
               "store_id": 4
             },
             "renameByName": {
-              "store_name": "Store Name",
               "email": "Email",
+              "store_name": "Store Name",
               "mall": "Mall / Location",
               "phone": "Phone",
               "store_id": "Store ID"
@@ -5635,6 +5728,21 @@
             },
             "properties": [
               {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "dark-blue"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 260
+              },
+              {
                 "id": "links",
                 "value": [
                   {
@@ -5653,15 +5761,8 @@
             },
             "properties": [
               {
-                "id": "custom.displayMode",
-                "value": "color-background-solid"
-              },
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "dark-blue"
-                }
+                "id": "custom.width",
+                "value": 180
               }
             ]
           }
@@ -5673,8 +5774,265 @@
         },
         "sortBy": [
           {
-            "displayName": "Store Name",
+            "displayName": "Email",
             "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 1243,
+      "type": "table",
+      "title": "Store Emails — Quick Reference",
+      "description": "Focused view: store name and email only. Sorted alphabetically. Click email to open mailto.",
+      "gridPos": {
+        "x": 0,
+        "y": 233,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_store_info > 0",
+          "instant": true,
+          "legendFormat": "__auto",
+          "refId": "A"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "Value #A": true,
+              "Value": true,
+              "mall": true,
+              "phone": true,
+              "store_id": true
+            },
+            "indexByName": {
+              "store_name": 0,
+              "email": 1
+            },
+            "renameByName": {
+              "store_name": "Store",
+              "email": "Email"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "string"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Email"
+            },
+            "properties": [
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "dark-blue"
+                }
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Send email",
+                    "url": "mailto:${__value.text}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Store",
+            "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 1240,
+      "type": "bargauge",
+      "title": "Products per Store",
+      "description": "Total indexed products per registered store. Red = empty, green = well-stocked (10+).",
+      "gridPos": {
+        "x": 0,
+        "y": 223,
+        "w": 14,
+        "h": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sort_desc(locus_store_items_total)",
+          "legendFormat": "{{store_name}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color",
+        "showUnfilled": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": 0 },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 10 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        }
+      }
+    },
+    {
+      "id": 1241,
+      "type": "piechart",
+      "title": "Stores by Mall / Location",
+      "description": "Distribution of registered stores across mall locations.",
+      "gridPos": {
+        "x": 14,
+        "y": 223,
+        "w": 5,
+        "h": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "count by (mall) (locus_store_info > 0)",
+          "legendFormat": "{{mall}}",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "pieType": "donut",
+        "displayLabels": ["name", "value"],
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" }
+        }
+      }
+    },
+    {
+      "id": 1242,
+      "type": "piechart",
+      "title": "Onboarding Status",
+      "description": "Active stores (have products) vs Empty stores (no products uploaded yet).",
+      "gridPos": {
+        "x": 19,
+        "y": 223,
+        "w": 5,
+        "h": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "count(locus_store_items_total > 0)",
+          "legendFormat": "Active",
+          "refId": "A",
+          "instant": true
+        },
+        {
+          "expr": "locus_stores_registered_total - count(locus_store_items_total > 0) or vector(0)",
+          "legendFormat": "Empty",
+          "refId": "B",
+          "instant": true
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "pieType": "donut",
+        "displayLabels": ["name", "percent"],
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Active" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Empty" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+            ]
           }
         ]
       }
