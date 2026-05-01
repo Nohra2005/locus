@@ -121,6 +121,28 @@ const GLOBAL_CSS = `
   .fade-up { animation: fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
   .fade-in { animation: fadeIn 0.3s ease forwards; }
 
+  @keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position:  400px 0; }
+  }
+  .shimmer-box {
+    background: linear-gradient(90deg, ${T.bgDeep} 25%, ${T.border} 50%, ${T.bgDeep} 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.4s infinite linear;
+  }
+
+  .discover-scroll {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 4px;
+  }
+  .discover-scroll::-webkit-scrollbar { display: none; }
+
   .font-serif {
     font-family: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
   }
@@ -472,6 +494,49 @@ const CLOTH_EMOJIS = [
   "🧤","👗","👜","🧥","👠","👗","👒","🧥","👗","👟",
 ];
 
+function LocusLogo({ layout = "stacked", markSize = 48, fontSize = "1rem", color, accent, style }) {
+  const c = color ?? T.text;
+  const a = accent ?? T.accent;
+  const sw = 1.2;
+
+  const mark = (
+    <svg width={markSize} height={markSize} viewBox="0 0 48 48" fill="none">
+      <circle cx="24" cy="24" r="15" stroke={a} strokeWidth={sw}/>
+      <circle cx="24" cy="24" r="3" fill={a}/>
+      <line x1="24" y1="4"  x2="24" y2="10" stroke={a} strokeWidth={sw} strokeLinecap="round"/>
+      <line x1="24" y1="38" x2="24" y2="44" stroke={a} strokeWidth={sw} strokeLinecap="round"/>
+      <line x1="4"  y1="24" x2="10" y2="24" stroke={a} strokeWidth={sw} strokeLinecap="round"/>
+      <line x1="38" y1="24" x2="44" y2="24" stroke={a} strokeWidth={sw} strokeLinecap="round"/>
+    </svg>
+  );
+
+  const wordmark = (
+    <span style={{
+      fontFamily: "'Josefin Sans', sans-serif",
+      fontSize, fontWeight: 300, color: c,
+      letterSpacing: "0.4em",
+      textTransform: "uppercase",
+      paddingRight: "0.4em",
+    }}>locus</span>
+  );
+
+  if (layout === "stacked") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, ...style }}>
+        {mark}
+        {wordmark}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 10, ...style }}>
+      {mark}
+      {wordmark}
+    </div>
+  );
+}
+
 function FloatingClothes({ opacity = 1 }) {
   const items = useMemo(() => CLOTH_EMOJIS.map((emoji, i) => {
     const total = CLOTH_EMOJIS.length;
@@ -519,167 +584,331 @@ function FloatingClothes({ opacity = 1 }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// DISCOVER FEED  — horizontal strips on the home screen
+// ══════════════════════════════════════════════════════════════════
+function DiscoverCard({ item, isSaved, onToggleSave }) {
+  const [hovered, setHovered] = useState(false);
+  const raw      = item.image_url ?? "";
+  const imageURL = raw ? (raw.startsWith("http") ? raw : `${API}${raw}`) : null;
+  const catColor = CATEGORY_COLORS[item.category] || T.accent;
+
+  return (
+    <div
+      style={{
+        flex: "0 0 130px",
+        background: T.surface,
+        border: `1px solid ${hovered ? T.accent : T.border}`,
+        borderRadius: 12,
+        overflow: "hidden",
+        scrollSnapAlign: "start",
+        transition: "border-color 0.2s, transform 0.22s cubic-bezier(0.16,1,0.3,1), box-shadow 0.22s",
+        transform: hovered ? "translateY(-3px)" : "none",
+        boxShadow: hovered ? "0 8px 24px rgba(0,0,0,0.08)" : "none",
+        cursor: "pointer",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div style={{ aspectRatio: "3/4", background: T.bgDeep, position: "relative", overflow: "hidden" }}>
+        {imageURL
+          ? <img
+              src={imageURL}
+              alt={item.name || "product"}
+              style={{ width: "100%", height: "100%", objectFit: "cover", transition: "transform 0.5s ease", transform: hovered ? "scale(1.05)" : "scale(1)" }}
+            />
+          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1.2rem" }}>✦</div>
+        }
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleSave?.(item); }}
+          style={{
+            position: "absolute", bottom: 6, right: 6,
+            background: isSaved ? T.accent : "rgba(250,249,247,0.88)",
+            backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+            border: "none", borderRadius: "50%",
+            width: 26, height: 26, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: "0.72rem", color: isSaved ? "#fff" : T.textMuted,
+            transition: "background 0.2s, color 0.2s",
+          }}
+        >
+          {isSaved ? "♥" : "♡"}
+        </button>
+      </div>
+      <div style={{ padding: "8px 10px 10px" }}>
+        <div style={{ height: 2, borderRadius: 1, background: `${catColor}40`, marginBottom: 5 }} />
+        <div style={{
+          fontSize: "0.7rem", fontWeight: 500, color: T.text, lineHeight: 1.3,
+          overflow: "hidden", display: "-webkit-box",
+          WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+        }}>
+          {item.name || "Product"}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+          <span style={{ fontSize: "0.58rem", color: T.textMuted, letterSpacing: "0.01em" }}>{item.store || ""}</span>
+          {item.price && <span style={{ fontSize: "0.65rem", color: T.accent, fontWeight: 600 }}>{item.price}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DiscoverSection({ title, subtitle, badge, items, saved, onToggleSave, loading }) {
+  const isItemSaved = (pid) => saved.some(s => s.productId === pid);
+
+  const wrapDiscover = (item) => ({
+    score: 0,
+    payload: {
+      product_id:   item.product_id,
+      name:         item.name,
+      item_name:    item.name,
+      image_url:    item.image_url,
+      store_name:   item.store,
+      store:        item.store,
+      mall_name:    item.mall,
+      price:        item.price,
+      category_tag: item.category,
+    },
+  });
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingLeft: 24, paddingRight: 24 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 2 }}>
+            <span style={{ fontSize: "0.55rem", letterSpacing: "0.18em", textTransform: "uppercase", color: T.textMuted }}>{subtitle}</span>
+            {badge && (
+              <span style={{
+                fontSize: "0.48rem", letterSpacing: "0.1em", textTransform: "uppercase",
+                background: T.accentBg, color: T.accent, borderRadius: 20,
+                padding: "2px 7px", border: `1px solid ${T.accentRing}`,
+              }}>
+                {badge}
+              </span>
+            )}
+          </div>
+          <div className="font-serif" style={{ fontSize: "1.1rem", fontWeight: 500, color: T.text, fontStyle: "italic" }}>
+            {title}
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="discover-scroll" style={{ paddingLeft: 24, paddingRight: 24 }}>
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} style={{ flex: "0 0 130px", scrollSnapAlign: "start" }}>
+              <div className="shimmer-box" style={{ borderRadius: 12, aspectRatio: "3/4" }} />
+              <div className="shimmer-box" style={{ borderRadius: 6, height: 10, marginTop: 8, width: "80%" }} />
+              <div className="shimmer-box" style={{ borderRadius: 6, height: 8, marginTop: 5, width: "50%" }} />
+            </div>
+          ))}
+        </div>
+      ) : items.length === 0 ? null : (
+        <div className="discover-scroll" style={{ paddingLeft: 24, paddingRight: 24 }}>
+          {items.map((item) => (
+            <DiscoverCard
+              key={item.product_id}
+              item={item}
+              isSaved={isItemSaved(item.product_id)}
+              onToggleSave={() => onToggleSave?.(wrapDiscover(item))}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // LANDING
 // ══════════════════════════════════════════════════════════════════
 const LANDING_CATEGORIES = ["Dress", "Jacket", "Bag", "Shoes", "Top", "Pants", "Sweater", "Hat"];
 
-function LandingView({ onUpload, error }) {
+function LandingView({ onUpload, error, history, saved, onToggleSave }) {
   const inputRef  = useRef(null);
   const cameraRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const [discover, setDiscover] = useState(null); // null = loading
 
   const handleFile = (file) => {
     if (file && file.type.startsWith("image/")) onUpload(file);
   };
 
+  // Fetch discover feed once on mount
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API}/discover?limit=15`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (!cancelled) setDiscover(data || { trending: [], women: [], men: [] }); })
+      .catch(() => { if (!cancelled) setDiscover({ trending: [], women: [], men: [] }); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Derive "For You" from search history — pull top results across recent searches
+  const forYou = useMemo(() => {
+    if (!history.length) return [];
+    const pool = [];
+    const seen = new Set();
+    for (const entry of history.slice(0, 8)) {
+      for (const r of (entry.results || []).slice(0, 3)) {
+        const p   = r.payload ?? {};
+        const pid = p.product_id || p.item_id || p.image_url;
+        if (!pid || seen.has(pid) || !p.image_url) continue;
+        seen.add(pid);
+        pool.push({
+          product_id: pid,
+          name:       p.name || p.item_name || "",
+          price:      p.price || "",
+          category:   p.category_tag || entry.category || "",
+          image_url:  p.image_url,
+          store:      p.store_name || p.store || "",
+          mall:       p.mall_name || p.mall || "",
+        });
+      }
+    }
+    return pool.slice(0, 15);
+  }, [history]);
+
+  const loading = discover === null;
+
   return (
     <div className="fade-in" style={{
       minHeight: "100svh",
-      position: "relative",
-      display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center",
-      padding: "32px 28px",
-      paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 20px)",
       background: T.bg,
-      overflow: "hidden",
+      paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 32px)",
     }}>
-      <FloatingClothes opacity={1} />
+      {/* Hero section — upload + branding */}
+      <div style={{
+        position: "relative",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        padding: "28px 28px 20px",
+        overflow: "hidden",
+      }}>
+        <FloatingClothes opacity={1} />
 
-      {/* Editorial branding */}
-      <div className="fade-up" style={{ textAlign: "center", marginBottom: 48, position: "relative", zIndex: 1 }}>
-        {/* Double-ring lens mark */}
-        <div style={{
-          width: 76, height: 76,
-          borderRadius: "50%",
-          border: "1px solid rgba(28,23,20,0.14)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          margin: "0 auto 30px",
-          position: "relative",
-        }}>
-          <div style={{
-            position: "absolute",
-            width: 54, height: 54,
-            borderRadius: "50%",
-            border: "1px solid rgba(28,23,20,0.07)",
-          }} />
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-            stroke={T.textMuted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="6"/>
-            <line x1="16" y1="16" x2="22" y2="22"/>
-          </svg>
+        {/* Editorial branding */}
+        <div className="fade-up" style={{ textAlign: "center", marginBottom: 20, position: "relative", zIndex: 1 }}>
+          <LocusLogo layout="stacked" markSize={48} fontSize="2rem" style={{ marginBottom: 10 }} />
+          <p style={{ fontSize: "0.82rem", color: T.textMuted, lineHeight: 1.6, maxWidth: 220, margin: "0 auto" }}>
+            Photograph any piece. Find it in stores near you.
+          </p>
         </div>
 
-        {/* Serif italic wordmark */}
-        <h1 className="font-logo" style={{
-          fontSize: "4rem", fontWeight: 400,
-          letterSpacing: "0.06em", color: T.text,
-          marginBottom: 20, lineHeight: 1,
-        }}>
-          locus
-        </h1>
+        {/* Upload actions */}
+        <div className="fade-up" style={{ width: "100%", maxWidth: 320, display: "flex", flexDirection: "row", gap: 8, position: "relative", zIndex: 1 }}>
+          <button className="btn-primary" style={{ flex: 1, height: 42, fontSize: "0.85rem" }} onClick={() => cameraRef.current?.click()}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+            Take photo
+          </button>
 
-        {/* Thin rule + descriptor */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 12,
-          maxWidth: 240, margin: "0 auto 18px",
-        }}>
-          <div style={{ flex: 1, height: "1px", background: T.border }} />
-          <span style={{
-            fontSize: "0.5rem", letterSpacing: "0.22em",
-            textTransform: "uppercase", color: T.textMuted,
-            whiteSpace: "nowrap",
+          <div
+            className={`upload-zone ${dragging ? "drag-over" : ""}`}
+            onClick={() => inputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
+            style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "10px 12px", cursor: "pointer" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.textMuted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <span style={{ fontSize: "0.82rem", color: T.textMuted, fontWeight: 400 }}>
+              {dragging ? "Drop here" : "Library"}
+            </span>
+          </div>
+
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }}
+            onChange={(e) => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = null; } }} />
+          <input ref={inputRef} type="file" accept="image/jpeg, image/png, image/webp, image/heic, image/*" style={{ display: "none" }}
+            onChange={(e) => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = null; } }} />
+        </div>
+
+
+        {error && (
+          <div className="fade-up" style={{
+            marginTop: 20, padding: "14px 18px",
+            background: "rgba(184,88,88,0.08)", border: "1px solid rgba(184,88,88,0.2)",
+            borderRadius: 10, fontSize: "0.9rem", color: T.red,
+            maxWidth: 340, width: "100%", textAlign: "center", position: "relative", zIndex: 1,
           }}>
-            fashion discovery
-          </span>
-          <div style={{ flex: 1, height: "1px", background: T.border }} />
-        </div>
+            {error}
+          </div>
+        )}
 
-        <p style={{
-          fontSize: "0.88rem", color: T.textMuted,
-          lineHeight: 1.7, maxWidth: 240, margin: "0 auto",
-        }}>
-          Photograph any piece. Find it in stores near you.
-        </p>
       </div>
 
-      {/* Upload actions */}
-      <div className="fade-up" style={{ width: "100%", maxWidth: 340, display: "flex", flexDirection: "column", gap: 10, position: "relative", zIndex: 1 }}>
-        <button
-          className="btn-primary"
-          style={{ width: "100%", height: 52 }}
-          onClick={() => cameraRef.current?.click()}
-        >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-          Take a photo
-        </button>
+      {/* ── Discover sections ─────────────────────────────────── */}
+      <div style={{ paddingTop: 4 }}>
 
-        <div
-          className={`upload-zone ${dragging ? "drag-over" : ""}`}
-          onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            gap: 10, padding: "15px 28px",
-            cursor: "pointer",
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.textMuted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2"/>
-            <circle cx="8.5" cy="8.5" r="1.5"/>
-            <polyline points="21 15 16 10 5 21"/>
-          </svg>
-          <span style={{ fontSize: "0.9rem", color: T.textMuted, fontWeight: 400 }}>
-            {dragging ? "Drop to discover" : "Choose from library"}
+        {/* Divider */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, paddingLeft: 24, paddingRight: 24, marginBottom: 20 }}>
+          <div style={{ flex: 1, height: "1px", background: T.borderFaint }} />
+          <span style={{ fontSize: "0.48rem", letterSpacing: "0.2em", textTransform: "uppercase", color: T.textFaint, whiteSpace: "nowrap" }}>
+            what's happening
           </span>
+          <div style={{ flex: 1, height: "1px", background: T.borderFaint }} />
         </div>
 
-        <input
-          ref={cameraRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          style={{ display: "none" }}
-          onChange={(e) => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = null; } }}
+        {/* Trending Now */}
+        <DiscoverSection
+          title="Trending Now"
+          subtitle="This week"
+          badge="live"
+          items={discover?.trending ?? []}
+          saved={saved}
+          onToggleSave={onToggleSave}
+          loading={loading}
         />
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/jpeg, image/png, image/webp, image/heic, image/*"
-          style={{ display: "none" }}
-          onChange={(e) => { if (e.target.files?.[0]) { handleFile(e.target.files[0]); e.target.value = null; } }}
-        />
-      </div>
 
-      {/* Category suggestion pills */}
-      <div className="fade-up" style={{ marginTop: 30, display: "flex", flexWrap: "wrap", gap: 7, justifyContent: "center", maxWidth: 310, position: "relative", zIndex: 1 }}>
-        {LANDING_CATEGORIES.map(cat => (
-          <span key={cat} style={{
-            fontSize: "0.58rem", letterSpacing: "0.12em", textTransform: "uppercase",
-            color: T.textFaint, background: "transparent",
-            border: `1px solid ${T.borderFaint}`,
-            borderRadius: 20, padding: "4px 11px",
-          }}>
-            {cat}
+        {/* For You — only show when user has history */}
+        {(forYou.length > 0 || loading) && (
+          <DiscoverSection
+            title="For You"
+            subtitle="Based on your searches"
+            items={forYou}
+            saved={saved}
+            onToggleSave={onToggleSave}
+            loading={false}
+          />
+        )}
+
+        {/* Section divider */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, paddingLeft: 24, paddingRight: 24, marginBottom: 32 }}>
+          <div style={{ flex: 1, height: "1px", background: T.borderFaint }} />
+          <span style={{ fontSize: "0.48rem", letterSpacing: "0.2em", textTransform: "uppercase", color: T.textFaint, whiteSpace: "nowrap" }}>
+            hot nearby
           </span>
-        ))}
-      </div>
-
-      {error && (
-        <div className="fade-up" style={{
-          marginTop: 20, padding: "14px 18px",
-          background: "rgba(184,88,88,0.08)", border: "1px solid rgba(184,88,88,0.2)",
-          borderRadius: 10, fontSize: "0.9rem", color: T.red,
-          maxWidth: 340, width: "100%", textAlign: "center",
-          position: "relative", zIndex: 1,
-        }}>
-          {error}
+          <div style={{ flex: 1, height: "1px", background: T.borderFaint }} />
         </div>
-      )}
+
+        {/* Hot Nearby — Women */}
+        <DiscoverSection
+          title="Women's Picks"
+          subtitle="Hot nearby · Women"
+          badge="women"
+          items={discover?.women ?? []}
+          saved={saved}
+          onToggleSave={onToggleSave}
+          loading={loading}
+        />
+
+        {/* Hot Nearby — Men */}
+        <DiscoverSection
+          title="Men's Picks"
+          subtitle="Hot nearby · Men"
+          badge="men"
+          items={discover?.men ?? []}
+          saved={saved}
+          onToggleSave={onToggleSave}
+          loading={loading}
+        />
+
+      </div>
     </div>
   );
 }
@@ -699,9 +928,7 @@ function LoadingView({ label }) {
     }}>
       <FloatingClothes opacity={0.6} />
       <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 18, position: "relative", zIndex: 1 }}>
-        <span className="font-logo" style={{ fontSize: "1.9rem", fontWeight: 400, color: T.text, letterSpacing: "0.06em", opacity: 0.7 }}>
-          locus
-        </span>
+        <LocusLogo layout="horizontal" markSize={22} fontSize="0.95rem" style={{ opacity: 0.7 }} />
         <div style={{ width: 28, height: 28, border: `2px solid ${T.borderFaint}`, borderTop: `2px solid ${T.accent}`, borderRadius: "50%", animation: "spin 0.9s linear infinite" }} />
         <span style={{ fontSize: "0.72rem", color: T.textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>{label}</span>
       </div>
@@ -2995,7 +3222,7 @@ export default function App() {
         />
       ) : (
         <>
-          {view === "landing"    && <LandingView onUpload={handleUpload} error={error} />}
+          {view === "landing"    && <LandingView onUpload={handleUpload} error={error} history={history} saved={saved} onToggleSave={handleToggleSave} />}
           {view === "drawing"    && <DrawView imageURL={imageURL} imageFile={imageFile} onConfirm={handleDrawConfirm} onBack={reset} />}
           {view === "confirming" && <ConfirmView cropBlob={cropBlob} predictedCategory={predictedCategory} allScores={allScores} onSearch={handleConfirm} onBack={() => setView("drawing")} />}
           {view === "searching"  && <LoadingView label="Finding matches…" />}

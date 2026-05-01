@@ -38,5 +38,13 @@
     "store_name": "Forever21",
     "judge_score": 0.15,
     "flagged_at": "2026-04-24T05:16:37.985507"
+  },
+  {
+    "product_id": "5481af89-e808-5883-8faf-327c72b8d049",
+    "image_url": "https://cdn.shopify.com/s/files/1/0702/7847/9906/files/Large-00486596-01-1_front.jpg?v=1751579149",
+    "name": "Crochet Sweater-Knit Tank Top",
+    "store_name": "Forever21",
+    "judge_score": 0.05,
+    "flagged_at": "2026-05-01T08:12:24.118999"
   }
 ]

@@ -173,11 +173,20 @@ function AuthPage({ onAuth }) {
 
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ fontSize: "0.65rem", color: T.accent, letterSpacing: "0.22em",
-            textTransform: "uppercase", marginBottom: 14, display: "flex",
-            alignItems: "center", justifyContent: "center", gap: 8 }}>
-            <span style={{ fontSize: "0.55rem" }}>✦</span> LOCUS
-            <span style={{ fontSize: "0.55rem" }}>✦</span>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, marginBottom: 20 }}>
+            <svg width="52" height="52" viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="24" r="15" stroke={T.accent} strokeWidth="1.2"/>
+              <circle cx="24" cy="24" r="3" fill={T.accent}/>
+              <line x1="24" y1="4"  x2="24" y2="10" stroke={T.accent} strokeWidth="1.2" strokeLinecap="round"/>
+              <line x1="24" y1="38" x2="24" y2="44" stroke={T.accent} strokeWidth="1.2" strokeLinecap="round"/>
+              <line x1="4"  y1="24" x2="10" y2="24" stroke={T.accent} strokeWidth="1.2" strokeLinecap="round"/>
+              <line x1="38" y1="24" x2="44" y2="24" stroke={T.accent} strokeWidth="1.2" strokeLinecap="round"/>
+            </svg>
+            <span style={{
+              fontFamily: "'Josefin Sans', sans-serif",
+              fontSize: "0.75rem", fontWeight: 300, color: T.accent,
+              letterSpacing: "0.5em", textTransform: "uppercase", paddingRight: "0.5em",
+            }}>locus</span>
           </div>
           <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "2.2rem",
             fontWeight: 500, color: T.text, margin: 0, lineHeight: 1.1 }}>
