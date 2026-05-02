@@ -45,10 +45,8 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - GOLDEN_DATASET_PATH=/mlops/golden_dataset.json
     volumes:
-      - ./gateway:/app
       - ./mlops:/mlops
       - ./mlops/golden_images:/mlops/golden_images
-      - ./frontend/dist:/app/frontend/dist
     dns:
       - 8.8.8.8
       - 1.1.1.1
