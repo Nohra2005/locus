@@ -2036,7 +2036,7 @@ function AttributePanel({ attributes, refineMode, onRefine }) {
 // ══════════════════════════════════════════════════════════════════
 // RESULTS VIEW
 // ══════════════════════════════════════════════════════════════════
-function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, attributes, refineMode, onRefine, onRefineCrop, radius, setRadius, userLocation, onFeedback, onReset, saved = [], onToggleSave, onFlag }) {
+function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, judging, attributes, refineMode, onRefine, onRefineCrop, radius, setRadius, userLocation, onFeedback, onReset, saved = [], onToggleSave, onFlag }) {
   const [highlightedStore, setHighlightedStore] = useState(null);
   const [activeDetail,     setActiveDetail]     = useState(null);
   const impressionsFired = useRef(false);
@@ -2108,9 +2108,14 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
             <div className="font-serif" style={{ fontSize: "1.2rem", fontWeight: 300, fontStyle: "italic", color: T.text, letterSpacing: "0.02em", textTransform: "capitalize", lineHeight: 1.2 }}>
               {selectedItem?.label || category || "Results"}
             </div>
-            <div style={{ fontSize: "0.63rem", color: T.textMuted, letterSpacing: "0.02em", marginTop: 2 }}>
+            <div style={{ fontSize: "0.63rem", color: T.textMuted, letterSpacing: "0.02em", marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
               {displayResults.length} match{displayResults.length !== 1 ? "es" : ""}
               {storesInRadius.length > 0 && ` · ${storesInRadius.length} store${storesInRadius.length > 1 ? "s" : ""} nearby`}
+              {judging && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: T.accent, fontWeight: 500 }}>
+                  · <span style={{ width: 7, height: 7, borderRadius: "50%", border: `1.5px solid ${T.accent}`, borderTopColor: "transparent", display: "inline-block", animation: "spin 0.8s linear infinite" }} /> AI scoring
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -2987,6 +2992,7 @@ export default function App() {
   const [queryImageURL,    setQueryImageURL]    = useState(null);
   const [searchId,         setSearchId]         = useState(null);
   const [judgeScores,      setJudgeScores]      = useState({});   // {product_id: float}
+  const [judging,          setJudging]          = useState(false); // true while AI scoring is in progress
   const [attributes,       setAttributes]       = useState(null); // null=loading, {}=failed/empty, obj=ready
   const [refineMode,       setRefineMode]       = useState(null); // "visual"|"style"|"color"|null
   const [radius,           setRadius]           = useState(5);
@@ -3002,22 +3008,23 @@ export default function App() {
   }, []);
 
   // Poll for OpenRouter judge scores after results are shown.
-  // Judge runs in background scoring all 25 results; poll every 4s for up to 5 min.
   useEffect(() => {
     if (view !== "results" || !searchId) return;
+    setJudging(true);
     let attempts = 0;
+    const total = results.length || 15;
     const interval = setInterval(async () => {
       attempts++;
-      if (attempts > 75) { clearInterval(interval); return; }
+      if (attempts > 75) { clearInterval(interval); setJudging(false); return; }
       try {
         const res = await fetch(`${API}/judge-scores/${searchId}`);
         if (!res.ok) return;
         const scores = await res.json();
         if (Object.keys(scores).length > 0) setJudgeScores(scores);
-        if (Object.keys(scores).length >= 25) clearInterval(interval);
+        if (Object.keys(scores).length >= total) { clearInterval(interval); setJudging(false); }
       } catch { /* non-critical */ }
     }, 4000);
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); setJudging(false); };
   }, [view, searchId]);
 
   // Track time spent on results page and fire event on exit.
@@ -3303,6 +3310,7 @@ export default function App() {
               selectedItem={selectedItem}
               queryImageURL={queryImageURL}
               judgeScores={judgeScores}
+              judging={judging}
               attributes={attributes}
               refineMode={refineMode}
               onRefine={handleRefine}

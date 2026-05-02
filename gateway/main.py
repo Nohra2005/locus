@@ -3408,4 +3408,7 @@ async def _run_link_check_subprocess():
 
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
+    static = pathlib.Path("frontend/dist") / full_path
+    if static.is_file():
+        return FileResponse(str(static))
     return FileResponse("frontend/dist/index.html")
