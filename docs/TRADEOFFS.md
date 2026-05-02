@@ -116,9 +116,18 @@ LoRA trains only ~0.5% of the total parameter count, runs in under 30 minutes on
 - **Risk**: full retraining can catastrophically forget general fashion embeddings; LoRA preserves the base model as a fallback.
 
 ### Evidence
-LoRA training runs are logged to MLflow under experiment `locus_clip_finetune`. Promotion is gated by `promote_model.py`: the new adapter must score ≥ baseline + 0.02 on the judge evaluation before being swapped into production. If it fails, the previous adapter is restored automatically (`rollback` logic in `promote_model.py`).
 
-Per-run judge scores (Gemini 2.0 Flash, 33 queries) are tracked in MLflow and compared against `mlops/ci_baseline.json` (baseline: **0.6546**). A promoted adapter must reach ≥ **0.6746** to replace the previous one. This threshold-gated promotion ensures each LoRA update moves the needle measurably rather than just fitting noise in the feedback pairs.
+**Per-run quality gate** — judge scores (Gemini 2.0 Flash, 33 queries) are tracked in MLflow experiment `locus_clip_finetune` and compared against `mlops/ci_baseline.json`:
+
+| Checkpoint | Judge score (Gemini, 33 queries) | Notes |
+|---|---|---|
+| Base Fashion-CLIP (no adapter) | 0.6546 | Stored in `ci_baseline.json` |
+| Promotion threshold | ≥ 0.6746 | Must beat baseline by +0.02 (`PROMOTION_DELTA`) |
+| Rolled-back adapter | < 0.6546 | Previous adapter restored automatically |
+
+**Validation during training** — as of `mlops/lora_trainer.py`, training now computes `val_loss` and `val_recall@5` on a held-out 15% validation split every `LOG_EVERY_STEPS` steps, logged to MLflow. This gives per-run evidence that the adapter improves on unseen pairs, not just training pairs.
+
+Promotion is gated by `promote_model.py`: the new adapter must score ≥ baseline + 0.02 on the judge evaluation before being swapped into production. If it fails, the previous adapter is restored automatically (`rollback` logic in `promote_model.py`). This threshold-gated promotion ensures each LoRA update moves the needle measurably rather than just fitting noise in the feedback pairs.
 
 ---
 

@@ -119,8 +119,32 @@ services:
   # To run manually: docker compose run --rm gateway python repair_broken_links.py
   # link_monitor: <removed from VM — not needed for deployment>
 
-  # ── 7. MLops Automated Retraining (disabled — runs via GitHub Actions) ────
-  # mlops_retrain: <removed from VM — retraining handled by .github/workflows/retrain.yml>
+  # ── 7. MLops Automated Retraining ────────────────────────────────────────────
+  # Runs retrain_clip.py in --schedule mode: checks feedback thresholds every 48h,
+  # trains a LoRA adapter if conditions are met, evaluates against ci_baseline.json,
+  # promotes and hot-reloads if score improves by ≥ PROMOTION_DELTA.
+  # NOTE: During training this service temporarily uses ~1.5GB RAM (fashion-CLIP load).
+  # On a 4GB VM it coexists with visual_engine; set restart:no to avoid OOM loops.
+  mlops_retrain:
+    build:
+      context: .
+      dockerfile: mlops/Dockerfile.retrain
+    working_dir: /mlops
+    command: python retrain_clip.py --schedule
+    volumes:
+      - ./mlops:/mlops
+      - ./visual_engine:/visual_engine
+      - hf_cache:/root/.cache/huggingface
+    environment:
+      - QDRANT_URL=${QDRANT_URL}
+      - QDRANT_API_KEY=${QDRANT_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GATEWAY_BASE_URL=${GATEWAY_BASE_URL:-http://gateway:8000}
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - gateway
+      - mlflow
+    restart: "no"
 
   # ── 7. MLops Metrics Exporter ────────────────────────────────────
   mlops_exporter:

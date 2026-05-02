@@ -253,7 +253,7 @@ def run_api_comparison(model: str = DEFAULT_EVAL_MODEL) -> None:
     for entry in dataset:
         cat   = entry["query_category_tag"]
         fname = entry["query_image_url"].split("/")[-1]
-        if (IMAGES_DIR / fname).exists() and per_cat.get(cat, 0) < 2:
+        if (IMAGES_DIR / fname).exists() and per_cat.get(cat, 0) < 5:
             samples.append({"category": cat, "name": entry.get("query_name", fname), "file": fname})
             per_cat[cat] = per_cat.get(cat, 0) + 1
 

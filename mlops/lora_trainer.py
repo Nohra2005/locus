@@ -47,6 +47,7 @@ BATCH_SIZE        = int(os.getenv("BATCH_SIZE", 4))
 GRAD_ACCUM_STEPS  = int(os.getenv("GRAD_ACCUM_STEPS", 4))  # effective batch = BATCH_SIZE * GRAD_ACCUM_STEPS
 MAX_STEPS         = int(os.getenv("MAX_TRAIN_STEPS", 300))
 LOG_EVERY         = int(os.getenv("LOG_EVERY_STEPS", 20))  # log loss to MLflow every N steps
+VAL_SPLIT         = float(os.getenv("VAL_SPLIT", 0.15))    # fraction of pairs held out for validation
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -110,6 +111,57 @@ def _load_pairs(manifest_path: str) -> list[dict]:
     return valid
 
 
+@torch.no_grad()
+def _compute_val_metrics(
+    model: CLIPModel,
+    processor: CLIPProcessor,
+    val_pairs: list[dict],
+    k: int = 5,
+) -> tuple[float, float]:
+    """
+    Compute validation loss and recall@k on the held-out val set.
+
+    For recall@k: each anchor's positive must appear in its top-k nearest
+    neighbors (by cosine similarity) among all val positives.
+
+    Returns: (val_loss, recall_at_k)
+    """
+    if not val_pairs:
+        return 0.0, 0.0
+
+    model.eval()
+    anchors_pil   = []
+    positives_pil = []
+    for p in val_pairs:
+        try:
+            anchors_pil.append(Image.open(p["anchor_path"]).convert("RGB"))
+            positives_pil.append(Image.open(p["positive_path"]).convert("RGB"))
+        except Exception:
+            continue
+
+    if len(anchors_pil) < 2:
+        model.train()
+        return 0.0, 0.0
+
+    # Embed in a single batch (val set is small — 15% of pairs, typically <30)
+    z_a = _embed_batch(model, processor, anchors_pil)
+    z_p = _embed_batch(model, processor, positives_pil)
+
+    val_loss = infonce_loss(z_a, z_p, TEMPERATURE).item()
+
+    # Recall@k: for each anchor, is its paired positive in the top-k positives?
+    sim = torch.mm(z_a, z_p.T)  # (N, N) cosine similarity
+    topk_indices = sim.topk(min(k, sim.shape[1]), dim=1).indices  # (N, k)
+    hits = sum(
+        i in topk_indices[i].tolist()
+        for i in range(len(anchors_pil))
+    )
+    recall_at_k = hits / len(anchors_pil)
+
+    model.train()
+    return val_loss, recall_at_k
+
+
 def train(
     manifest_path:  str,
     output_dir:     str,
@@ -137,10 +189,15 @@ def train(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    pairs = _load_pairs(manifest_path)
-    if not pairs:
+    all_pairs = _load_pairs(manifest_path)
+    if not all_pairs:
         raise ValueError(f"No valid training pairs found in {manifest_path}")
-    print(f"[TRAINER] Loaded {len(pairs)} training pairs")
+
+    # Train / val split — hold out VAL_SPLIT fraction for validation
+    n_val  = max(1, int(len(all_pairs) * VAL_SPLIT))
+    pairs  = all_pairs[n_val:]   # training pairs
+    val_pairs = all_pairs[:n_val]
+    print(f"[TRAINER] Loaded {len(all_pairs)} pairs → {len(pairs)} train / {len(val_pairs)} val")
 
     # ── Load model ────────────────────────────────────────────────────────────
     print(f"[TRAINER] Loading {MODEL_NAME}...")
@@ -242,10 +299,14 @@ def train(
             if step % LOG_EVERY == 0:
                 elapsed = time.time() - start_time
                 eta     = (elapsed / step) * (MAX_STEPS - step)
+                val_loss, val_recall = _compute_val_metrics(model, processor, val_pairs)
                 print(f"[TRAINER] step={step}/{MAX_STEPS}  loss={avg_loss:.4f}  "
+                      f"val_loss={val_loss:.4f}  val_recall@5={val_recall:.3f}  "
                       f"elapsed={elapsed/60:.1f}m  eta={eta/60:.1f}m")
                 if mlflow_run_id:
-                    mlflow.log_metric("train_loss", avg_loss, step=step)
+                    mlflow.log_metric("train_loss",   avg_loss,   step=step)
+                    mlflow.log_metric("val_loss",     val_loss,   step=step)
+                    mlflow.log_metric("val_recall_at_5", val_recall, step=step)
 
     # ── Save LoRA adapter ─────────────────────────────────────────────────────
     adapter_dir = output_dir / "lora_adapter"
@@ -257,8 +318,14 @@ def train(
         output_dir / "visual_projection.pt",
     )
 
+    # Final validation metrics
+    final_val_loss, final_val_recall = _compute_val_metrics(model, processor, val_pairs)
     elapsed = time.time() - start_time
     print(f"\n[TRAINER] Training complete in {elapsed/60:.1f} min")
+    print(f"[TRAINER] Final val_loss={final_val_loss:.4f}  val_recall@5={final_val_recall:.3f}")
     print(f"[TRAINER] LoRA adapter saved to: {adapter_dir}")
+    if mlflow_run_id:
+        mlflow.log_metric("final_val_loss",     final_val_loss)
+        mlflow.log_metric("final_val_recall_at_5", final_val_recall)
 
     return str(adapter_dir)

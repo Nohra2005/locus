@@ -7,12 +7,13 @@ import os
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from PIL import Image, ImageDraw
 from pydantic import BaseModel
+from typing import Any, Optional
 
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Histogram
 from vectorizer import LocusVisualizer
 
-app = FastAPI()
+app = FastAPI(title="Locus Visual Engine", version="1.0.0")
 Instrumentator().instrument(app).expose(app)
 visualizer = LocusVisualizer()
 
@@ -32,6 +33,43 @@ locus_clip_confidence = Histogram(
 OVERRIDES_PATH = "/app/whitelist_overrides.json"
 
 
+# ── Response models ────────────────────────────────────────────────────────────
+
+class DetectionResponse(BaseModel):
+    detections: list[dict]
+    image_width: int
+    image_height: int
+
+
+class VectorizeResponse(BaseModel):
+    filename: Optional[str]
+    vector: list[float]
+    category: str
+    category_confidence: Any
+    debug_image: Optional[str]
+
+
+class TextEmbeddingResponse(BaseModel):
+    embedding: list[float]
+
+
+class ReloadAdapterResponse(BaseModel):
+    success: bool
+    error: Optional[str] = None
+
+
+class WhitelistAddResponse(BaseModel):
+    status: str
+    word: str
+    category: str
+    reload: Any
+
+
+class WhitelistOverridesResponse(BaseModel):
+    total: int
+    entries: list[dict]
+
+
 @app.get("/")
 def read_root():
     return {"status": "online", "service": "locus visual engine"}
@@ -39,7 +77,7 @@ def read_root():
 
 # ── Search path ────────────────────────────────────────────────────────────────
 
-@app.post("/detect")
+@app.post("/detect", response_model=DetectionResponse)
 async def detect(file: UploadFile = File(...)):
     """Search time. Returns all YOLO boxes for user to select from."""
     image_data = await file.read()
@@ -54,7 +92,7 @@ async def detect(file: UploadFile = File(...)):
     }
 
 
-@app.post("/vectorize")
+@app.post("/vectorize", response_model=VectorizeResponse)
 async def vectorize(
     file:        UploadFile = File(...),
     yolo_label:  str        = Form(""),
@@ -99,7 +137,7 @@ class TextQuery(BaseModel):
     text: str
 
 
-@app.post("/vectorize-text")
+@app.post("/vectorize-text", response_model=TextEmbeddingResponse)
 async def vectorize_text(body: TextQuery):
     """Encode a text string with CLIP's text encoder. Used by /refine in the gateway."""
     if not body.text or not body.text.strip():
@@ -248,7 +286,7 @@ def _write_overrides(data: list):
         json.dump(data, f, indent=2)
 
 
-@app.post("/whitelist-add")
+@app.post("/whitelist-add", response_model=WhitelistAddResponse)
 async def whitelist_add(req: WhitelistAddRequest):
     word     = req.word.strip().lower()
     category = req.category.strip()
@@ -277,7 +315,7 @@ async def whitelist_reload():
     return {"status": "reloaded", **result}
 
 
-@app.get("/whitelist-overrides")
+@app.get("/whitelist-overrides", response_model=WhitelistOverridesResponse)
 async def whitelist_overrides():
     overrides = _read_overrides()
     active    = [e for e in overrides if e.get("status") == "approved"]
@@ -295,7 +333,7 @@ class ReloadAdapterRequest(BaseModel):
     visual_projection_path: str = ""
 
 
-@app.post("/reload-adapter")
+@app.post("/reload-adapter", response_model=ReloadAdapterResponse)
 async def reload_adapter(req: ReloadAdapterRequest):
     """
     Hot-swap the LoRA adapter on the running visual engine.
