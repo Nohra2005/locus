@@ -5,7 +5,7 @@
 Online shopping has become a major part of today’s fashion industry. The main inconvenience is clients buy without trying/seeing the product and have to wait for shipping. While many shoppers really enjoy going out to the mall, physical shopping is unarguably draining, inefficient and often unfruitful: shoppers can spend countless hours looking for a specific product they have in mind or they have found on Pinterest/Instagram but have no idea where to find it. Some countries like Lebanon lack a centralized marketplace where people can easily order from a wide variety of products. This emphasizes the need for Lebanese shoppers to physically go out to malls.
 
 **Impact:**
-Locus merges best of both worlds: convenience and precision of online shopping with the product experience of physical shopping.
+Locus merges best of both worlds: convenience and precision of online shopping with the product experience of physical shopping. Unlike Google Lens or Pinterest visual search, Locus maps results directly to physical local store inventory with precise store locations and WhatsApp CTAs — solving the last-mile problem for Lebanon's offline-first retail market where no centralized marketplace exists.
 
 ## 2. Project Objective (The "What")
 To design and develop a clothing recommendation system that returns similar items ranked by similarity and nearness that allows users to upload an image and retrieve visually similar inventory items with a focus on accuracy and speed.
@@ -58,7 +58,40 @@ To design and develop a clothing recommendation system that returns similar item
 * **Robustness:** System successfully rejects low confidence predictions (with 45% resemblance and less).
 * **Speed:** End-to-end processing must take maximum 15s.
 
-## 7. Secrets Management
+## 7. System Architecture
+
+```
+User / Browser
+      │ HTTPS
+      ▼
+┌─────────────────────────────────┐
+│  Gateway (FastAPI, port 8000)   │  ← EEP: orchestration, auth, rate-limiting
+│  JWT auth · slowapi · Prometheus│
+└────────┬──────────────┬─────────┘
+         │              │
+    /embed, /detect  /classify, /refine
+         │              │
+         ▼              ▼
+┌─────────────┐  ┌──────────────────┐
+│visual_engine│  │ attribute_tagger │  ← IEPs
+│ (CLIP+YOLO) │  │ (Gemini 2.0 Flash│
+│  port 8001  │  │   port 8004)     │
+└──────┬──────┘  └──────────────────┘
+       │ vectors
+       ▼
+  Qdrant Cloud (vector DB)
+
+Background services (same VM):
+  MLflow :5000  ← experiment tracking
+  mlops_exporter :8003 ← ML metrics → Prometheus :9090 → Grafana :3000
+  link_monitor  ← catalog link health (async)
+
+CI/CD (GitHub Actions):
+  unit-tests → integration-tests → judge quality gate → E2E tests
+  retrain.yml (cron every 2 days) → LoRA fine-tune → promote → SSH deploy → hot-reload
+```
+
+## 8. Secrets Management
 
 Locus uses three API keys: `QDRANT_API_KEY`, `OPENROUTER_API_KEY`, and `GOOGLE_API_KEY`. Each is never committed to the repository. The table below shows how they are injected per environment.
 
@@ -81,7 +114,60 @@ Pods read secrets via `secretKeyRef` in `k8s/deployment.yaml` — keys are injec
 
 **Key rotation:** rotate a key by updating the GitHub Secret and re-running the retrain/deploy workflow, or by patching the K8s secret with `kubectl create secret generic locus-secrets --from-literal=KEY=<new> --dry-run=client -o yaml | kubectl apply -f -` and restarting the affected deployment.
 
-## 8. Assumptions & Risks
+## 9. Cloud Deployment & Cost Estimate
+
+**Deployment:** Azure VM `Standard_B2s` (2 vCPU, 4GB RAM) running Docker Compose with 7 services. Public IP: `20.240.203.22`.
+
+| Component | Cost |
+|---|---|
+| Azure Standard_B2s VM | ~$35/month |
+| Qdrant Cloud (free tier, 1GB) | $0 |
+| OpenRouter (Gemini judge, ~500 calls/day) | ~$2–5/month |
+| Google Gemini API (attribute tagger fallback) | ~$1–3/month |
+| GitHub Actions (CI, self-hosted runner on VM) | $0 |
+| **Total estimated** | **~$38–43/month** |
+
+**How to start the system:**
+```bash
+ssh -i locus-vm_key.pem azureuser@20.240.203.22 "cd ~/locus && docker compose up -d"
+```
+
+## 10. Local Development & Deployment Runbook
+
+### Prerequisites
+- Docker + Docker Compose installed
+- `.env` file with `QDRANT_URL`, `QDRANT_API_KEY`, `OPENROUTER_API_KEY`, `GOOGLE_API_KEY`, `ADMIN_API_KEY` (copy `.env.example` and fill values)
+
+### Start locally
+```bash
+git clone https://github.com/tatiananohra/locus.git && cd locus
+cp .env.example .env  # fill in API keys
+docker compose up -d
+curl http://localhost:8000/health  # expect {"gateway":"ready",...}
+```
+
+### Deploy to Azure VM (production)
+```bash
+# One-time: copy env file to VM
+scp -i locus-vm_key.pem .env azureuser@20.240.203.22:~/locus/.env
+
+# Start / restart all services
+ssh -i locus-vm_key.pem azureuser@20.240.203.22 "cd ~/locus && docker compose up -d"
+
+# Verify
+curl http://20.240.203.22:8000/health
+```
+
+### Kubernetes (AKS — future)
+```bash
+kubectl create secret generic locus-secrets --from-env-file=.env
+kubectl apply -f k8s/
+kubectl rollout status deployment/gateway
+```
+
+---
+
+## 11. Assumptions & Risks
 * **Assumption:** User photos will have reasonable lighting and resolution.
 * **Risk 1: Background Removal Failure.**
     * **Issue:** `rembg` might fail on white-on-white images or complex textures.

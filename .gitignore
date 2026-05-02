@@ -53,6 +53,11 @@ visual_engine/models/
 mlops/.last_retrain_ts
 gateway/reindex_checkpoint.json
 
+# ── Generated reports and local planning docs ─────────────────────────────────
+mlops/golden_dataset_report.html
+PLAN.md
+*.xlsx
+
 # ── Frontend build ────────────────────────────────────────────────────────────
 frontend/dist/
 frontend/node_modules/
