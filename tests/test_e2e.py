@@ -48,7 +48,7 @@ def search_response(image_bytes):
 class TestAvailability:
     def test_gateway_online(self):
         _skip_if_no_url()
-        r = requests.get(f"{GATEWAY_URL}/", timeout=TIMEOUT)
+        r = requests.get(f"{GATEWAY_URL}/health", timeout=TIMEOUT)
         assert r.status_code == 200
 
     def test_health_endpoint(self):
@@ -103,14 +103,14 @@ class TestSearchQuality:
             timeout=TIMEOUT,
         )
         assert r.status_code == 200
-        assert isinstance(r.json(), list)
+        assert "detections" in r.json()
 
     def test_feedback_endpoint_accepts_submission(self, search_response):
         product_id = search_response["matches"][0]["product_id"]
         search_id  = search_response["search_id"]
         r = requests.post(
             f"{GATEWAY_URL}/feedback",
-            json={"product_id": product_id, "search_id": search_id, "rating": 4, "source": "e2e"},
+            json={"result_product_id": product_id, "rating": 4, "source": "e2e"},
             timeout=TIMEOUT,
         )
         assert r.status_code == 200

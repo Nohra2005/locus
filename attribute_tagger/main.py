@@ -1,4 +1,5 @@
 import time
+from typing import Optional
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -7,7 +8,7 @@ from prometheus_client import Counter, Histogram
 
 import tagger
 
-app = FastAPI()
+app = FastAPI(title="Locus Attribute Tagger", version="1.0.0")
 Instrumentator().instrument(app).expose(app)
 
 tagger_requests = Counter(
@@ -30,6 +31,16 @@ class TagRequest(BaseModel):
     category: str = ""
 
 
+class TagResponse(BaseModel):
+    colors: Optional[list[str]] = None
+    style: Optional[str] = None
+    silhouette: Optional[str] = None
+    occasion: Optional[list[str]] = None
+    pattern: Optional[str] = None
+    material_feel: Optional[str] = None
+    trend_tags: Optional[list[str]] = None
+
+
 @app.get("/")
 def root():
     return {"status": "online", "service": "Locus Attribute Tagger"}
@@ -40,7 +51,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/tag")
+@app.post("/tag", response_model=TagResponse)
 def tag(body: TagRequest):
     tagger_requests.inc()
     t0 = time.perf_counter()

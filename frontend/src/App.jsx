@@ -2272,7 +2272,7 @@ function AttributePanel({ attributes, refineMode, onRefine }) {
 // ══════════════════════════════════════════════════════════════════
 // RESULTS VIEW
 // ══════════════════════════════════════════════════════════════════
-function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, judging, attributes, refineMode, onRefine, onRefineCrop, radius, setRadius, userLocation, searchLocation, storeLocations = {}, onFeedback, onReset, saved = [], onToggleSave, onFlag }) {
+function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, judging, attributes, refineMode, onRefine, onRefineCrop, radius, setRadius, userLocation, searchLocation, storeLocations = {}, onFeedback, onReset, saved = [], onToggleSave, onFlag, searchWarning }) {
   const [highlightedStore, setHighlightedStore] = useState(null);
   const [activeDetail,     setActiveDetail]     = useState(null);
   const impressionsFired = useRef(false);
@@ -2492,8 +2492,10 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
 
         {displayResults.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 0", fontSize: "0.8rem", color: T.textMuted, lineHeight: 2 }}>
-            No results found.<br />
-            <span style={{ fontSize: "0.72rem" }}>The database may be empty — index items first.</span>
+            {searchWarning
+              ? <>No matches found.<br /><span style={{ fontSize: "0.72rem" }}>Try uploading a photo of a clothing item or accessory.</span></>
+              : <>No results found.<br /><span style={{ fontSize: "0.72rem" }}>The database may be empty — index items first.</span></>
+            }
           </div>
         ) : (
           <div className="results-grid">
@@ -3262,6 +3264,7 @@ export default function App() {
   const [categoryInfo,     setCategoryInfo]     = useState(null);
   const [queryImageURL,    setQueryImageURL]    = useState(null);
   const [searchId,         setSearchId]         = useState(null);
+  const [searchWarning,    setSearchWarning]    = useState(null);
   const [judgeScores,      setJudgeScores]      = useState({});   // {product_id: float}
   const [judging,          setJudging]          = useState(false); // true while AI scoring is in progress
   const [attributes,       setAttributes]       = useState(null); // null=loading, {}=failed/empty, obj=ready
@@ -3430,6 +3433,7 @@ export default function App() {
       const confVal = (confMap && typeof confMap === "object") ? (confMap[detCat] ?? 0) : 0;
       setCategoryInfo({ category: detCat, confidence: confVal });
       setSearchId(data.search_id || null);
+      setSearchWarning(data.warning || null);
       setJudgeScores({});
       setAttributes(null);
       setRefineMode(null);
@@ -3512,7 +3516,7 @@ export default function App() {
     setSelectedItem({ search_label: entry.category, label: CATEGORY_LABELS[entry.category] || entry.category });
     setQueryImageURL(null);
     setJudgeScores({});
-    setSearchId(null);
+    setSearchId(null); setSearchWarning(null);
     setView("results");
     setActiveTab("Discover");
   }, []);
@@ -3528,7 +3532,7 @@ export default function App() {
 
   const handleRefineCrop = useCallback(() => {
     setResults([]);
-    setSearchId(null);
+    setSearchId(null); setSearchWarning(null);
     setAttributes(null);
     setRefineMode(null);
     setJudgeScores({});
@@ -3549,7 +3553,7 @@ export default function App() {
     setResults([]);
     setSelectedItem(null);
     setCategoryInfo(null);
-    setSearchId(null);
+    setSearchId(null); setSearchWarning(null);
     setJudgeScores({});
     setError(null);
   }, [imageURL, queryImageURL]);
@@ -3583,7 +3587,7 @@ export default function App() {
             setSelectedItem({ search_label: (result.payload ?? {}).category_tag || "", label: CATEGORY_LABELS[(result.payload ?? {}).category_tag] || "item" });
             setQueryImageURL(null);
             setJudgeScores({});
-            setSearchId(null);
+            setSearchId(null); setSearchWarning(null);
             setView("results");
             setActiveTab("Discover");
           }}
@@ -3617,6 +3621,7 @@ export default function App() {
               onRefineCrop={handleRefineCrop}
               saved={saved}
               onToggleSave={handleToggleSave}
+              searchWarning={searchWarning}
             />
           )}
         </>

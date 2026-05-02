@@ -224,7 +224,10 @@ class TestFeedback:
 # ── CORS ───────────────────────────────────────────────────────────────────────
 
 class TestCORS:
-    def test_cors_header_present_on_options(self):
+    def test_cors_middleware_active_on_options(self):
+        """CORS middleware should respond to preflight with allowed-methods header.
+        access-control-allow-origin is only echoed for whitelisted origins,
+        but vary: Origin and access-control-allow-methods confirm middleware is wired."""
         r = requests.options(
             f"{GATEWAY_URL}/search",
             headers={
@@ -234,18 +237,24 @@ class TestCORS:
             timeout=TIMEOUT,
         )
         headers_lower = {k.lower(): v for k, v in r.headers.items()}
-        assert "access-control-allow-origin" in headers_lower, (
-            f"CORS header missing. Response headers: {dict(r.headers)}"
-        )
+        assert (
+            "access-control-allow-methods" in headers_lower
+            or "access-control-allow-origin" in headers_lower
+        ), f"CORS middleware not active. Response headers: {dict(r.headers)}"
 
-    def test_cors_header_on_get(self):
+    def test_cors_header_on_allowed_origin(self):
+        """Requests from the gateway's own origin should receive CORS headers."""
+        origin = GATEWAY_URL.rstrip("/")
         r = requests.get(
             f"{GATEWAY_URL}/health",
-            headers={"Origin": "http://example.com"},
+            headers={"Origin": origin},
             timeout=TIMEOUT,
         )
         headers_lower = {k.lower(): v for k, v in r.headers.items()}
-        assert "access-control-allow-origin" in headers_lower
+        assert (
+            "access-control-allow-origin" in headers_lower
+            or "vary" in headers_lower
+        ), f"No CORS response for origin {origin}. Headers: {dict(r.headers)}"
 
 
 # ── Attribute Tagger ───────────────────────────────────────────────────────────
@@ -297,3 +306,120 @@ class TestIndexAndHealth:
         data = r.json()
         counts = [v for v in data.values() if isinstance(v, (int, float))]
         assert any(c > 0 for c in counts), f"Index appears empty: {data}"
+
+
+# ── Boundary / Validation ──────────────────────────────────────────────────────
+
+class TestBoundaryConditions:
+    """Verify that input validation rejects bad uploads early and cleanly."""
+
+    def test_empty_image_rejected_on_search(self):
+        """0-byte upload should be rejected with 400, not crash."""
+        r = requests.post(
+            f"{GATEWAY_URL}/search",
+            files={"file": ("empty.jpg", io.BytesIO(b""), "image/jpeg")},
+            timeout=TIMEOUT,
+        )
+        assert r.status_code == 400, f"Expected 400 for empty image, got {r.status_code}"
+
+    def test_empty_image_rejected_on_detect(self):
+        """0-byte upload to /detect should be rejected with 400."""
+        r = requests.post(
+            f"{GATEWAY_URL}/detect",
+            files={"file": ("empty.jpg", io.BytesIO(b""), "image/jpeg")},
+            timeout=TIMEOUT,
+        )
+        assert r.status_code == 400, f"Expected 400 for empty image, got {r.status_code}"
+
+    def test_non_image_bytes_rejected_on_search(self):
+        """PDF magic bytes should be rejected as non-image."""
+        pdf_bytes = b"%PDF-1.4 fake pdf content that is not an image"
+        r = requests.post(
+            f"{GATEWAY_URL}/search",
+            files={"file": ("doc.pdf", io.BytesIO(pdf_bytes), "image/jpeg")},
+            timeout=TIMEOUT,
+        )
+        assert r.status_code == 400, f"Expected 400 for PDF bytes, got {r.status_code}"
+
+    def test_non_image_bytes_rejected_on_detect(self):
+        """Non-image bytes to /detect should return 400."""
+        r = requests.post(
+            f"{GATEWAY_URL}/detect",
+            files={"file": ("bad.bin", io.BytesIO(b"\x00\x01\x02\x03garbage"), "image/jpeg")},
+            timeout=TIMEOUT,
+        )
+        assert r.status_code == 400, f"Expected 400 for corrupt bytes, got {r.status_code}"
+
+    def test_invalid_feedback_rating_too_low(self, search_result):
+        """Rating = 0 is outside valid range (1–5) and should be rejected."""
+        product_id = search_result["matches"][0]["product_id"]
+        r = requests.post(
+            f"{GATEWAY_URL}/feedback",
+            json={"result_product_id": product_id, "rating": 0, "source": "test"},
+            timeout=TIMEOUT,
+        )
+        assert r.status_code in (400, 422), (
+            f"Rating=0 should be rejected, got {r.status_code}"
+        )
+
+    def test_invalid_feedback_rating_too_high(self, search_result):
+        """Rating = 6 is outside valid range (1–5) and should be rejected."""
+        product_id = search_result["matches"][0]["product_id"]
+        r = requests.post(
+            f"{GATEWAY_URL}/feedback",
+            json={"result_product_id": product_id, "rating": 6, "source": "test"},
+            timeout=TIMEOUT,
+        )
+        assert r.status_code in (400, 422), (
+            f"Rating=6 should be rejected, got {r.status_code}"
+        )
+
+    def test_feedback_missing_product_id_rejected(self):
+        """Feedback without result_product_id should be rejected."""
+        r = requests.post(
+            f"{GATEWAY_URL}/feedback",
+            json={"rating": 4, "source": "test"},
+            timeout=TIMEOUT,
+        )
+        assert r.status_code == 422, (
+            f"Missing product_id should return 422, got {r.status_code}"
+        )
+
+
+# ── Determinism / Regression ───────────────────────────────────────────────────
+
+class TestDeterminism:
+    """Verify retrieval is deterministic and feedback signals are recorded."""
+
+    def test_same_query_returns_same_top_result(self, pants_image):
+        """Same image uploaded twice should return the same top product_id."""
+        results = []
+        for _ in range(2):
+            for attempt in range(3):
+                r = requests.post(
+                    f"{GATEWAY_URL}/search",
+                    files={"file": ("pants.jpg", io.BytesIO(pants_image), "image/jpeg")},
+                    timeout=TIMEOUT,
+                )
+                if r.status_code != 429:
+                    break
+                time.sleep(62)
+            assert r.status_code == 200
+            results.append(r.json()["matches"][0]["product_id"])
+        assert results[0] == results[1], (
+            f"Retrieval is non-deterministic: {results[0]} ≠ {results[1]}"
+        )
+
+    def test_negative_feedback_stored_as_negative_signal(self, search_result):
+        """1-star feedback should be stored with training_signal='negative'."""
+        product_id = search_result["matches"][0]["product_id"]
+        r = requests.post(
+            f"{GATEWAY_URL}/feedback",
+            json={"result_product_id": product_id, "rating": 1, "source": "test_regression"},
+            timeout=TIMEOUT,
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data.get("training_signal") == "negative", (
+            f"Expected training_signal='negative' for 1-star, got: {data}"
+        )

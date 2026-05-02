@@ -1166,6 +1166,7 @@ async def track_event(req: TrackEventRequest):
 # ── Detect ─────────────────────────────────────────────────────────────────────
 
 @app.post("/detect")
+@limiter.limit("5/minute")
 async def detect_items(request: Request, file: UploadFile = File(...)):
     image_bytes = await file.read()
     try:
@@ -1511,6 +1512,7 @@ async def classify_crop(
 # ── Search ─────────────────────────────────────────────────────────────────────
 
 @app.post("/search")
+@limiter.limit("10/minute")
 async def search_items(
     request:            Request,
     background_tasks:   BackgroundTasks,
@@ -1568,6 +1570,10 @@ async def search_items(
     detected_category   = vis_data.get("category")
     category_confidence = vis_data.get("category_confidence", {})
     processed_image     = vis_data.get("debug_image")
+
+    if not vector:
+        return JSONResponse({"matches": [], "detected_category": None, "warning": "Image could not be embedded — no fashion content detected"})
+
     locus_searches.labels(category=detected_category or "unknown").inc()
 
     mismatch_warning = None
