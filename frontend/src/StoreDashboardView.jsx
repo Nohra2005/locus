@@ -848,25 +848,54 @@ function UploadPage({ auth }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function SettingsPage({ auth, onProfileUpdate, onLogout }) {
-  const [name,    setName]    = useState(auth.store_name || "");
-  const [mall,    setMall]    = useState(auth.mall || "");
-  const [phone,   setPhone]   = useState(auth.phone || "");
-  const [saving,  setSaving]  = useState(false);
-  const [saved,   setSaved]   = useState(false);
-  const [error,   setError]   = useState("");
+  const [name,      setName]      = useState(auth.store_name || "");
+  const [mall,      setMall]      = useState(auth.mall || "");
+  const [phone,     setPhone]     = useState(auth.phone || "");
+  const [mapsUrl,   setMapsUrl]   = useState(auth.maps_url || "");
+  const [latitude,  setLatitude]  = useState(auth.latitude != null ? String(auth.latitude) : "");
+  const [longitude, setLongitude] = useState(auth.longitude != null ? String(auth.longitude) : "");
+  const [locating,  setLocating]  = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [saved,     setSaved]     = useState(false);
+  const [error,     setError]     = useState("");
+
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) { setError("Geolocation is not supported by your browser."); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLatitude(pos.coords.latitude.toFixed(6));
+        setLongitude(pos.coords.longitude.toFixed(6));
+        setLocating(false);
+      },
+      () => { setError("Could not get your location. Please allow location access and try again."); setLocating(false); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true); setError(""); setSaved(false);
+    const lat = latitude !== "" ? parseFloat(latitude) : null;
+    const lng = longitude !== "" ? parseFloat(longitude) : null;
+    if ((latitude !== "" && isNaN(lat)) || (longitude !== "" && isNaN(lng))) {
+      setError("Latitude and longitude must be valid numbers."); setSaving(false); return;
+    }
     try {
       const resp = await fetch(`${API}/auth/profile`, {
         method: "PUT",
         headers: authHeaders(auth.access_token),
-        body: JSON.stringify({ store_name: name.trim(), mall: mall.trim(), phone: phone.trim() }),
+        body: JSON.stringify({
+          store_name: name.trim(), mall: mall.trim(), phone: phone.trim(),
+          maps_url: mapsUrl.trim(), latitude: lat, longitude: lng,
+        }),
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.detail || "Update failed");
-      onProfileUpdate({ store_name: data.store_name, mall: data.mall, phone: data.phone });
+      onProfileUpdate({
+        store_name: data.store_name, mall: data.mall, phone: data.phone,
+        maps_url: data.maps_url, latitude: data.latitude, longitude: data.longitude,
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -906,6 +935,70 @@ function SettingsPage({ auth, onProfileUpdate, onLogout }) {
             placeholder="e.g. ABC Achrafieh" required />
           <AuthInput label="Phone" type="tel" value={phone} onChange={setPhone}
             placeholder="+961 70 000 000" />
+
+          {/* Google Maps location */}
+          <div>
+            <label style={labelStyle}>Google Maps link</label>
+            <input
+              value={mapsUrl}
+              onChange={e => setMapsUrl(e.target.value)}
+              placeholder="https://maps.google.com/?q=..."
+              type="url"
+              style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+            />
+            <div style={{ fontSize: "0.68rem", color: T.textMuted, marginTop: 6, lineHeight: 1.5 }}>
+              Open Google Maps, find your store, tap Share → Copy link, then paste it here.
+              Customers will see a "Get directions" button on every product.
+            </div>
+            {mapsUrl && (
+              <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 8,
+                  fontSize: "0.72rem", color: T.accent, textDecoration: "none" }}>
+                ◎ Preview link →
+              </a>
+            )}
+          </div>
+
+          {/* Store coordinates for map display */}
+          <div>
+            <label style={labelStyle}>Store coordinates</label>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <input
+                value={latitude}
+                onChange={e => setLatitude(e.target.value)}
+                placeholder="Latitude (e.g. 33.8869)"
+                style={{ ...inputStyle, flex: 1, minWidth: 130, boxSizing: "border-box" }}
+              />
+              <input
+                value={longitude}
+                onChange={e => setLongitude(e.target.value)}
+                placeholder="Longitude (e.g. 35.5131)"
+                style={{ ...inputStyle, flex: 1, minWidth: 130, boxSizing: "border-box" }}
+              />
+              <button
+                type="button"
+                onClick={handleUseMyLocation}
+                disabled={locating}
+                style={{
+                  padding: "9px 14px", borderRadius: 9, border: `1px solid ${T.accentRing}`,
+                  background: T.accentBg, color: T.accent, cursor: locating ? "not-allowed" : "pointer",
+                  fontSize: "0.78rem", fontFamily: "inherit", whiteSpace: "nowrap",
+                  display: "flex", alignItems: "center", gap: 6, opacity: locating ? 0.65 : 1,
+                }}
+              >
+                {locating ? <><Spinner small /> Locating…</> : "⊕ Use my location"}
+              </button>
+            </div>
+            <div style={{ fontSize: "0.68rem", color: T.textMuted, marginTop: 6, lineHeight: 1.5 }}>
+              Tap "Use my location" while standing in your store — your pin will appear on the map
+              when customers search for nearby items.
+            </div>
+            {latitude && longitude && (
+              <div style={{ marginTop: 6, fontSize: "0.72rem", color: T.green }}>
+                ✓ Pinned at {parseFloat(latitude).toFixed(5)}, {parseFloat(longitude).toFixed(5)}
+              </div>
+            )}
+          </div>
 
           <div>
             <label style={labelStyle}>Email</label>

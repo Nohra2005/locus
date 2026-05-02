@@ -30,7 +30,7 @@ from qdrant_client.http.models import Distance, PointStruct, VectorParams
 import time as _time_module
 
 from judge import run_judge
-from auth import router as auth_router, verify_token, optional_token, _load_users, pwd_context
+from auth import router as auth_router, verify_token, optional_token, _load_users, pwd_context, get_store_maps_urls, get_store_locations
 
 # ── Per-search judge score store ──────────────────────────────────────────────
 # search_id → {product_id: float_score}  written incrementally by run_judge.
@@ -727,11 +727,7 @@ async def startup_metrics():
     asyncio.create_task(_refresh_admin_metrics())
 
 
-@app.on_event("startup")
-def startup_event():
-    if not TAGGER_HOST:
-        print("[WARNING] TAGGER_HOST is not set — attribute tagging will be silently disabled. "
-              "Set TAGGER_HOST=http://attribute_tagger:8004 to enable it.")
+def _init_qdrant_collections():
     # ── Main collection ───────────────────────────────────────────────────────
     if not client.collection_exists(collection_name=COLLECTION_NAME):
         client.create_collection(
@@ -819,6 +815,25 @@ def startup_event():
     if not os.path.exists(PENDING_PATH):
         with open(PENDING_PATH, "w") as f:
             _json.dump([], f)
+
+
+@app.on_event("startup")
+def startup_event():
+    if not TAGGER_HOST:
+        print("[WARNING] TAGGER_HOST is not set — attribute tagging will be silently disabled. "
+              "Set TAGGER_HOST=http://attribute_tagger:8004 to enable it.")
+    import time as _time
+    for attempt in range(5):
+        try:
+            _init_qdrant_collections()
+            break
+        except Exception as e:
+            if attempt < 4:
+                wait = 2 ** attempt
+                print(f"[STARTUP] Qdrant not reachable ({e}), retry {attempt + 1}/5 in {wait}s...")
+                _time.sleep(wait)
+            else:
+                print(f"[STARTUP] WARNING: Could not initialize Qdrant collections after 5 attempts: {e}")
 
 
 @app.get("/")
@@ -1183,6 +1198,12 @@ async def health_check():
     return {"ready": all(v == "ready" for v in status.values()), "services": status}
 
 
+@app.get("/stores/locations")
+async def stores_locations():
+    """Return {store_name: [lat, lng]} for all stores that have pinned coordinates."""
+    return get_store_locations()
+
+
 # ── Index Stats ────────────────────────────────────────────────────────────────
 
 @app.get("/index-stats")
@@ -1245,20 +1266,28 @@ async def index_stats():
 
 @app.get("/store-catalogue")
 async def store_catalogue(store_name: str, limit: int = 100, offset: int = 0):
-    results, _ = client.scroll(
-        collection_name=COLLECTION_NAME,
-        scroll_filter=models.Filter(
-            must=[models.FieldCondition(
-                key="store_name",
-                match=models.MatchValue(value=store_name)
-            )]
-        ),
-        limit=1000,
-        with_payload=True,
-        with_vectors=False,
+    store_filter = models.Filter(
+        must=[models.FieldCondition(
+            key="store_name",
+            match=models.MatchValue(value=store_name)
+        )]
     )
+    all_points = []
+    next_offset = None
+    while True:
+        batch, next_offset = client.scroll(
+            collection_name=COLLECTION_NAME,
+            scroll_filter=store_filter,
+            limit=1000,
+            offset=next_offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        all_points.extend(batch)
+        if next_offset is None:
+            break
     seen_products = {}
-    for point in results:
+    for point in all_points:
         p          = point.payload
         product_id = p.get("product_id", str(point.id))
         if product_id not in seen_products:
@@ -1361,15 +1390,23 @@ async def store_stats(payload=Depends(verify_token)):
     """Return aggregate stats for the authenticated store."""
     store_name = payload["store_name"]
     try:
-        results, _ = client.scroll(
-            collection_name=COLLECTION_NAME,
-            scroll_filter=models.Filter(must=[
-                models.FieldCondition(key="store_name", match=models.MatchValue(value=store_name))
-            ]),
-            limit=5000,
-            with_payload=True,
-            with_vectors=False,
-        )
+        store_filter = models.Filter(must=[
+            models.FieldCondition(key="store_name", match=models.MatchValue(value=store_name))
+        ])
+        all_points = []
+        next_offset = None
+        while True:
+            batch, next_offset = client.scroll(
+                collection_name=COLLECTION_NAME,
+                scroll_filter=store_filter,
+                limit=1000,
+                offset=next_offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            all_points.extend(batch)
+            if next_offset is None:
+                break
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1379,7 +1416,7 @@ async def store_stats(payload=Depends(verify_token)):
     rating_count = 0
     week_ago = datetime.utcnow().timestamp() - 7 * 86400
 
-    for point in results:
+    for point in all_points:
         p          = point.payload
         product_id = p.get("product_id", str(point.id))
         if product_id in seen:
@@ -1700,6 +1737,10 @@ async def search_items(
 
     matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:15]
 
+    maps_urls = get_store_maps_urls()
+    for m in matches:
+        m["maps_url"] = maps_urls.get(m.get("store_name", ""), "")
+
     search_id = str(uuid.uuid4())[:12]
 
     # ── Attribute tagger: extract visual attributes in background ─────────────
@@ -1876,6 +1917,9 @@ async def refine_results(body: RefineRequest):
             }
 
     results = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:25]
+    maps_urls = get_store_maps_urls()
+    for r in results:
+        r["maps_url"] = maps_urls.get(r.get("store_name", ""), "")
     return {"results": results, "mode": body.mode, "query_text": text}
 
 
@@ -2418,6 +2462,7 @@ async def add_bulk_batch(batch: BulkBatchRequest):
                         "price":        price,
                         "product_id":   product_id,
                         "box_source":   box_source,
+                        "updated_at":   datetime.utcnow().isoformat(),
                     }
                     if shoe_style:
                         batch_payload["shoe_style"] = shoe_style

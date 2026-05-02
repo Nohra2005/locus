@@ -490,7 +490,23 @@ async def recover_broken(broken_items: list[dict]) -> list[dict]:
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 
+async def _wait_for_qdrant(retries: int = 6) -> None:
+    for attempt in range(retries):
+        try:
+            client.get_collections()
+            return
+        except Exception as e:
+            if attempt < retries - 1:
+                wait = 2 ** attempt
+                print(f"[STARTUP] Qdrant not reachable ({e}), retry {attempt + 1}/{retries} in {wait}s...")
+                await asyncio.sleep(wait)
+            else:
+                raise RuntimeError(f"Could not connect to Qdrant after {retries} attempts: {e}") from e
+
+
 async def main() -> None:
+    await _wait_for_qdrant()
+
     start = datetime.utcnow()
     print("=" * 60)
     print("Locus — Link Health Monitor")

@@ -143,5 +143,37 @@
     "store_name": "Maison123",
     "judge_score": 0.35,
     "flagged_at": "2026-05-01T15:25:06.940327"
+  },
+  {
+    "product_id": "57a3d5a8-524e-5639-a967-3a2e7aaf771e",
+    "image_url": "https://cdn.shopify.com/s/files/1/0283/6715/9393/files/655487186_x.jpg?v=1756468434",
+    "name": "BIXENTE SLEEVELESS CINNAMON WOOL CARDIGAN",
+    "store_name": "Maison123",
+    "judge_score": 0.35,
+    "flagged_at": "2026-05-02T13:28:03.369125"
+  },
+  {
+    "product_id": "8dc8279e-c9c1-5a8f-a828-c837b8ee5d4c",
+    "image_url": "https://cdn.shopify.com/s/files/1/0283/6715/9393/files/654775748_x.jpg?v=1757517821",
+    "name": "CELESTIN KHAKI TURTLENECK WOOL JUMPER",
+    "store_name": "Maison123",
+    "judge_score": 0.35,
+    "flagged_at": "2026-05-02T13:28:03.619655"
+  },
+  {
+    "product_id": "52e0e611-aa7d-5017-ace3-6f247c7fe47f",
+    "image_url": "https://cdn.shopify.com/s/files/1/0283/6715/9393/files/655526148_c.jpg?v=1758524177",
+    "name": "SIMONE KHAKI EMBROIDERED BLOUSE",
+    "store_name": "Maison123",
+    "judge_score": 0.35,
+    "flagged_at": "2026-05-02T13:55:14.844695"
+  },
+  {
+    "product_id": "7a23b5da-cb43-55ef-a327-bd8666b0759c",
+    "image_url": "https://cdn.shopify.com/s/files/1/0283/6715/9393/files/655853780_b.jpg?v=1773256191",
+    "name": "DORIAN ECRU LONG SLEEVE BLOUSE",
+    "store_name": "Maison123",
+    "judge_score": 0.15,
+    "flagged_at": "2026-05-02T13:55:15.152454"
   }
 ]

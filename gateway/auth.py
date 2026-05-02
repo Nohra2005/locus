@@ -42,6 +42,24 @@ def _verify_password(plain: str, stored: str) -> bool:
         return False
 
 
+def get_store_maps_urls() -> dict[str, str]:
+    """Return {store_name: maps_url} for all registered stores."""
+    users = _load_users()
+    return {u["store_name"]: u.get("maps_url", "") for u in users.values() if u.get("maps_url")}
+
+
+def get_store_locations() -> dict[str, list[float]]:
+    """Return {store_name: [lat, lng]} for all stores that have coordinates."""
+    users = _load_users()
+    out = {}
+    for u in users.values():
+        lat = u.get("latitude")
+        lng = u.get("longitude")
+        if lat is not None and lng is not None:
+            out[u["store_name"]] = [lat, lng]
+    return out
+
+
 def _load_users() -> dict:
     try:
         with open(USERS_FILE) as f:
@@ -104,6 +122,9 @@ class ProfileUpdateRequest(BaseModel):
     store_name: str | None = None
     mall:       str | None = None
     phone:      str | None = None
+    maps_url:   str | None = None
+    latitude:   float | None = None
+    longitude:  float | None = None
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -139,6 +160,7 @@ async def register(req: RegisterRequest):
         "store_name": req.store_name.strip(),
         "mall":       req.mall.strip(),
         "phone":      req.phone.strip(),
+        "maps_url":   "",
         "created_at": datetime.utcnow().isoformat(),
     }
     _save_users(users)
@@ -150,6 +172,9 @@ async def register(req: RegisterRequest):
         "store_id":     store_id,
         "mall":         req.mall.strip(),
         "phone":        req.phone.strip(),
+        "maps_url":     "",
+        "latitude":     None,
+        "longitude":    None,
     }
 
 
@@ -181,6 +206,9 @@ async def login(req: LoginRequest):
         "store_id":     user["store_id"],
         "mall":         user.get("mall", ""),
         "phone":        user.get("phone", ""),
+        "maps_url":     user.get("maps_url", ""),
+        "latitude":     user.get("latitude"),
+        "longitude":    user.get("longitude"),
     }
 
 
@@ -194,6 +222,9 @@ async def me(payload=Depends(verify_token)):
         "store_name": payload["store_name"],
         "mall":       u.get("mall", ""),
         "phone":      u.get("phone", ""),
+        "maps_url":   u.get("maps_url", ""),
+        "latitude":   u.get("latitude"),
+        "longitude":  u.get("longitude"),
         "created_at": u.get("created_at", ""),
     }
 
@@ -235,10 +266,19 @@ async def update_profile(req: ProfileUpdateRequest, payload=Depends(verify_token
         u["mall"] = req.mall.strip()
     if req.phone is not None:
         u["phone"] = req.phone.strip()
+    if req.maps_url is not None:
+        u["maps_url"] = req.maps_url.strip()
+    if req.latitude is not None:
+        u["latitude"] = req.latitude
+    if req.longitude is not None:
+        u["longitude"] = req.longitude
     _save_users(users)
     return {
         "success":    True,
         "store_name": u["store_name"],
         "mall":       u["mall"],
         "phone":      u["phone"],
+        "maps_url":   u.get("maps_url", ""),
+        "latitude":   u.get("latitude"),
+        "longitude":  u.get("longitude"),
     }
