@@ -55,11 +55,13 @@ jobs:
           path: ~/.cache/huggingface
           key: hf-fashion-clip-${{ runner.os }}-v1
 
-      - name: Start core services
-        run: |
-          USERPROFILE="$HOME" docker compose up -d gateway visual_engine attribute_tagger mlflow
+      - name: Build images (sequential to avoid OOM on self-hosted runner)
+        run: USERPROFILE="$HOME" docker compose build --no-parallel gateway visual_engine attribute_tagger
         env:
           DOCKER_BUILDKIT: 1
+
+      - name: Start core services
+        run: USERPROFILE="$HOME" docker compose up -d gateway visual_engine attribute_tagger mlflow
 
       - name: Wait for gateway
         run: |

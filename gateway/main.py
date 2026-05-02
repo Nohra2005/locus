@@ -1533,6 +1533,10 @@ async def search_items(
     detected_category   = vis_data.get("category")
     category_confidence = vis_data.get("category_confidence", {})
     processed_image     = vis_data.get("debug_image")
+
+    if not vector:
+        return JSONResponse({"matches": [], "detected_category": None, "warning": "Image could not be embedded — no fashion content detected"})
+
     locus_searches.labels(category=detected_category or "unknown").inc()
 
     mismatch_warning = None
