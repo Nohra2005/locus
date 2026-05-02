@@ -56,7 +56,10 @@ jobs:
           key: hf-fashion-clip-${{ runner.os }}-v1
 
       - name: Build images (sequential to avoid OOM on self-hosted runner)
-        run: USERPROFILE="$HOME" docker compose build --no-parallel gateway visual_engine attribute_tagger
+        run: |
+          USERPROFILE="$HOME" docker compose build gateway
+          USERPROFILE="$HOME" docker compose build visual_engine
+          USERPROFILE="$HOME" docker compose build attribute_tagger
         env:
           DOCKER_BUILDKIT: 1
 
