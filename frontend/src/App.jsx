@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import StoreDashboardView from "./StoreDashboardView";
@@ -13,14 +13,6 @@ L.Icon.Default.mergeOptions({
 });
 
 const API = "";
-
-const STORE_COORDS = {
-  "Zara":          [33.88685, 35.51308],
-  "Bershka":       [33.93372, 35.58891],
-  "Mike Sport":    [33.86769, 35.54560],
-  "Louis Vuitton": [33.89383, 35.50182],
-  "Virgin":        [33.88685, 35.51308],
-};
 
 const T = {
   bg:          "#FAF9F7",
@@ -670,6 +662,8 @@ function DiscoverSection({ title, subtitle, badge, items, saved, onToggleSave, l
     },
   });
 
+  if (!loading && items.length === 0) return null;
+
   return (
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingLeft: 24, paddingRight: 24 }}>
@@ -702,7 +696,7 @@ function DiscoverSection({ title, subtitle, badge, items, saved, onToggleSave, l
             </div>
           ))}
         </div>
-      ) : items.length === 0 ? null : (
+      ) : (
         <div className="discover-scroll" style={{ paddingLeft: 24, paddingRight: 24 }}>
           {items.map((item) => (
             <DiscoverCard
@@ -766,6 +760,39 @@ function LandingView({ onUpload, error, history, saved, onToggleSave }) {
       }
     }
     return pool.slice(0, 15);
+  }, [history]);
+
+  // Rank items by how often they appear across all search results
+  const mostSearched = useMemo(() => {
+    if (!history.length) return [];
+    const counts = new Map();
+    for (const entry of history) {
+      for (const r of (entry.results || [])) {
+        const p   = r.payload ?? {};
+        const pid = p.product_id || p.item_id || p.image_url;
+        if (!pid || !p.image_url) continue;
+        if (counts.has(pid)) {
+          counts.get(pid).count++;
+        } else {
+          counts.set(pid, {
+            count: 1,
+            item: {
+              product_id: pid,
+              name:       p.name || p.item_name || "",
+              price:      p.price || "",
+              category:   p.category_tag || entry.category || "",
+              image_url:  p.image_url,
+              store:      p.store_name || p.store || "",
+              mall:       p.mall_name || p.mall || "",
+            },
+          });
+        }
+      }
+    }
+    return Array.from(counts.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15)
+      .map(({ item }) => item);
   }, [history]);
 
   const loading = discover === null;
@@ -871,6 +898,19 @@ function LandingView({ onUpload, error, history, saved, onToggleSave }) {
             title="For You"
             subtitle="Based on your searches"
             items={forYou}
+            saved={saved}
+            onToggleSave={onToggleSave}
+            loading={false}
+          />
+        )}
+
+        {/* Most Searched — only show when user has sufficient history */}
+        {mostSearched.length > 0 && (
+          <DiscoverSection
+            title="Most Searched"
+            subtitle="Top picks from your searches"
+            badge="popular"
+            items={mostSearched}
             saved={saved}
             onToggleSave={onToggleSave}
             loading={false}
@@ -1278,9 +1318,167 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// LOCATION PICKER MODAL
+// ══════════════════════════════════════════════════════════════════
+function MapClickHandler({ onMapClick }) {
+  useMapEvents({ click(e) { onMapClick([e.latlng.lat, e.latlng.lng]); } });
+  return null;
+}
+
+const searchPinIcon = (active) => L.divIcon({
+  html: `<div style="
+    width:24px; height:24px;
+    background:${active ? T.accent : "#999"};
+    border-radius:50% 50% 50% 0;
+    transform:rotate(-45deg);
+    border:2.5px solid #fff;
+    box-shadow:0 2px 12px rgba(0,0,0,0.45);
+  "></div>`,
+  className: "",
+  iconSize: [24, 24],
+  iconAnchor: [12, 24],
+  popupAnchor: [0, -26],
+});
+
+const gpsUserIcon = L.divIcon({
+  html: `<div style="width:16px;height:16px;background:#4A90E2;border-radius:50%;border:2.5px solid #fff;box-shadow:0 0 0 4px rgba(74,144,226,0.25);"></div>`,
+  className: "",
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+});
+
+function LocationPickerModal({ userLocation, storeLocations, currentSearchLocation, onConfirm, onClose }) {
+  const fallback = [33.8869, 35.5131];
+  const gpsLL    = userLocation || fallback;
+  const [pin, setPin] = useState(currentSearchLocation || gpsLL);
+  const isGPS = userLocation && pin[0] === gpsLL[0] && pin[1] === gpsLL[1];
+
+  const handleUseGPS = () => {
+    if (!userLocation) return;
+    setPin([...gpsLL]);
+  };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 2000,
+      background: T.bg, display: "flex", flexDirection: "column",
+      animation: "slideUp 0.22s cubic-bezier(0.16,1,0.3,1) forwards",
+    }}>
+      {/* Header */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "14px 20px",
+        borderBottom: `1px solid ${T.borderFaint}`,
+        background: T.surface,
+        flexShrink: 0,
+      }}>
+        <div>
+          <div style={{ fontSize: "0.95rem", fontWeight: 600, color: T.text }}>Search location</div>
+          <div style={{ fontSize: "0.68rem", color: T.textMuted, marginTop: 2 }}>
+            Tap anywhere on the map to place your search pin
+          </div>
+        </div>
+        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "1.2rem", color: T.textMuted, cursor: "pointer", padding: "4px 8px" }}>✕</button>
+      </div>
+
+      {/* Map */}
+      <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
+        <MapContainer
+          center={pin}
+          zoom={13}
+          style={{ height: "100%", width: "100%" }}
+          zoomControl={true}
+        >
+          <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
+          <MapClickHandler onMapClick={setPin} />
+          <MapRecenter center={pin} />
+
+          {/* Store pins (faded reference) */}
+          {Object.entries(storeLocations).map(([store, coords]) => (
+            <Marker key={store} position={coords} icon={L.divIcon({
+              html: `<div style="width:10px;height:10px;background:${T.textFaint};border-radius:50%;border:1.5px solid #fff;"></div>`,
+              className: "",
+              iconSize: [10, 10],
+              iconAnchor: [5, 5],
+            })}>
+              <Popup><span style={{ fontSize: "0.8rem", color: T.textMuted }}>{store}</span></Popup>
+            </Marker>
+          ))}
+
+          {/* GPS dot */}
+          {userLocation && (
+            <Marker position={gpsLL} icon={gpsUserIcon}>
+              <Popup><span style={{ fontSize: "0.8rem" }}>Your GPS location</span></Popup>
+            </Marker>
+          )}
+
+          {/* Search pin */}
+          <Marker position={pin} icon={searchPinIcon(true)}>
+            <Popup>
+              <span style={{ fontSize: "0.8rem", color: T.accent, fontWeight: 600 }}>Search here</span><br />
+              <span style={{ fontSize: "0.72rem", color: T.textMuted }}>{pin[0].toFixed(4)}, {pin[1].toFixed(4)}</span>
+            </Popup>
+          </Marker>
+        </MapContainer>
+
+        {/* Use GPS button floating on map */}
+        {userLocation && (
+          <button
+            onClick={handleUseGPS}
+            style={{
+              position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
+              zIndex: 1000,
+              background: isGPS ? T.accent : T.surface,
+              color: isGPS ? "#fff" : T.text,
+              border: `1px solid ${isGPS ? T.accent : T.border}`,
+              borderRadius: 24, padding: "10px 20px",
+              fontSize: "0.82rem", fontFamily: "inherit", fontWeight: 500,
+              cursor: "pointer",
+              boxShadow: "0 2px 12px rgba(0,0,0,0.18)",
+              display: "flex", alignItems: "center", gap: 8,
+              transition: "all 0.15s",
+            }}
+          >
+            <span style={{ fontSize: "0.7rem", lineHeight: 1 }}>◉</span>
+            {isGPS ? "Using GPS location" : "Use GPS location"}
+          </button>
+        )}
+      </div>
+
+      {/* Bottom action bar */}
+      <div style={{
+        padding: "16px 20px", paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
+        borderTop: `1px solid ${T.borderFaint}`,
+        background: T.surface,
+        display: "flex", alignItems: "center", gap: 14,
+        flexShrink: 0,
+      }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: "0.62rem", color: T.textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Pinned at</div>
+          <div style={{ fontSize: "0.82rem", color: T.text, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
+            {pin[0].toFixed(5)}, {pin[1].toFixed(5)}
+          </div>
+        </div>
+        <button
+          onClick={() => onConfirm(pin)}
+          style={{
+            padding: "12px 28px", background: T.text, color: T.bg,
+            border: "none", borderRadius: 12,
+            fontSize: "0.88rem", fontFamily: "inherit", fontWeight: 500,
+            cursor: "pointer", letterSpacing: "0.02em",
+          }}
+        >
+          Search here →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 // CONFIRM VIEW  — shows crop + CLIP category prediction for approval
 // ══════════════════════════════════════════════════════════════════
-function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack }) {
+function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack, searchLocation, userLocation, onOpenLocationPicker }) {
   const cropURL = useMemo(() => {
     if (!cropBlob) return null;
     const url = URL.createObjectURL(cropBlob);
@@ -1373,6 +1571,40 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
           </div>
         </div>
 
+        {/* Location row */}
+        <div style={{
+          width: "100%", maxWidth: 480,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: T.surface, border: `1px solid ${T.border}`,
+          borderRadius: 12, padding: "12px 16px",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: "1rem", lineHeight: 1 }}>
+              {searchLocation ? "📍" : "◉"}
+            </span>
+            <div>
+              <div style={{ fontSize: "0.62rem", color: T.textMuted, letterSpacing: "0.1em", textTransform: "uppercase" }}>Searching near</div>
+              <div style={{ fontSize: "0.82rem", color: T.text, marginTop: 2, fontWeight: 500 }}>
+                {searchLocation
+                  ? `${searchLocation[0].toFixed(4)}, ${searchLocation[1].toFixed(4)}`
+                  : (userLocation ? "Your current location" : "Detecting location…")}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenLocationPicker}
+            style={{
+              background: T.accentBg, border: `1px solid ${T.accentRing}`,
+              borderRadius: 8, padding: "7px 14px",
+              fontSize: "0.75rem", color: T.accent, cursor: "pointer",
+              fontFamily: "inherit", fontWeight: 500, whiteSpace: "nowrap",
+            }}
+          >
+            Change
+          </button>
+        </div>
+
         <button
           className="btn-primary"
           style={{ width: "100%", maxWidth: 480 }}
@@ -1388,7 +1620,7 @@ function ConfirmView({ cropBlob, predictedCategory, allScores, onSearch, onBack 
 // ══════════════════════════════════════════════════════════════════
 // PRODUCT DETAIL SHEET
 // ══════════════════════════════════════════════════════════════════
-function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose, saved, onToggleSave }) {
+function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose, saved, onToggleSave, storeLocations = {} }) {
   const [vote, setVote]         = useState(null);
   const [hoverStar, setHover]   = useState(null);
   const [imgLoaded, setImgLoaded] = useState(false);
@@ -1402,13 +1634,15 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
   const displayScore = judgeScore ?? score;
   const isJudged     = judgeScore !== null && judgeScore !== undefined;
   const scoreColor   = displayScore >= 0.80 ? T.green : displayScore >= 0.60 ? T.yellow : T.red;
-  const storeCoords  = STORE_COORDS[payload.store];
+  const storeCoords  = storeLocations[payload.store] ?? null;
   const catColor     = CATEGORY_COLORS[payload.category_tag || category] || T.accent;
   const productUrl   = payload.product_url || payload.source_url || payload.url || null;
 
-  const mapsQuery = payload.store
-    ? encodeURIComponent([payload.store, payload.mall_name].filter(Boolean).join(" "))
-    : null;
+  const mapsHref = payload.maps_url ||
+    (payload.store
+      ? `https://maps.google.com/?q=${encodeURIComponent([payload.store, payload.mall_name].filter(Boolean).join(" "))}`
+      : null);
+  const hasLocation = !!(storeCoords || mapsHref);
 
   // Close on Escape for keyboard users
   useEffect(() => {
@@ -1725,34 +1959,36 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
           </div>
 
           {/* Location section */}
-          {storeCoords ? (
+          {hasLocation && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                 <span style={{ fontSize: "0.65rem", color: T.textMuted, letterSpacing: "0.12em", textTransform: "uppercase" }}>Find in store</span>
-                <span style={{ fontSize: "0.62rem", color: T.textFaint }}>drag to explore</span>
+                {storeCoords && <span style={{ fontSize: "0.62rem", color: T.textFaint }}>drag to explore</span>}
               </div>
-              <div style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${T.border}`, height: 220 }}>
-                <MapContainer
-                  center={storeCoords}
-                  zoom={15}
-                  style={{ height: "100%", width: "100%" }}
-                  zoomControl={true}
-                  scrollWheelZoom={true}
-                  dragging={true}
-                  doubleClickZoom={true}
-                  touchZoom={true}
-                >
-                  <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
-                  <Marker position={storeCoords}>
-                    <Popup>
-                      <strong style={{ color: T.accent }}>{payload.store}</strong>
-                      {payload.mall_name && <><br />{payload.mall_name}</>}
-                    </Popup>
-                  </Marker>
-                </MapContainer>
-              </div>
+              {storeCoords && (
+                <div style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${T.border}`, height: 220 }}>
+                  <MapContainer
+                    center={storeCoords}
+                    zoom={15}
+                    style={{ height: "100%", width: "100%" }}
+                    zoomControl={true}
+                    scrollWheelZoom={true}
+                    dragging={true}
+                    doubleClickZoom={true}
+                    touchZoom={true}
+                  >
+                    <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
+                    <Marker position={storeCoords}>
+                      <Popup>
+                        <strong style={{ color: T.accent }}>{payload.store}</strong>
+                        {payload.mall_name && <><br />{payload.mall_name}</>}
+                      </Popup>
+                    </Marker>
+                  </MapContainer>
+                </div>
+              )}
               <a
-                href={`https://maps.google.com/?q=${mapsQuery}`}
+                href={mapsHref}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => {
@@ -1763,8 +1999,8 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                   }).catch(() => {});
                 }}
                 style={{
-                  display: "block", textAlign: "center",
-                  padding: "11px", borderRadius: 10,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  padding: "12px", borderRadius: 10,
                   background: T.accentBg, border: `1px solid ${T.accentRing}`,
                   color: T.accent, fontSize: "0.82rem", fontWeight: 500,
                   textDecoration: "none",
@@ -1773,10 +2009,10 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
                 onMouseEnter={e => e.currentTarget.style.background = T.accentRing}
                 onMouseLeave={e => e.currentTarget.style.background = T.accentBg}
               >
-                Get directions →
+                <span style={{ fontSize: "1rem" }}>◎</span> Get directions →
               </a>
             </div>
-          ) : null}
+          )}
 
           {/* Star rating */}
           <div style={{
@@ -2036,11 +2272,15 @@ function AttributePanel({ attributes, refineMode, onRefine }) {
 // ══════════════════════════════════════════════════════════════════
 // RESULTS VIEW
 // ══════════════════════════════════════════════════════════════════
-function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, judging, attributes, refineMode, onRefine, onRefineCrop, radius, setRadius, userLocation, onFeedback, onReset, saved = [], onToggleSave, onFlag, searchWarning }) {
+function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judgeScores, judging, attributes, refineMode, onRefine, onRefineCrop, radius, setRadius, userLocation, searchLocation, storeLocations = {}, onFeedback, onReset, saved = [], onToggleSave, onFlag, searchWarning }) {
   const [highlightedStore, setHighlightedStore] = useState(null);
   const [activeDetail,     setActiveDetail]     = useState(null);
   const impressionsFired = useRef(false);
-  const userLL   = userLocation || [33.8869, 35.5131];
+  const fallbackLL = [33.8869, 35.5131];
+  const gpsLL      = userLocation || fallbackLL;
+  // searchLocation = user-chosen pin; falls back to GPS, then hardcoded default
+  const userLL     = searchLocation || gpsLL;
+  const isCustomLocation = !!(searchLocation);
   const category = categoryInfo?.category || selectedItem?.search_label || "";
 
   // Fire one batch impression event when results first render
@@ -2067,8 +2307,17 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
     }
   });
 
+  // Stores with known coordinates that fall within the chosen radius — shown on map
+  const storesOnMap = Object.keys(storeResults).filter(store => {
+    const coords = storeLocations[store];
+    return coords && haversineKm(userLL, coords) <= radius;
+  });
+
+  // Stores included in the results list: those on the map PLUS any store with no
+  // pinned coordinates (we can't filter what we don't know, so include by default)
   const storesInRadius = Object.keys(storeResults).filter(store => {
-    const coords = STORE_COORDS[store] ?? userLL;
+    const coords = storeLocations[store];
+    if (!coords) return true;
     return haversineKm(userLL, coords) <= radius;
   });
 
@@ -2108,9 +2357,14 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
             <div className="font-serif" style={{ fontSize: "1.2rem", fontWeight: 300, fontStyle: "italic", color: T.text, letterSpacing: "0.02em", textTransform: "capitalize", lineHeight: 1.2 }}>
               {selectedItem?.label || category || "Results"}
             </div>
-            <div style={{ fontSize: "0.63rem", color: T.textMuted, letterSpacing: "0.02em", marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ fontSize: "0.63rem", color: T.textMuted, letterSpacing: "0.02em", marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               {displayResults.length} match{displayResults.length !== 1 ? "es" : ""}
-              {storesInRadius.length > 0 && ` · ${storesInRadius.length} store${storesInRadius.length > 1 ? "s" : ""} nearby`}
+              {storesOnMap.length > 0 && ` · ${storesOnMap.length} store${storesOnMap.length > 1 ? "s" : ""} nearby`}
+              {isCustomLocation && (
+                <span style={{ background: T.accentBg, color: T.accent, border: `1px solid ${T.accentRing}`, borderRadius: 10, padding: "1px 7px", fontSize: "0.6rem", letterSpacing: "0.05em" }}>
+                  📍 custom pin
+                </span>
+              )}
               {judging && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: T.accent, fontWeight: 500 }}>
                   · <span style={{ width: 7, height: 7, borderRadius: "50%", border: `1.5px solid ${T.accent}`, borderTopColor: "transparent", display: "inline-block", animation: "spin 0.8s linear infinite" }} /> AI scoring
@@ -2186,25 +2440,41 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
           <MapContainer center={userLL} zoom={11} style={{ height: "100%", width: "100%" }} zoomControl={false}>
             <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
             <MapRecenter center={userLL} />
-            {storesInRadius.map(store => {
-              const coords = STORE_COORDS[store] ?? userLL;
+            {storesOnMap.map(store => {
+              const coords = storeLocations[store];
               return (
                 <Marker key={store} position={coords} icon={makeStoreIcon(store === highlightedStore)} eventHandlers={{ click: () => setHighlightedStore(store === highlightedStore ? null : store) }}>
                   <Popup>
                     <div style={{ lineHeight: 1.7 }}>
                       <strong style={{ color: T.accent }}>{store}</strong><br />
-                      {storeResults[store]?.length} matching item{storeResults[store]?.length !== 1 ? "s" : ""}
+                      {storeResults[store]?.length} matching item{storeResults[store]?.length !== 1 ? "s" : ""}<br />
+                      <span style={{ color: T.textMuted }}>{haversineKm(userLL, coords).toFixed(1)} km away</span>
                     </div>
                   </Popup>
                 </Marker>
               );
             })}
+            {/* GPS dot (always shown when available) */}
+            {userLocation && (
+              <Marker position={gpsLL} icon={gpsUserIcon}>
+                <Popup><span style={{ fontSize: "0.8rem" }}>Your GPS location</span></Popup>
+              </Marker>
+            )}
+            {/* Custom search pin (shown when user picked a different location) */}
+            {isCustomLocation && (
+              <Marker position={userLL} icon={searchPinIcon(true)}>
+                <Popup>
+                  <span style={{ fontSize: "0.8rem", color: T.accent, fontWeight: 600 }}>Search pin</span><br />
+                  <span style={{ fontSize: "0.72rem", color: T.textMuted }}>{userLL[0].toFixed(4)}, {userLL[1].toFixed(4)}</span>
+                </Popup>
+              </Marker>
+            )}
           </MapContainer>
         </div>
 
-        {storesInRadius.length === 0 && (
+        {storesOnMap.length === 0 && Object.keys(storeLocations).length > 0 && (
           <div style={{ fontSize: "0.72rem", color: T.textMuted, textAlign: "center", marginTop: "10px" }}>
-            No stores within {radius} km. Try increasing the radius.
+            No pinned stores within {radius} km · Try increasing the radius.
           </div>
         )}
 
@@ -2277,6 +2547,7 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
             onClose={() => setActiveDetail(null)}
             saved={isItemSaved(pid, saved)}
             onToggleSave={onToggleSave}
+            storeLocations={storeLocations}
           />
         );
       })()}
@@ -2998,16 +3269,26 @@ export default function App() {
   const [judging,          setJudging]          = useState(false); // true while AI scoring is in progress
   const [attributes,       setAttributes]       = useState(null); // null=loading, {}=failed/empty, obj=ready
   const [refineMode,       setRefineMode]       = useState(null); // "visual"|"style"|"color"|null
-  const [radius,           setRadius]           = useState(5);
-  const [userLocation,     setUserLocation]     = useState(null);
+  const [radius,              setRadius]              = useState(5);
+  const [userLocation,        setUserLocation]        = useState(null);
+  const [searchLocation,      setSearchLocation]      = useState(null); // null = use GPS
+  const [showLocationPicker,  setShowLocationPicker]  = useState(false);
+  const [storeLocations,      setStoreLocations]      = useState({});
   const [error,            setError]            = useState(null);
   const [history,          setHistory]          = useState(() => loadHistory());
   const [saved,            setSaved]            = useState(() => loadSaved());
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
       pos => setUserLocation([pos.coords.latitude, pos.coords.longitude]),
-      ()  => setUserLocation([33.8869, 35.5131])
+      ()  => setUserLocation([33.8869, 35.5131]),
+      { enableHighAccuracy: true, timeout: 8000 }
     );
+  }, []);
+  useEffect(() => {
+    fetch(`${API}/stores/locations`)
+      .then(r => r.ok ? r.json() : {})
+      .then(data => setStoreLocations(data))
+      .catch(() => {});
   }, []);
 
   // Poll for OpenRouter judge scores after results are shown.
@@ -3136,6 +3417,7 @@ export default function App() {
           price:        m.price        || "",
           mall_name:    m.mall_name    || "",
           category_tag: m.category_tag || "",
+          maps_url:     m.maps_url     || "",
         }
       }));
       const seen = new Map();
@@ -3220,6 +3502,7 @@ export default function App() {
           product_id: m.product_id,
           price:      m.price      || "",
           mall_name:  m.mall_name  || "",
+          maps_url:   m.maps_url   || "",
         },
       }));
       setResults(reshaped);
@@ -3278,6 +3561,15 @@ export default function App() {
   return (
     <>
       <StyleInjector />
+      {showLocationPicker && (
+        <LocationPickerModal
+          userLocation={userLocation}
+          storeLocations={storeLocations}
+          currentSearchLocation={searchLocation ?? userLocation}
+          onConfirm={(loc) => { setSearchLocation(loc); setShowLocationPicker(false); }}
+          onClose={() => setShowLocationPicker(false)}
+        />
+      )}
       {/* Content sits above the fixed bottom tab bar */}
       <div style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
 
@@ -3305,7 +3597,7 @@ export default function App() {
         <>
           {view === "landing"    && <LandingView onUpload={handleUpload} error={error} history={history} saved={saved} onToggleSave={handleToggleSave} />}
           {view === "drawing"    && <DrawView imageURL={imageURL} imageFile={imageFile} onConfirm={handleDrawConfirm} onBack={reset} />}
-          {view === "confirming" && <ConfirmView cropBlob={cropBlob} predictedCategory={predictedCategory} allScores={allScores} onSearch={handleConfirm} onBack={() => setView("drawing")} />}
+          {view === "confirming" && <ConfirmView cropBlob={cropBlob} predictedCategory={predictedCategory} allScores={allScores} onSearch={handleConfirm} onBack={() => setView("drawing")} searchLocation={searchLocation} userLocation={userLocation} onOpenLocationPicker={() => setShowLocationPicker(true)} />}
           {view === "searching"  && <LoadingView label="Finding matches…" />}
           {view === "results"    && (
             <ResultsView
@@ -3321,6 +3613,8 @@ export default function App() {
               radius={radius}
               setRadius={setRadius}
               userLocation={userLocation}
+              searchLocation={searchLocation}
+              storeLocations={storeLocations}
               onFeedback={handleFeedback}
               onFlag={handleFlagItem}
               onReset={reset}

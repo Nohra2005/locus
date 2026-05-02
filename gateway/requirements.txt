@@ -14,4 +14,5 @@ prometheus-fastapi-instrumentator
 google-genai
 PyJWT>=2.8.0
 passlib[bcrypt]>=1.7.4
+bcrypt>=3.2.0,<4.0.0
 python-dotenv
