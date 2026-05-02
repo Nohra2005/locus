@@ -130,7 +130,7 @@ services:
       context: .
       dockerfile: mlops/Dockerfile.retrain
     working_dir: /mlops
-    command: python retrain_clip.py --schedule
+    command: ["python", "retrain_clip.py", "--schedule", "48"]
     volumes:
       - ./mlops:/mlops
       - ./visual_engine:/visual_engine
@@ -138,13 +138,26 @@ services:
     environment:
       - QDRANT_URL=${QDRANT_URL}
       - QDRANT_API_KEY=${QDRANT_API_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - GATEWAY_BASE_URL=${GATEWAY_BASE_URL:-http://gateway:8000}
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - GATEWAY_URL=http://gateway:8000
+      - GATEWAY_BASE_URL=${GATEWAY_BASE_URL:-http://gateway:8000}
+      - VISUAL_HOST=http://visual_engine:8001
+      - VISUAL_ENGINE_MODELS=/visual_engine/models
+      - VISUAL_ENGINE_MODELS_INTERNAL=/app/models
+      - MIN_FEEDBACK_PAIRS=50
+      - MIN_ACS_THRESHOLD=0.70
+      - MAX_TRAIN_STEPS=${MAX_TRAIN_STEPS:-150}
+      - LOG_EVERY_STEPS=${LOG_EVERY_STEPS:-20}
+      - GIT_PYTHON_REFRESH=quiet
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - TRANSFORMERS_CACHE=/root/.cache/huggingface
     depends_on:
       - gateway
       - mlflow
     restart: "no"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
   # ── 7. MLops Metrics Exporter ────────────────────────────────────
   mlops_exporter:

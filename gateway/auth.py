@@ -3,7 +3,7 @@ import hashlib
 import json
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,7 +11,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from passlib.context import CryptContext
 from pydantic import BaseModel
 
-SECRET_KEY = os.getenv("JWT_SECRET", "locus_store_portal_secret_2026")
+SECRET_KEY = os.getenv("JWT_SECRET", "locus_store_portal_secret_2026_key")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_DAYS = 30
 
@@ -78,7 +78,7 @@ def _make_token(email: str, store_id: str, store_name: str) -> str:
         "sub":        email,
         "store_id":   store_id,
         "store_name": store_name,
-        "exp":        datetime.utcnow() + timedelta(days=TOKEN_EXPIRE_DAYS),
+        "exp":        datetime.now(timezone.utc) + timedelta(days=TOKEN_EXPIRE_DAYS),
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -161,7 +161,7 @@ async def register(req: RegisterRequest):
         "mall":       req.mall.strip(),
         "phone":      req.phone.strip(),
         "maps_url":   "",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     _save_users(users)
     return {
@@ -219,7 +219,7 @@ async def me(payload=Depends(verify_token)):
     return {
         "email":      payload["sub"],
         "store_id":   payload["store_id"],
-        "store_name": payload["store_name"],
+        "store_name": u.get("store_name", payload["store_name"]),
         "mall":       u.get("mall", ""),
         "phone":      u.get("phone", ""),
         "maps_url":   u.get("maps_url", ""),
@@ -260,17 +260,20 @@ async def update_profile(req: ProfileUpdateRequest, payload=Depends(verify_token
     u = users.get(email)
     if not u:
         raise HTTPException(404, "User not found")
-    if req.store_name is not None:
+    # Use model_fields_set so callers can explicitly null-out optional fields
+    # (e.g. sending {"latitude": null} clears a previously stored coordinate).
+    fields = req.model_fields_set
+    if "store_name" in fields and req.store_name is not None:
         u["store_name"] = req.store_name.strip()
-    if req.mall is not None:
+    if "mall" in fields and req.mall is not None:
         u["mall"] = req.mall.strip()
-    if req.phone is not None:
+    if "phone" in fields and req.phone is not None:
         u["phone"] = req.phone.strip()
-    if req.maps_url is not None:
-        u["maps_url"] = req.maps_url.strip()
-    if req.latitude is not None:
+    if "maps_url" in fields:
+        u["maps_url"] = req.maps_url.strip() if req.maps_url else ""
+    if "latitude" in fields:
         u["latitude"] = req.latitude
-    if req.longitude is not None:
+    if "longitude" in fields:
         u["longitude"] = req.longitude
     _save_users(users)
     return {
