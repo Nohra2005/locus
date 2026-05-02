@@ -118,6 +118,8 @@ LoRA trains only ~0.5% of the total parameter count, runs in under 30 minutes on
 ### Evidence
 LoRA training runs are logged to MLflow under experiment `locus_clip_finetune`. Promotion is gated by `promote_model.py`: the new adapter must score ≥ baseline + 0.02 on the judge evaluation before being swapped into production. If it fails, the previous adapter is restored automatically (`rollback` logic in `promote_model.py`).
 
+Per-run judge scores (Gemini 2.0 Flash, 33 queries) are tracked in MLflow and compared against `mlops/ci_baseline.json` (baseline: **0.6546**). A promoted adapter must reach ≥ **0.6746** to replace the previous one. This threshold-gated promotion ensures each LoRA update moves the needle measurably rather than just fitting noise in the feedback pairs.
+
 ---
 
 ---

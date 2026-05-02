@@ -1153,14 +1153,21 @@ async def track_event(req: TrackEventRequest):
 @app.post("/detect")
 async def detect_items(request: Request, file: UploadFile = File(...)):
     image_bytes = await file.read()
-    async with httpx.AsyncClient() as http:
-        resp = await http.post(
-            f"{VISUAL_URL}/detect",
-            files={"file": (file.filename, image_bytes, file.content_type)},
-            timeout=60.0,
-        )
-        resp.raise_for_status()
-        return resp.json()
+    try:
+        Image.open(io.BytesIO(image_bytes)).verify()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or corrupt image file")
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(
+                f"{VISUAL_URL}/detect",
+                files={"file": (file.filename, image_bytes, file.content_type)},
+                timeout=60.0,
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except httpx.RequestError:
+        raise HTTPException(status_code=503, detail="Visual engine unavailable")
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
@@ -1434,17 +1441,24 @@ async def classify_crop(
     Called by the frontend after the user draws a bounding box, before searching.
     """
     image_bytes = await file.read()
+    try:
+        Image.open(io.BytesIO(image_bytes)).verify()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or corrupt image file")
     crop_bytes  = _crop_image_bytes(image_bytes, x1, y1, x2, y2) if (x2 > x1 and y2 > y1) else image_bytes
 
-    async with httpx.AsyncClient() as http:
-        vis_response = await http.post(
-            f"{VISUAL_URL}/vectorize",
-            files={"file": (file.filename, crop_bytes, "image/jpeg")},
-            data={"yolo_label": "", "darken": "false", "query": "true"},
-            timeout=60.0,
-        )
-        vis_response.raise_for_status()
-        vis_data = vis_response.json()
+    try:
+        async with httpx.AsyncClient() as http:
+            vis_response = await http.post(
+                f"{VISUAL_URL}/vectorize",
+                files={"file": (file.filename, crop_bytes, "image/jpeg")},
+                data={"yolo_label": "", "darken": "false", "query": "true"},
+                timeout=60.0,
+            )
+            vis_response.raise_for_status()
+            vis_data = vis_response.json()
+    except httpx.RequestError:
+        raise HTTPException(status_code=503, detail="Visual engine unavailable")
 
     all_scores = vis_data.get("category_confidence", {})
     category   = vis_data.get("category")
@@ -1500,15 +1514,18 @@ async def search_items(
     if _style_hint:
         print(f"[SEARCH] style_hint='{_style_hint[:60]}' for category='{_effective_search}'")
 
-    async with httpx.AsyncClient() as http:
-        vis_response = await http.post(
-            f"{VISUAL_URL}/vectorize",
-            files={"file": (file.filename, crop_bytes, "image/jpeg")},
-            data={"yolo_label": search_label, "darken": "false", "style_hint": _style_hint},
-            timeout=60.0,
-        )
-        vis_response.raise_for_status()
-        vis_data = vis_response.json()
+    try:
+        async with httpx.AsyncClient() as http:
+            vis_response = await http.post(
+                f"{VISUAL_URL}/vectorize",
+                files={"file": (file.filename, crop_bytes, "image/jpeg")},
+                data={"yolo_label": search_label, "darken": "false", "style_hint": _style_hint},
+                timeout=60.0,
+            )
+            vis_response.raise_for_status()
+            vis_data = vis_response.json()
+    except httpx.RequestError:
+        raise HTTPException(status_code=503, detail="Visual engine unavailable")
 
     vector              = vis_data.get("vector")
     detected_category   = vis_data.get("category")

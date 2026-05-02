@@ -5,7 +5,7 @@
 Online shopping has become a major part of today’s fashion industry. The main inconvenience is clients buy without trying/seeing the product and have to wait for shipping. While many shoppers really enjoy going out to the mall, physical shopping is unarguably draining, inefficient and often unfruitful: shoppers can spend countless hours looking for a specific product they have in mind or they have found on Pinterest/Instagram but have no idea where to find it. Some countries like Lebanon lack a centralized marketplace where people can easily order from a wide variety of products. This emphasizes the need for Lebanese shoppers to physically go out to malls.
 
 **Impact:**
-Locus merges best of both worlds: convenience and precision of online shopping with the product experience of physical shopping.
+Locus merges best of both worlds: convenience and precision of online shopping with the product experience of physical shopping. Unlike Google Lens or Pinterest visual search, Locus maps results directly to physical local store inventory with precise store locations and WhatsApp CTAs — solving the last-mile problem for Lebanon's offline-first retail market where no centralized marketplace exists.
 
 ## 2. Project Objective (The "What")
 To design and develop a clothing recommendation system that returns similar items ranked by similarity and nearness that allows users to upload an image and retrieve visually similar inventory items with a focus on accuracy and speed.
@@ -132,7 +132,42 @@ Pods read secrets via `secretKeyRef` in `k8s/deployment.yaml` — keys are injec
 ssh -i locus-vm_key.pem azureuser@20.240.203.22 "cd ~/locus && docker compose up -d"
 ```
 
-## 10. Assumptions & Risks
+## 10. Local Development & Deployment Runbook
+
+### Prerequisites
+- Docker + Docker Compose installed
+- `.env` file with `QDRANT_URL`, `QDRANT_API_KEY`, `OPENROUTER_API_KEY`, `GOOGLE_API_KEY`, `ADMIN_API_KEY` (copy `.env.example` and fill values)
+
+### Start locally
+```bash
+git clone https://github.com/tatiananohra/locus.git && cd locus
+cp .env.example .env  # fill in API keys
+docker compose up -d
+curl http://localhost:8000/health  # expect {"gateway":"ready",...}
+```
+
+### Deploy to Azure VM (production)
+```bash
+# One-time: copy env file to VM
+scp -i locus-vm_key.pem .env azureuser@20.240.203.22:~/locus/.env
+
+# Start / restart all services
+ssh -i locus-vm_key.pem azureuser@20.240.203.22 "cd ~/locus && docker compose up -d"
+
+# Verify
+curl http://20.240.203.22:8000/health
+```
+
+### Kubernetes (AKS — future)
+```bash
+kubectl create secret generic locus-secrets --from-env-file=.env
+kubectl apply -f k8s/
+kubectl rollout status deployment/gateway
+```
+
+---
+
+## 11. Assumptions & Risks
 * **Assumption:** User photos will have reasonable lighting and resolution.
 * **Risk 1: Background Removal Failure.**
     * **Issue:** `rembg` might fail on white-on-white images or complex textures.
