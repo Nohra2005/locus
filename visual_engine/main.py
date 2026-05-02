@@ -44,7 +44,7 @@ class DetectionResponse(BaseModel):
 class VectorizeResponse(BaseModel):
     filename: Optional[str]
     vector: list[float]
-    category: str
+    category: Optional[str]
     category_confidence: Any
     debug_image: Optional[str]
 
