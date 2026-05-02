@@ -260,17 +260,20 @@ async def update_profile(req: ProfileUpdateRequest, payload=Depends(verify_token
     u = users.get(email)
     if not u:
         raise HTTPException(404, "User not found")
-    if req.store_name is not None:
+    # Use model_fields_set so callers can explicitly null-out optional fields
+    # (e.g. sending {"latitude": null} clears a previously stored coordinate).
+    fields = req.model_fields_set
+    if "store_name" in fields and req.store_name is not None:
         u["store_name"] = req.store_name.strip()
-    if req.mall is not None:
+    if "mall" in fields and req.mall is not None:
         u["mall"] = req.mall.strip()
-    if req.phone is not None:
+    if "phone" in fields and req.phone is not None:
         u["phone"] = req.phone.strip()
-    if req.maps_url is not None:
-        u["maps_url"] = req.maps_url.strip()
-    if req.latitude is not None:
+    if "maps_url" in fields:
+        u["maps_url"] = req.maps_url.strip() if req.maps_url else ""
+    if "latitude" in fields:
         u["latitude"] = req.latitude
-    if req.longitude is not None:
+    if "longitude" in fields:
         u["longitude"] = req.longitude
     _save_users(users)
     return {

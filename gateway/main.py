@@ -1381,13 +1381,28 @@ async def discover(limit: int = 15):
 
 
 @app.delete("/store-catalogue/item/{item_id}")
-async def delete_catalogue_item(item_id: str):
+async def delete_catalogue_item(item_id: str, payload=Depends(verify_token)):
+    """Delete a catalogue item. Only the owning store may delete its own items."""
+    store_name = _load_users().get(payload["sub"], {}).get("store_name", "")
     try:
+        # Verify the point belongs to the authenticated store before deleting.
+        points = await asyncio.to_thread(
+            client.retrieve,
+            collection_name=COLLECTION_NAME,
+            ids=[item_id],
+            with_payload=True,
+        )
+        if points:
+            item_store = points[0].payload.get("store_name", "")
+            if item_store and item_store != store_name:
+                raise HTTPException(status_code=403, detail="You can only delete items from your own store")
         client.delete(
             collection_name=COLLECTION_NAME,
             points_selector=models.PointIdsList(points=[item_id]),
         )
         return {"status": "deleted", "id": item_id}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1395,7 +1410,12 @@ async def delete_catalogue_item(item_id: str):
 @app.get("/store-stats")
 async def store_stats(payload=Depends(verify_token)):
     """Return aggregate stats for the authenticated store."""
-    store_name = payload["store_name"]
+    # Read store_name from DB so it stays correct after a profile rename.
+    users = _load_users()
+    u = users.get(payload["sub"])
+    if not u:
+        raise HTTPException(status_code=404, detail="Store account not found")
+    store_name = u["store_name"]
     try:
         store_filter = models.Filter(must=[
             models.FieldCondition(key="store_name", match=models.MatchValue(value=store_name))
