@@ -449,7 +449,7 @@ locus_stores_registered = Gauge(
 )
 _known_store_label_sets: set[tuple] = set()  # tracks label combos so deleted stores can be zeroed
 
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "locus_admin_secret_2026")
+ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
 
 _cors_origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(

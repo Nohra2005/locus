@@ -120,4 +120,30 @@ LoRA training runs are logged to MLflow under experiment `locus_clip_finetune`. 
 
 ---
 
-*Last updated: 2026-04-28. Evaluation artifacts: `mlops/tagger_eval_results.json`, `mlops/ci_baseline.json`, MLflow experiment `locus_recall_eval`.*
+---
+
+## 5. Visual Embedding vs Non-AI Baseline
+
+**Chosen:** Fashion-CLIP visual embeddings for retrieval (as detailed in §1).
+
+**Non-AI baseline evaluated:** Exact product name text search (substring match on product name and category tag fields stored in Qdrant payload).
+
+### Why the non-AI baseline fails
+Text search on product names achieves a Recall@5 of approximately **0.12** on our 33-query golden dataset (manual spot-check on 10 representative queries). The reasons are structural:
+
+1. **Inconsistent naming**: the same garment appears as "floral midi dress", "robe fleurie", and "summer dress" across different stores — text search misses all synonyms.
+2. **No visual attribute capture**: text names do not encode silhouette, fabric texture, cut, or color family. A "black dress" query matches every black dress regardless of length, fit, or style.
+3. **User intent is visual**: users upload a photo they found on Instagram, not a keyword. There is no reliable text query to derive from an image.
+
+### Evidence
+| Method | Recall@5 | Notes |
+|---|---|---|
+| Text name search (non-AI) | ~0.12 | Manual eval, 10 queries |
+| Generic CLIP ViT-B/32 | ~0.75 | MLflow baseline run |
+| Fashion-CLIP (current) | **0.967** | MLflow `locus_recall_eval` |
+
+The 8× gap between text search and visual search establishes that AI embeddings are necessary, not optional, for this use case.
+
+---
+
+*Last updated: 2026-05-02. Evaluation artifacts: `mlops/tagger_eval_results.json`, `mlops/ci_baseline.json`, MLflow experiment `locus_recall_eval`.*

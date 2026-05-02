@@ -94,6 +94,11 @@ jobs:
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
+      - name: Run E2E tests against deployed cloud system
+        run: pytest tests/test_e2e.py -v
+        env:
+          GATEWAY_URL: http://20.240.203.22:8000
+
       - name: Show service logs on failure
         if: failure()
         run: docker compose logs --tail=50

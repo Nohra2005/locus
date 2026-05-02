@@ -58,7 +58,40 @@ To design and develop a clothing recommendation system that returns similar item
 * **Robustness:** System successfully rejects low confidence predictions (with 45% resemblance and less).
 * **Speed:** End-to-end processing must take maximum 15s.
 
-## 7. Secrets Management
+## 7. System Architecture
+
+```
+User / Browser
+      │ HTTPS
+      ▼
+┌─────────────────────────────────┐
+│  Gateway (FastAPI, port 8000)   │  ← EEP: orchestration, auth, rate-limiting
+│  JWT auth · slowapi · Prometheus│
+└────────┬──────────────┬─────────┘
+         │              │
+    /embed, /detect  /classify, /refine
+         │              │
+         ▼              ▼
+┌─────────────┐  ┌──────────────────┐
+│visual_engine│  │ attribute_tagger │  ← IEPs
+│ (CLIP+YOLO) │  │ (Gemini 2.0 Flash│
+│  port 8001  │  │   port 8004)     │
+└──────┬──────┘  └──────────────────┘
+       │ vectors
+       ▼
+  Qdrant Cloud (vector DB)
+
+Background services (same VM):
+  MLflow :5000  ← experiment tracking
+  mlops_exporter :8003 ← ML metrics → Prometheus :9090 → Grafana :3000
+  link_monitor  ← catalog link health (async)
+
+CI/CD (GitHub Actions):
+  unit-tests → integration-tests → judge quality gate → E2E tests
+  retrain.yml (cron every 2 days) → LoRA fine-tune → promote → SSH deploy → hot-reload
+```
+
+## 8. Secrets Management
 
 Locus uses three API keys: `QDRANT_API_KEY`, `OPENROUTER_API_KEY`, and `GOOGLE_API_KEY`. Each is never committed to the repository. The table below shows how they are injected per environment.
 
@@ -81,7 +114,25 @@ Pods read secrets via `secretKeyRef` in `k8s/deployment.yaml` — keys are injec
 
 **Key rotation:** rotate a key by updating the GitHub Secret and re-running the retrain/deploy workflow, or by patching the K8s secret with `kubectl create secret generic locus-secrets --from-literal=KEY=<new> --dry-run=client -o yaml | kubectl apply -f -` and restarting the affected deployment.
 
-## 8. Assumptions & Risks
+## 9. Cloud Deployment & Cost Estimate
+
+**Deployment:** Azure VM `Standard_B2s` (2 vCPU, 4GB RAM) running Docker Compose with 7 services. Public IP: `20.240.203.22`.
+
+| Component | Cost |
+|---|---|
+| Azure Standard_B2s VM | ~$35/month |
+| Qdrant Cloud (free tier, 1GB) | $0 |
+| OpenRouter (Gemini judge, ~500 calls/day) | ~$2–5/month |
+| Google Gemini API (attribute tagger fallback) | ~$1–3/month |
+| GitHub Actions (CI, self-hosted runner on VM) | $0 |
+| **Total estimated** | **~$38–43/month** |
+
+**How to start the system:**
+```bash
+ssh -i locus-vm_key.pem azureuser@20.240.203.22 "cd ~/locus && docker compose up -d"
+```
+
+## 10. Assumptions & Risks
 * **Assumption:** User photos will have reasonable lighting and resolution.
 * **Risk 1: Background Removal Failure.**
     * **Issue:** `rembg` might fail on white-on-white images or complex textures.
