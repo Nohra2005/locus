@@ -322,7 +322,7 @@
       "id": 57,
       "type": "stat",
       "title": "Visual Engine",
-      "description": "up=1 only after CLIP finishes loading \u00e2\u20ac\u201d goes green ~30\u00e2\u20ac\u201c60s after container start.",
+      "description": "UP immediately on start. Models load in background \u2014 /health returns {status:loading} until ready (~60s)",
       "gridPos": {
         "x": 12,
         "y": 1,
@@ -357,8 +357,8 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "\u00e2\u0152\u203a LOADING",
-                  "color": "yellow"
+                  "text": "\u00e2\u0153\u2022 DOWN",
+                  "color": "red"
                 }
               }
             },
@@ -376,7 +376,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "yellow",
+                "color": "red",
                 "value": 0
               },
               {

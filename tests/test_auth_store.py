@@ -311,6 +311,15 @@ class TestMe:
         r = auth_client.get("/auth/me", headers={"Authorization": "Bearer not-a-real-token"})
         assert r.status_code == 401
 
+    def test_me_returns_fresh_store_name_after_rename(self, auth_client, auth_header):
+        """After a profile rename, /auth/me must return the current name, not the JWT's stale one."""
+        auth_client.put("/auth/profile",
+            json={"store_name": "Renamed Store"},
+            headers=auth_header)
+        r = auth_client.get("/auth/me", headers=auth_header)
+        assert r.status_code == 200
+        assert r.json()["store_name"] == "Renamed Store"
+
 
 class TestForgotPassword:
     @pytest.fixture(autouse=True)

@@ -183,8 +183,16 @@ class LocusVisualizer:
         last_err = None
         for attempt in range(1, retries + 1):
             try:
-                model     = CLIPModel.from_pretrained(model_id)
-                processor = CLIPProcessor.from_pretrained(model_id)
+                model = CLIPModel.from_pretrained(model_id)
+                try:
+                    processor = CLIPProcessor.from_pretrained(model_id)
+                except Exception:
+                    # Some fine-tuned CLIP models (e.g. patrickjohncyh/fashion-clip) don't
+                    # ship a processor_config.json — transformers>=4.48 requires it.
+                    # Fall back to the base ViT-B/32 processor, which is identical.
+                    print(f"[CLIP] No processor config for '{model_id}', "
+                          f"falling back to openai/clip-vit-base-patch32 processor")
+                    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
                 return model, processor
             except Exception as e:
                 last_err = e

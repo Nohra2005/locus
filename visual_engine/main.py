@@ -3,6 +3,7 @@ import io
 import base64
 import json
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from PIL import Image, ImageDraw
@@ -10,11 +11,41 @@ from pydantic import BaseModel
 
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Histogram
-from vectorizer import LocusVisualizer
 
-app = FastAPI()
+# ---------------------------------------------------------------------------
+# Deferred model loading — uvicorn binds to :8001 (and exposes /metrics)
+# BEFORE the heavy CLIP/YOLO models load.  Prometheus sees the service as UP
+# immediately; endpoints return 503 while loading, then work normally.
+# ---------------------------------------------------------------------------
+
+visualizer = None   # set by _load_models() on startup
+
+
+def _load_models():
+    global visualizer
+    from vectorizer import LocusVisualizer
+    visualizer = LocusVisualizer()
+
+
+def _require_visualizer():
+    if visualizer is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Visual engine loading — models not ready yet, retry in ~60s",
+        )
+    return visualizer
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Run blocking model load in a thread pool so the event loop stays free
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, _load_models)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 Instrumentator().instrument(app).expose(app)
-visualizer = LocusVisualizer()
 
 locus_detections_histogram = Histogram(
     "locus_detections_per_request",
@@ -34,7 +65,17 @@ OVERRIDES_PATH = "/app/whitelist_overrides.json"
 
 @app.get("/")
 def read_root():
-    return {"status": "online", "service": "locus visual engine"}
+    return {
+        "status":  "ready" if visualizer is not None else "loading",
+        "service": "locus visual engine",
+    }
+
+
+@app.get("/health")
+def health():
+    if visualizer is None:
+        return {"status": "loading"}
+    return {"status": "ready"}
 
 
 # ── Search path ────────────────────────────────────────────────────────────────
@@ -42,9 +83,10 @@ def read_root():
 @app.post("/detect")
 async def detect(file: UploadFile = File(...)):
     """Search time. Returns all YOLO boxes for user to select from."""
+    v = _require_visualizer()
     image_data = await file.read()
     detections, img_width, img_height = await asyncio.to_thread(
-        visualizer.detect_objects, image_data
+        v.detect_objects, image_data
     )
     locus_detections_histogram.observe(len(detections))
     return {
@@ -67,12 +109,13 @@ async def vectorize(
     Pass query=true when classifying a user-drawn crop (enables person-wearing prompts).
     Pass style_hint with a descriptive phrase for accessories to enable hybrid vector mixing.
     """
+    v = _require_visualizer()
     image_data    = await file.read()
     should_darken = darken.lower() == "true"
     query_mode    = query.lower() == "true"
 
     vector, category, confidence, debug_img = await asyncio.to_thread(
-        visualizer.process_image,
+        v.process_image,
         image_bytes=image_data,
         yolo_label=yolo_label,
         darken=should_darken,
@@ -102,9 +145,10 @@ class TextQuery(BaseModel):
 @app.post("/vectorize-text")
 async def vectorize_text(body: TextQuery):
     """Encode a text string with CLIP's text encoder. Used by /refine in the gateway."""
+    v = _require_visualizer()
     if not body.text or not body.text.strip():
         raise HTTPException(status_code=400, detail="text cannot be empty")
-    embedding = await asyncio.to_thread(visualizer.encode_text, body.text.strip())
+    embedding = await asyncio.to_thread(v.encode_text, body.text.strip())
     return {"embedding": embedding}
 
 
@@ -119,9 +163,10 @@ async def index_image(
     Index time only. Returns vector + category + box_source,
     or {"skipped": true} with reason.
     """
+    v = _require_visualizer()
     image_data = await file.read()
     result = await asyncio.to_thread(
-        visualizer.index_product, image_data, title=title
+        v.index_product, image_data, title=title
     )
     return result
 
@@ -141,8 +186,9 @@ async def debug_index(
 
     Does NOT write to Qdrant.
     """
+    v = _require_visualizer()
     image_data = await file.read()
-    result     = await asyncio.to_thread(visualizer.index_product, image_data, title=title)
+    result     = await asyncio.to_thread(v.index_product, image_data, title=title)
 
     try:
         image = Image.open(io.BytesIO(image_data)).convert("RGB")
@@ -220,7 +266,8 @@ class ClassifyTextRequest(BaseModel):
 
 @app.post("/classify-text")
 async def classify_text(req: ClassifyTextRequest):
-    category, confidence = visualizer.classify_text(req.title)
+    v = _require_visualizer()
+    category, confidence = v.classify_text(req.title)
     return {"category": category, "confidence": confidence}
 
 
@@ -250,6 +297,7 @@ def _write_overrides(data: list):
 
 @app.post("/whitelist-add")
 async def whitelist_add(req: WhitelistAddRequest):
+    v = _require_visualizer()
     word     = req.word.strip().lower()
     category = req.category.strip()
 
@@ -265,7 +313,7 @@ async def whitelist_add(req: WhitelistAddRequest):
         overrides.append({"word": word, "category": category, "status": "approved"})
 
     _write_overrides(overrides)
-    result = visualizer.reload_overrides()
+    result = v.reload_overrides()
 
     print(f"[WHITELIST] Added override: '{word}' → '{category}'")
     return {"status": "added", "word": word, "category": category, "reload": result}
@@ -273,7 +321,8 @@ async def whitelist_add(req: WhitelistAddRequest):
 
 @app.post("/whitelist-reload")
 async def whitelist_reload():
-    result = visualizer.reload_overrides()
+    v = _require_visualizer()
+    result = v.reload_overrides()
     return {"status": "reloaded", **result}
 
 
@@ -303,8 +352,9 @@ async def reload_adapter(req: ReloadAdapterRequest):
     self.clip_model so in-flight requests are not disrupted.
     Takes ~30s while the base model reloads from the HuggingFace cache.
     """
+    v = _require_visualizer()
     result = await asyncio.to_thread(
-        visualizer.reload_adapter,
+        v.reload_adapter,
         adapter_path=req.adapter_path,
         visual_projection_path=req.visual_projection_path,
     )
