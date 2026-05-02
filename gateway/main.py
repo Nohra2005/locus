@@ -1151,6 +1151,7 @@ async def track_event(req: TrackEventRequest):
 # ── Detect ─────────────────────────────────────────────────────────────────────
 
 @app.post("/detect")
+@limiter.limit("5/minute")
 async def detect_items(request: Request, file: UploadFile = File(...)):
     image_bytes = await file.read()
     try:
@@ -1474,6 +1475,7 @@ async def classify_crop(
 # ── Search ─────────────────────────────────────────────────────────────────────
 
 @app.post("/search")
+@limiter.limit("10/minute")
 async def search_items(
     request:            Request,
     background_tasks:   BackgroundTasks,
