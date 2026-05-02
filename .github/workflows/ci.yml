@@ -52,6 +52,9 @@ jobs:
           path: ~/.cache/huggingface
           key: hf-fashion-clip-${{ runner.os }}-v1
 
+      - name: Build frontend
+        run: cd frontend && npm ci && npm run build
+
       - name: Build images (sequential to avoid OOM on self-hosted runner)
         run: |
           USERPROFILE="$HOME" docker compose build gateway
