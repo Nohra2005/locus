@@ -62,7 +62,9 @@ jobs:
         run: cd frontend && npm ci && npm run build
 
       - name: Free disk space
-        run: docker system prune -f --volumes
+        run: |
+          docker image prune -a -f
+          docker system prune -f --volumes
 
       - name: Build images (sequential to avoid OOM on self-hosted runner)
         run: |
