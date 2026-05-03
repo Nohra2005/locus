@@ -164,6 +164,12 @@ def run_eval(gateway_url: str) -> tuple[float, int, dict[str, float]]:
             style = _shoe_style_from_name(query_name)
             if style and style != "other":
                 search_data["shoe_style"] = style
+        bbox = entry.get("query_bbox")
+        if bbox:
+            search_data.update({
+                "x1": bbox["x1"], "y1": bbox["y1"],
+                "x2": bbox["x2"], "y2": bbox["y2"],
+            })
 
         search_resp = None
         for attempt in range(3):
