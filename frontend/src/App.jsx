@@ -2385,7 +2385,15 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
     return haversineKm(userLL, coords) <= radius;
   });
 
-  const visibleResults = results.filter(r => !r.payload?.store || storesInRadius.includes(r.payload.store));
+  // Show all results regardless of radius — radius only controls map pins.
+  // Nearby-store results are sorted to the top so the user sees closest matches first.
+  const visibleResults = [...results].sort((a, b) => {
+    const aClose = storesInRadius.includes(a.payload?.store);
+    const bClose = storesInRadius.includes(b.payload?.store);
+    if (aClose && !bClose) return -1;
+    if (!aClose && bClose) return 1;
+    return 0;
+  });
   const unfilteredResults = highlightedStore
     ? visibleResults.filter(r => r.payload?.store === highlightedStore)
     : visibleResults;
@@ -2504,6 +2512,16 @@ function ResultsView({ results, categoryInfo, selectedItem, queryImageURL, judge
           <MapContainer center={userLL} zoom={11} style={{ height: "100%", width: "100%" }} zoomControl={false}>
             <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution="&copy; CartoDB" />
             <MapRecenter center={userLL} />
+            {/* All registered stores as faded background pins */}
+            {Object.entries(storeLocations).filter(([store]) => !storesOnMap.includes(store)).map(([store, coords]) => (
+              <Marker key={`bg-${store}`} position={coords} icon={L.divIcon({
+                html: `<div style="width:10px;height:10px;background:${T.textFaint};border-radius:50%;border:1.5px solid #fff;"></div>`,
+                className: "", iconSize: [10, 10], iconAnchor: [5, 5],
+              })}>
+                <Popup><span style={{ fontSize: "0.75rem", color: T.textMuted }}>{store}</span></Popup>
+              </Marker>
+            ))}
+            {/* Stores with matching results — bright pins */}
             {storesOnMap.map(store => {
               const coords = storeLocations[store];
               return (
