@@ -190,6 +190,7 @@ services:
     depends_on:
       - gateway
       - visual_engine
+      - attribute_tagger
       - mlops_exporter
 
   # ── 10. Grafana ───────────────────────────────────────────────────
