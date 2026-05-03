@@ -929,6 +929,34 @@ class FeedbackRequest(BaseModel):
     source:            str = "user"  # "user" | "auto_judge"
 
 
+def _store_feedback_direct(payload: dict) -> None:
+    """Write judge feedback directly to Qdrant — avoids HTTP roundtrip during shutdown."""
+    rating = payload["rating"]
+    if rating >= 4:
+        signal, weight = "positive", 0.6 + (rating - 4) * 0.4
+    elif rating == 3:
+        signal, weight = "neutral", 0.0
+    else:
+        signal, weight = "negative", 0.4 + (2 - rating) * 0.6
+    locus_feedback_stars.labels(stars=str(rating), signal=signal).inc()
+    client.upsert(
+        collection_name=FEEDBACK_COLLECTION,
+        points=[
+            PointStruct(
+                id=str(uuid.uuid4()),
+                vector=[0.0],
+                payload={
+                    **payload,
+                    "training_signal": signal,
+                    "weight":          round(weight, 2),
+                    "timestamp":       datetime.utcnow().isoformat(),
+                },
+            )
+        ],
+    )
+    print(f"[FEEDBACK] {rating}★ '{payload.get('result_name','')}' ({payload.get('category','')}) → {signal} w={weight:.2f}")
+
+
 @app.post("/feedback")
 async def receive_feedback(req: FeedbackRequest):
     """
@@ -1809,6 +1837,7 @@ async def search_items(
             OPENROUTER_API_KEY,
             scores_dict,
             GOOGLE_API_KEY,
+            _store_feedback_direct,
         )
         if _suspicious_pids:
             background_tasks.add_task(

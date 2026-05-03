@@ -14,6 +14,7 @@ import os
 import re
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import httpx
@@ -248,6 +249,7 @@ def run_judge(
     openrouter_api_key: str,
     scores_out: dict | None = None,
     google_api_key: str = "",
+    feedback_fn: Callable[[dict], None] | None = None,
 ) -> None:
     if not openrouter_api_key and not google_api_key:
         logger.warning("judge: no OPENROUTER_API_KEY or GOOGLE_API_KEY configured, skipping")
@@ -314,12 +316,18 @@ def run_judge(
             "source":            f"auto_judge_{provider}",
         }
 
-        try:
-            with httpx.Client(timeout=10.0) as client:
-                resp = client.post(f"{gateway_base_url}/feedback", json=feedback_payload)
-                resp.raise_for_status()
-        except Exception as e:
-            logger.warning(f"judge: failed to post feedback for '{result_name}': {e}")
+        if feedback_fn is not None:
+            try:
+                feedback_fn(feedback_payload)
+            except Exception as e:
+                logger.warning(f"judge: failed to store feedback for '{result_name}': {e}")
+        else:
+            try:
+                with httpx.Client(timeout=10.0) as client:
+                    resp = client.post(f"{gateway_base_url}/feedback", json=feedback_payload)
+                    resp.raise_for_status()
+            except Exception as e:
+                logger.warning(f"judge: failed to post feedback for '{result_name}': {e}")
 
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = [pool.submit(_judge_one, r) for r in results]
