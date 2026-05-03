@@ -112,7 +112,7 @@ def read_root():
 @app.get("/health")
 def health():
     if visualizer is None:
-        return {"status": "loading"}
+        raise HTTPException(status_code=503, detail="loading")
     return {"status": "ready"}
 
 
