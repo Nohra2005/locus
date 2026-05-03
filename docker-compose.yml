@@ -20,6 +20,7 @@ services:
 
   # ── 1. Gateway ────────────────────────────────────────────────────
   gateway:
+    image: locus/gateway:latest
     build:
       context: .
       dockerfile: gateway/Dockerfile
