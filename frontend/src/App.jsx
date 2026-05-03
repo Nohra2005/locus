@@ -451,7 +451,7 @@ function Navbar({ activeTab, onTab }) {
       display: "flex",
       paddingBottom: "env(safe-area-inset-bottom, 0px)",
     }}>
-      {["Discover", "Saved", "History", "Store"].map(tab => {
+      {["Discover", "Saved", "Store"].map(tab => {
         const active = activeTab === tab;
         const label = tab === "Store" ? "Stores" : tab;
         return (
@@ -578,8 +578,9 @@ function FloatingClothes({ opacity = 1 }) {
 // ══════════════════════════════════════════════════════════════════
 // DISCOVER FEED  — horizontal strips on the home screen
 // ══════════════════════════════════════════════════════════════════
-function DiscoverCard({ item, isSaved, onToggleSave }) {
+function DiscoverCard({ item, isSaved, onToggleSave, onCardClick, onFeedback }) {
   const [hovered, setHovered] = useState(false);
+  const [cardRating, setCardRating] = useState(null);
   const raw      = item.image_url ?? "";
   const imageURL = raw ? (raw.startsWith("http") ? raw : `${API}${raw}`) : null;
   const catColor = CATEGORY_COLORS[item.category] || T.accent;
@@ -600,6 +601,7 @@ function DiscoverCard({ item, isSaved, onToggleSave }) {
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={() => onCardClick?.(item)}
     >
       <div style={{ aspectRatio: "3/4", background: T.bgDeep, position: "relative", overflow: "hidden" }}>
         {imageURL
@@ -639,12 +641,33 @@ function DiscoverCard({ item, isSaved, onToggleSave }) {
           <span style={{ fontSize: "0.58rem", color: T.textMuted, letterSpacing: "0.01em" }}>{item.store || ""}</span>
           {item.price && <span style={{ fontSize: "0.65rem", color: T.accent, fontWeight: 600 }}>{item.price}</span>}
         </div>
+        {onFeedback && (
+          <div style={{ display: "flex", gap: 2, marginTop: 6 }} onClick={(e) => e.stopPropagation()}>
+            {[1, 2, 3, 4, 5].map(star => (
+              <button
+                key={star}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCardRating(star);
+                  onFeedback(item.product_id, star, item.name, item.store, item.category, item.image_url);
+                }}
+                style={{
+                  background: "none", border: "none", cursor: "pointer", padding: 0,
+                  fontSize: "0.75rem", lineHeight: 1,
+                  color: star <= (cardRating ?? 0) ? T.yellow : T.textFaint,
+                  transition: "color 0.15s",
+                }}
+                title={`Rate ${star} star${star > 1 ? "s" : ""}`}
+              >★</button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function DiscoverSection({ title, subtitle, badge, items, saved, onToggleSave, loading }) {
+function DiscoverSection({ title, subtitle, badge, items, saved, onToggleSave, onCardClick, onFeedback, loading }) {
   const isItemSaved = (pid) => saved.some(s => s.productId === pid);
 
   const wrapDiscover = (item) => ({
@@ -704,6 +727,8 @@ function DiscoverSection({ title, subtitle, badge, items, saved, onToggleSave, l
               item={item}
               isSaved={isItemSaved(item.product_id)}
               onToggleSave={() => onToggleSave?.(wrapDiscover(item))}
+              onCardClick={onCardClick}
+              onFeedback={onFeedback}
             />
           ))}
         </div>
@@ -717,7 +742,7 @@ function DiscoverSection({ title, subtitle, badge, items, saved, onToggleSave, l
 // ══════════════════════════════════════════════════════════════════
 const LANDING_CATEGORIES = ["Dress", "Jacket", "Bag", "Shoes", "Top", "Pants", "Sweater", "Hat"];
 
-function LandingView({ onUpload, error, history, saved, onToggleSave }) {
+function LandingView({ onUpload, error, history, saved, onToggleSave, onCardClick, onFeedback }) {
   const inputRef  = useRef(null);
   const cameraRef = useRef(null);
   const [dragging, setDragging] = useState(false);
@@ -889,6 +914,8 @@ function LandingView({ onUpload, error, history, saved, onToggleSave }) {
           items={discover?.trending ?? []}
           saved={saved}
           onToggleSave={onToggleSave}
+          onCardClick={onCardClick}
+          onFeedback={onFeedback}
           loading={loading}
         />
 
@@ -900,6 +927,8 @@ function LandingView({ onUpload, error, history, saved, onToggleSave }) {
             items={forYou}
             saved={saved}
             onToggleSave={onToggleSave}
+            onCardClick={onCardClick}
+            onFeedback={onFeedback}
             loading={false}
           />
         )}
@@ -913,6 +942,8 @@ function LandingView({ onUpload, error, history, saved, onToggleSave }) {
             items={mostSearched}
             saved={saved}
             onToggleSave={onToggleSave}
+            onCardClick={onCardClick}
+            onFeedback={onFeedback}
             loading={false}
           />
         )}
@@ -934,6 +965,8 @@ function LandingView({ onUpload, error, history, saved, onToggleSave }) {
           items={discover?.women ?? []}
           saved={saved}
           onToggleSave={onToggleSave}
+          onCardClick={onCardClick}
+          onFeedback={onFeedback}
           loading={loading}
         />
 
@@ -945,6 +978,8 @@ function LandingView({ onUpload, error, history, saved, onToggleSave }) {
           items={discover?.men ?? []}
           saved={saved}
           onToggleSave={onToggleSave}
+          onCardClick={onCardClick}
+          onFeedback={onFeedback}
           loading={loading}
         />
 
@@ -1300,7 +1335,8 @@ function DrawView({ imageURL, imageFile, onConfirm, onBack }) {
             <video
               src={TUTORIAL_VIDEO}
               autoPlay loop muted playsInline
-              style={{ width: "100%", borderRadius: 12, background: "#000", maxHeight: "50svh", objectFit: "cover" }}
+              onError={() => {}}
+              style={{ width: "100%", borderRadius: 12, background: "#000", maxHeight: "min(50svh, 50vh)", objectFit: "cover" }}
             />
 
             <button
@@ -2058,6 +2094,7 @@ function ProductDetailSheet({ result, category, judgeScore, onFeedback, onClose,
 // ══════════════════════════════════════════════════════════════════
 function ResultCard({ result, category, onFeedback, onCardClick, highlighted, judgeScore, saved, onToggleSave, onFlag }) {
   const [flagged, setFlagged] = useState(false);
+  const [cardRating, setCardRating] = useState(null);
 
   const score    = result.score ?? 0;
   const payload  = result.payload ?? {};
@@ -2181,6 +2218,34 @@ function ResultCard({ result, category, onFeedback, onCardClick, highlighted, ju
             </span>
           )}
         </div>
+        {onFeedback && (
+          <div style={{ display: "flex", gap: 2, marginTop: 5 }} onClick={(e) => e.stopPropagation()}>
+            {[1, 2, 3, 4, 5].map(star => (
+              <button
+                key={star}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCardRating(star);
+                  onFeedback(
+                    payload.product_id || payload.item_id || payload.image_url,
+                    star,
+                    payload.item_name || "",
+                    payload.store || "",
+                    payload.category_tag || category || "",
+                    payload.image_url || "",
+                  );
+                }}
+                style={{
+                  background: "none", border: "none", cursor: "pointer", padding: 0,
+                  fontSize: "0.8rem", lineHeight: 1,
+                  color: star <= (cardRating ?? 0) ? T.yellow : T.borderFaint,
+                  transition: "color 0.15s",
+                }}
+                title={`Rate ${star} star${star > 1 ? "s" : ""}`}
+              >★</button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2660,117 +2725,6 @@ function SavedView({ saved, onOpenDetail, onToggleSave }) {
               </div>
             );
           })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════
-// HISTORY VIEW
-// ══════════════════════════════════════════════════════════════════
-function HistoryCard({ entry, onRestore }) {
-  const color = CATEGORY_COLORS[entry.category] || T.accent;
-  const thumbs = entry.results.slice(0, 4).map(r => r.payload?.image_url).filter(Boolean);
-
-  return (
-    <div
-      onClick={() => onRestore(entry)}
-      style={{
-        background: T.surface,
-        border: `1px solid ${T.border}`,
-        borderRadius: "14px",
-        padding: "14px 16px",
-        display: "flex",
-        gap: "14px",
-        alignItems: "center",
-        cursor: "pointer",
-        transition: "border-color 0.2s, transform 0.2s, box-shadow 0.2s",
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.borderColor = T.accent;
-        e.currentTarget.style.transform = "translateY(-1px)";
-        e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.06)";
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.borderColor = T.border;
-        e.currentTarget.style.transform = "";
-        e.currentTarget.style.boxShadow = "";
-      }}
-    >
-      {/* Crop thumbnail — portrait aspect */}
-      <div style={{ width: 48, height: 64, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: T.bgDeep, border: `1px solid ${T.borderFaint}` }}>
-        {entry.cropImageBase64
-          ? <img src={entry.cropImageBase64} alt="search crop" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint, fontSize: "1rem" }}>✦</div>
-        }
-      </div>
-
-      {/* Info */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 7 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: "0.6rem", fontWeight: 500, color, background: `${color}15`, border: `1px solid ${color}35`, borderRadius: 20, padding: "2px 9px", textTransform: "capitalize", letterSpacing: "0.04em" }}>
-            {entry.category?.replace(/_/g, " ") || "unknown"}
-          </span>
-          <span style={{ fontSize: "0.62rem", color: T.textFaint, letterSpacing: "0.02em" }}>{timeAgo(entry.timestamp)}</span>
-        </div>
-
-        {/* Result mini-thumbnails */}
-        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          {thumbs.map((url, i) => (
-            <div key={i} style={{ width: 28, height: 36, borderRadius: 5, overflow: "hidden", background: T.bgDeep, flexShrink: 0, border: `1px solid ${T.borderFaint}` }}>
-              <img
-                src={url.startsWith("http") ? url : `${API}${url}`}
-                alt=""
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                onError={e => { e.target.style.display = "none"; }}
-              />
-            </div>
-          ))}
-          <span style={{ fontSize: "0.62rem", color: T.textMuted, marginLeft: 5 }}>
-            {entry.results.length} result{entry.results.length !== 1 ? "s" : ""}
-          </span>
-        </div>
-      </div>
-
-      {/* Arrow */}
-      <span style={{ color: T.textFaint, fontSize: "1rem", flexShrink: 0 }}>›</span>
-    </div>
-  );
-}
-
-function HistoryView({ history, onRestore, onClear }) {
-  return (
-    <div style={{ minHeight: "100svh", padding: "24px 20px", paddingBottom: "calc(83px + env(safe-area-inset-bottom, 0px) + 24px)", maxWidth: 640, margin: "0 auto" }}>
-      <div className="fade-up" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-        <div>
-          <h2 className="font-serif" style={{ fontSize: "2rem", fontWeight: 400, fontStyle: "italic", color: T.text, letterSpacing: "0.02em" }}>
-            History
-          </h2>
-        </div>
-        {history.length > 0 && (
-          <button
-            onClick={onClear}
-            style={{ fontSize: "0.9rem", color: T.red, background: "none", border: "none", cursor: "pointer", fontWeight: 400 }}
-          >
-            Clear all
-          </button>
-        )}
-      </div>
-
-      {history.length === 0 ? (
-        <div className="fade-up" style={{ textAlign: "center", padding: "88px 0", color: T.textMuted }}>
-          <div className="font-serif" style={{ fontSize: "2.8rem", fontWeight: 300, fontStyle: "italic", color: T.textFaint, marginBottom: 16, lineHeight: 1 }}>
-            empty
-          </div>
-          <p style={{ fontSize: "0.82rem", color: T.textMuted }}>No searches yet</p>
-          <p style={{ fontSize: "0.72rem", marginTop: 8, color: T.textFaint }}>Your search history will appear here</p>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {history.map(entry => (
-            <HistoryCard key={entry.id} entry={entry} onRestore={onRestore} />
-          ))}
         </div>
       )}
     </div>
@@ -3274,6 +3228,7 @@ export default function App() {
   const [searchLocation,      setSearchLocation]      = useState(null); // null = use GPS
   const [showLocationPicker,  setShowLocationPicker]  = useState(false);
   const [storeLocations,      setStoreLocations]      = useState({});
+  const [discoverDetail,   setDiscoverDetail]   = useState(null);
   const [error,            setError]            = useState(null);
   const [history,          setHistory]          = useState(() => loadHistory());
   const [saved,            setSaved]            = useState(() => loadSaved());
@@ -3397,11 +3352,27 @@ export default function App() {
     }
     setSelectedItem({ search_label: confirmedCategory, label: CATEGORY_LABELS[confirmedCategory] || confirmedCategory, bbox: [x1, y1, x2, y2] });
 
+    // Compute nearby stores for radius-aware search
+    const loc = searchLocation ?? userLocation;
+    const storeHasCoords = Object.keys(storeLocations).length > 0;
+    const nearbyStores = (loc && storeHasCoords)
+      ? Object.entries(storeLocations)
+          .filter(([, coords]) => haversineKm(loc, coords) <= radius)
+          .map(([name]) => name)
+      : [];
+    if (storeHasCoords && loc && nearbyStores.length === 0) {
+      setResults([]);
+      setSearchWarning(`No registered stores within ${radius} km — try expanding your radius`);
+      setView("results");
+      return;
+    }
+
     const form = new FormData();
     form.append("file", imageFile);
     form.append("x1", x1); form.append("y1", y1);
     form.append("x2", x2); form.append("y2", y2);
     form.append("search_label", confirmedCategory);
+    if (nearbyStores.length > 0) form.append("nearby_stores", nearbyStores.join(","));
     try {
       const res = await fetch(`${API}/search`, { method: "POST", body: form });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -3442,7 +3413,7 @@ export default function App() {
       setError(`Search failed: ${e.message}`);
       setView("confirming");
     }
-  }, [imageFile, drawnBbox, cropBlob]);
+  }, [imageFile, drawnBbox, cropBlob, searchLocation, userLocation, storeLocations, radius]);
 
   const handleFeedback = useCallback(async (productId, rating, name, store, category, imageUrl) => {
     try {
@@ -3509,21 +3480,21 @@ export default function App() {
     } catch (err) { console.error("[REFINE] fetch threw:", err); }
   }, [searchId, attributes, categoryInfo, selectedItem]);
 
-  const handleRestoreHistory = useCallback((entry) => {
-    setResults(entry.results);
-    setPredictedCategory(entry.category);
-    setCategoryInfo({ category: entry.category, confidence: null });
-    setSelectedItem({ search_label: entry.category, label: CATEGORY_LABELS[entry.category] || entry.category });
-    setQueryImageURL(null);
-    setJudgeScores({});
-    setSearchId(null); setSearchWarning(null);
-    setView("results");
-    setActiveTab("Discover");
-  }, []);
-
-  const handleClearHistory = useCallback(() => {
-    clearHistory();
-    setHistory([]);
+  const handleDiscoverCardClick = useCallback((item) => {
+    setDiscoverDetail({
+      score: 0,
+      payload: {
+        product_id:   item.product_id,
+        name:         item.name,
+        item_name:    item.name,
+        image_url:    item.image_url,
+        store_name:   item.store,
+        store:        item.store,
+        mall_name:    item.mall,
+        price:        item.price,
+        category_tag: item.category,
+      },
+    });
   }, []);
 
   const handleToggleSave = useCallback((result) => {
@@ -3575,8 +3546,6 @@ export default function App() {
 
       {activeTab === "Store" ? (
         <StoreDashboardView />
-      ) : activeTab === "History" ? (
-        <HistoryView history={history} onRestore={handleRestoreHistory} onClear={handleClearHistory} />
       ) : activeTab === "Saved" ? (
         <SavedView
           saved={saved}
@@ -3595,7 +3564,7 @@ export default function App() {
         />
       ) : (
         <>
-          {view === "landing"    && <LandingView onUpload={handleUpload} error={error} history={history} saved={saved} onToggleSave={handleToggleSave} />}
+          {view === "landing"    && <LandingView onUpload={handleUpload} error={error} history={history} saved={saved} onToggleSave={handleToggleSave} onCardClick={handleDiscoverCardClick} onFeedback={handleFeedback} />}
           {view === "drawing"    && <DrawView imageURL={imageURL} imageFile={imageFile} onConfirm={handleDrawConfirm} onBack={reset} />}
           {view === "confirming" && <ConfirmView cropBlob={cropBlob} predictedCategory={predictedCategory} allScores={allScores} onSearch={handleConfirm} onBack={() => setView("drawing")} searchLocation={searchLocation} userLocation={userLocation} onOpenLocationPicker={() => setShowLocationPicker(true)} />}
           {view === "searching"  && <LoadingView label="Finding matches…" />}
@@ -3627,6 +3596,21 @@ export default function App() {
         </>
       )}
       </div>
+      {discoverDetail && (() => {
+        const pid = (discoverDetail.payload || {}).product_id || (discoverDetail.payload || {}).image_url;
+        return (
+          <ProductDetailSheet
+            result={discoverDetail}
+            category={(discoverDetail.payload || {}).category_tag}
+            judgeScore={null}
+            onFeedback={handleFeedback}
+            onClose={() => setDiscoverDetail(null)}
+            saved={isItemSaved(pid, saved)}
+            onToggleSave={handleToggleSave}
+            storeLocations={storeLocations}
+          />
+        );
+      })()}
       <Navbar activeTab={activeTab} onTab={setActiveTab} />
     </>
   );

@@ -241,7 +241,10 @@ async def forgot_password(req: ForgotPasswordRequest):
     users[email]["reset_code_exp"] = (
         datetime.now(timezone.utc) + timedelta(minutes=15)
     ).isoformat()
-    _save_users(users)
+    try:
+        _save_users(users)
+    except Exception as e:
+        raise HTTPException(500, f"Could not save reset code: {e}")
     # No email transport — return the code so the frontend can display it to the store owner.
     return {"success": True, "reset_code": code}
 
@@ -268,7 +271,10 @@ async def reset_password(req: ResetPasswordRequest):
     user["password"] = _hash_password(req.new_password)
     user.pop("reset_code", None)
     user.pop("reset_code_exp", None)
-    _save_users(users)
+    try:
+        _save_users(users)
+    except Exception as e:
+        raise HTTPException(500, f"Could not save new password: {e}")
     return {"success": True}
 
 

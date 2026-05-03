@@ -1367,7 +1367,9 @@ async def discover(limit: int = 15):
                             models.FieldCondition(key="category_tag", match=models.MatchValue(value=cat)),
                         ],
                         must_not=[
-                            models.FieldCondition(key="low_score_flag", match=models.MatchValue(value=True)),
+                            models.FieldCondition(key="low_score_flag",  match=models.MatchValue(value=True)),
+                            models.FieldCondition(key="store_name",      match=models.MatchValue(value="golden_dataset")),
+                            models.FieldCondition(key="broken",          match=models.MatchValue(value=True)),
                         ],
                     ),
                     limit=60,
@@ -1571,6 +1573,7 @@ async def search_items(
     y2:                 float      = Form(0),
     search_label:       str        = Form(""),
     shoe_style:         str        = Form(""),   # optional sub-type for shoes (sneaker|boot|heel|sandal)
+    nearby_stores:      str        = Form(""),   # comma-separated store names to restrict results by radius
     include_golden:     bool       = False,
     skip_judge:         bool       = Form(False),
 ):
@@ -1698,6 +1701,15 @@ async def search_items(
                 match=models.MatchValue(value=shoe_style)
             ))
             print(f"[SEARCH] Shoe sub-filter: shoe_style='{shoe_style}'")
+
+    # Restrict to stores within the user's radius when the frontend provides a list
+    store_filter = [s.strip() for s in nearby_stores.split(",") if s.strip()]
+    if store_filter:
+        must_conditions.append(models.FieldCondition(
+            key="store_name",
+            match=models.MatchAny(any=store_filter),
+        ))
+        print(f"[SEARCH] Radius filter: {len(store_filter)} nearby stores")
 
     # Exclude golden dataset items in normal searches; include them when toggled
     must_not_conditions = []
