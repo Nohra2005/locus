@@ -47,11 +47,13 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - ADMIN_API_KEY=${ADMIN_API_KEY}
       - GOLDEN_DATASET_PATH=/mlops/golden_dataset.json
+      - USERS_FILE=/userdata/users.json
     volumes:
       - ./gateway:/app
       - ./mlops:/mlops
       - ./mlops/golden_images:/mlops/golden_images
       - ./frontend/dist:/app/frontend/dist
+      - users_data:/userdata
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -214,3 +216,4 @@ volumes:
   grafana_data:
   hf_cache:
   clip_cache:
+  users_data:   # persists users.json across git wipes and container rebuilds

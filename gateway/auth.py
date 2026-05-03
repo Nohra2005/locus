@@ -16,7 +16,7 @@ SECRET_KEY = os.getenv("JWT_SECRET", "locus_store_portal_secret_2026_key")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_DAYS = 30
 
-USERS_FILE = os.path.join(os.path.dirname(__file__), "users.json")
+USERS_FILE = os.getenv("USERS_FILE", os.path.join(os.path.dirname(__file__), "users.json"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _bearer = HTTPBearer(auto_error=False)
