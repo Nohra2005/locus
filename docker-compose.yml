@@ -61,6 +61,7 @@ services:
 
   # ── 2. Visual Engine ──────────────────────────────────────────────
   visual_engine:
+    image: locus/visual-engine:latest
     build: ./visual_engine
     ports:
       - "8001:8001"
@@ -80,6 +81,7 @@ services:
   # trend tags. Runs as a background task — zero latency impact on /search.
   # Enables /refine: style-guided or color-guided CLIP text re-query.
   attribute_tagger:
+    image: locus/attribute-tagger:latest
     build: ./attribute_tagger
     ports:
       - "8004:8004"
@@ -167,6 +169,7 @@ services:
 
   # ── 8. MLops Metrics Exporter ────────────────────────────────────
   mlops_exporter:
+    image: locus/mlops-exporter:latest
     build:
       context: .
       dockerfile: mlops/Dockerfile.exporter
