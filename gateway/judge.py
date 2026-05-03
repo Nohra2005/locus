@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 import re
 import threading
 import time
@@ -32,6 +33,29 @@ GEMINI_API_URL = (
 
 _provider_lock  = threading.Lock()
 _provider_state: dict = {"last_call": 0.0, "backoff_until": 0.0, "min_gap": 2.0}
+
+# ── Judge recency cache ────────────────────────────────────────────────────────
+# Prevents the same product being judged more than once per TTL window.
+# Without this, every search re-judges the same popular products and floods
+# locus_feedback with duplicate entries, biasing LoRA training.
+
+_JUDGE_CACHE: dict[str, float] = {}   # product_key → last_judged monotonic time
+_JUDGE_CACHE_TTL = float(os.getenv("JUDGE_CACHE_TTL_HOURS", "24")) * 3600
+_JUDGE_CACHE_LOCK = threading.Lock()
+
+
+def _is_recently_judged(key: str) -> bool:
+    """Return True (skip) if this product was judged within the TTL window."""
+    now = time.monotonic()
+    with _JUDGE_CACHE_LOCK:
+        if len(_JUDGE_CACHE) > 10_000:
+            cutoff = now - _JUDGE_CACHE_TTL
+            for k in [k for k, t in _JUDGE_CACHE.items() if t < cutoff]:
+                del _JUDGE_CACHE[k]
+        if now - _JUDGE_CACHE.get(key, 0.0) < _JUDGE_CACHE_TTL:
+            return True
+        _JUDGE_CACHE[key] = now
+        return False
 
 
 def _acquire_slot() -> bool:
@@ -232,6 +256,10 @@ def run_judge(
 
         if not result_image_url:
             logger.info(f"judge: skipping '{result_name}' — no image_url")
+            return
+
+        if _is_recently_judged(key):
+            logger.info(f"judge: skipping '{result_name}' — recently judged (cache hit)")
             return
 
         score    = None

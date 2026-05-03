@@ -1,4 +1,8 @@
 # LOCUS: ingress.yaml
+#
+# ${GATEWAY_DOMAIN} is a shell variable — kubectl does NOT substitute it.
+# Apply with:
+#   GATEWAY_DOMAIN=locus.example.com envsubst < k8s/ingress.yaml | kubectl apply -f -
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

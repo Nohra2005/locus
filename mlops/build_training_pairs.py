@@ -128,8 +128,12 @@ def _build_feedback_weights(client) -> dict[str, int]:
     Positive feedback → 3 augmented pairs (model found these images useful).
     Negative feedback → 1 augmented pair (still informative as hard negatives).
     Default (no feedback) → 2 augmented pairs.
+
+    User feedback always takes priority over auto_judge: a human 1-star rating
+    wins over any number of auto_judge 5-star entries for the same product.
     """
-    weights: dict[str, int] = {}
+    user_w: dict[str, int] = {}
+    auto_w: dict[str, int] = {}
     try:
         offset = None
         while True:
@@ -145,19 +149,24 @@ def _build_feedback_weights(client) -> dict[str, int]:
             for pt in batch:
                 pid    = pt.payload.get("result_product_id", "")
                 signal = pt.payload.get("training_signal", "neutral")
+                source = pt.payload.get("source", "user")
                 if not pid:
                     continue
-                current = weights.get(pid, 2)  # default 2
+                target  = user_w if source == "user" else auto_w
+                current = target.get(pid, 2)
                 if signal == "positive":
-                    weights[pid] = max(current, 3)
+                    target[pid] = max(current, 3)
                 elif signal == "negative":
-                    weights[pid] = min(current, 1)
+                    target[pid] = min(current, 1)
             if next_offset is None:
                 break
             offset = next_offset
-        print(f"[PAIRS] Feedback loaded: {len(weights)} products have ratings")
+        weights = {**auto_w, **user_w}   # user entries overwrite auto_judge
+        print(f"[PAIRS] Feedback loaded: {len(weights)} products rated "
+              f"({len(user_w)} user, {len(auto_w)} auto_judge)")
     except Exception as e:
         print(f"[PAIRS] Could not load feedback (using default weights): {e}")
+        weights = {}
     return weights
 
 

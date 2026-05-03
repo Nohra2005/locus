@@ -44,6 +44,8 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - GATEWAY_BASE_URL=${GATEWAY_BASE_URL:-http://localhost:8000}
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
       - GOLDEN_DATASET_PATH=/mlops/golden_dataset.json
     volumes:
       - ./gateway:/app
@@ -80,6 +82,7 @@ services:
       - "8004:8004"
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8004/health')\""]
       interval: 5s
@@ -120,7 +123,7 @@ services:
   # To run manually: docker compose run --rm gateway python repair_broken_links.py
   # link_monitor: <removed from VM — not needed for deployment>
 
-  # ── 7. MLops Automated Retraining ────────────────────────────────────────────
+  # ── 6. MLops Automated Retraining ────────────────────────────────────────────
   # Runs retrain_clip.py in --schedule mode: checks feedback thresholds every 48h,
   # trains a LoRA adapter if conditions are met, evaluates against ci_baseline.json,
   # promotes and hot-reloads if score improves by ≥ PROMOTION_DELTA.
@@ -144,7 +147,6 @@ services:
       - GATEWAY_BASE_URL=${GATEWAY_BASE_URL:-http://gateway:8000}
       - VISUAL_HOST=http://visual_engine:8001
       - VISUAL_ENGINE_MODELS=/visual_engine/models
-      - VISUAL_ENGINE_MODELS_INTERNAL=/app/models
       - MIN_FEEDBACK_PAIRS=50
       - MIN_ACS_THRESHOLD=0.70
       - MAX_TRAIN_STEPS=${MAX_TRAIN_STEPS:-150}
@@ -160,7 +162,7 @@ services:
       - 8.8.8.8
       - 1.1.1.1
 
-  # ── 7. MLops Metrics Exporter ────────────────────────────────────
+  # ── 8. MLops Metrics Exporter ────────────────────────────────────
   mlops_exporter:
     build:
       context: .
@@ -178,7 +180,7 @@ services:
       - REFRESH_SECS=30
     restart: unless-stopped
 
-  # ── 7. Prometheus ─────────────────────────────────────────────────
+  # ── 9. Prometheus ─────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
     ports:
@@ -190,7 +192,7 @@ services:
       - visual_engine
       - mlops_exporter
 
-  # ── 7. Grafana ────────────────────────────────────────────────────
+  # ── 10. Grafana ───────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:10.4.3
     ports:
@@ -198,8 +200,8 @@ services:
     depends_on:
       - prometheus
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-admin}
       - GF_PANELS_DISABLE_SANITIZE_HTML=true
     volumes:
       - grafana_data:/var/lib/grafana

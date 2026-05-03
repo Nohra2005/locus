@@ -39,6 +39,16 @@ spec:
                 secretKeyRef:
                   name: locus-secrets
                   key: GOOGLE_API_KEY
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: locus-secrets
+                  key: JWT_SECRET
+            - name: ADMIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: locus-secrets
+                  key: ADMIN_API_KEY
           resources:
             requests:
               cpu: "100m"
@@ -118,6 +128,11 @@ spec:
                 secretKeyRef:
                   name: locus-secrets
                   key: OPENROUTER_API_KEY
+            - name: GOOGLE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: locus-secrets
+                  key: GOOGLE_API_KEY
           resources:
             requests:
               cpu: "100m"
