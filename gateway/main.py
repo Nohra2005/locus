@@ -1707,14 +1707,13 @@ async def search_items(
             ))
             print(f"[SEARCH] Shoe sub-filter: shoe_style='{shoe_style}'")
 
-    # Restrict to stores within the user's radius when the frontend provides a list
+    # Do NOT pre-filter Qdrant to nearby stores. Instead we search globally for the
+    # top-N most visually similar items and let the frontend filter by radius
+    # client-side. This ensures results always appear even when nearby stores have
+    # a thin catalogue, and makes the radius slider on the results page interactive.
     store_filter = [s.strip() for s in nearby_stores.split(",") if s.strip()]
     if store_filter:
-        must_conditions.append(models.FieldCondition(
-            key="store_name",
-            match=models.MatchAny(any=store_filter),
-        ))
-        print(f"[SEARCH] Radius filter: {len(store_filter)} nearby stores")
+        print(f"[SEARCH] Radius hint: {len(store_filter)} nearby stores (client-side filtered)")
 
     # Exclude golden dataset items in normal searches; include them when toggled
     must_not_conditions = []
@@ -1825,7 +1824,7 @@ async def search_items(
                 "product_id": product_id,
             }
 
-    matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:15]
+    matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:50]
 
     maps_urls = get_store_maps_urls()
     for m in matches:
