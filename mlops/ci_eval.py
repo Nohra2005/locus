@@ -42,6 +42,11 @@ _MODEL              = "openai/gpt-4o"
 # How many points below baseline triggers a failure (e.g. 0.04 = 4 percentage points)
 REGRESSION_TOLERANCE = 0.04
 
+# /search is rate-limited to 10/minute; 7s between calls keeps us at ~8/min
+SEARCH_INTERVAL = 7.0
+# Minimum fraction of eligible queries that must be evaluated for the result to be valid
+MIN_COVERAGE = 0.60
+
 
 def _shoe_style_from_name(name: str) -> str:
     lower = name.lower()
@@ -141,23 +146,37 @@ def run_eval(gateway_url: str) -> tuple[float, int, dict[str, float]]:
         image_bytes = img_path.read_bytes()
         query_b64   = base64.b64encode(image_bytes).decode()
 
-        try:
-            search_data = {"search_label": category} if category else {}
-            if category == "shoes":
-                style = _shoe_style_from_name(query_name)
-                if style and style != "other":
-                    search_data["shoe_style"] = style
-            r = requests.post(
-                f"{gateway_url}/search",
-                files={"file": ("q.jpg", io.BytesIO(image_bytes), "image/jpeg")},
-                data=search_data,
-                timeout=60,
-            )
-            r.raise_for_status()
-            matches = r.json().get("matches", [])[:3]
-        except Exception as e:
-            print(f"  [FAIL] /search error for '{query_name}': {e}")
+        search_data = {"search_label": category} if category else {}
+        if category == "shoes":
+            style = _shoe_style_from_name(query_name)
+            if style and style != "other":
+                search_data["shoe_style"] = style
+
+        search_resp = None
+        for attempt in range(3):
+            time.sleep(SEARCH_INTERVAL)
+            try:
+                r = requests.post(
+                    f"{gateway_url}/search",
+                    files={"file": ("q.jpg", io.BytesIO(image_bytes), "image/jpeg")},
+                    data=search_data,
+                    timeout=60,
+                )
+                if r.status_code == 429:
+                    wait = 30.0 * (attempt + 1)
+                    print(f"  [RETRY {attempt+1}] 429 rate-limit on '{query_name}', waiting {wait:.0f}s")
+                    time.sleep(wait)
+                    continue
+                r.raise_for_status()
+                search_resp = r
+                break
+            except Exception as e:
+                print(f"  [FAIL] /search error for '{query_name}': {e}")
+                break
+
+        if search_resp is None:
             continue
+        matches = search_resp.json().get("matches", [])[:3]
 
         if not matches:
             print(f"  [WARN] no results for '{query_name}'")
@@ -220,7 +239,17 @@ def main():
         print("[FAIL] no queries could be evaluated")
         sys.exit(1)
 
+    coverage = evaluated / n_queries if n_queries > 0 else 0.0
+    if coverage < MIN_COVERAGE:
+        print(f"[FAIL] only {evaluated}/{n_queries} queries evaluated ({coverage:.0%}) — "
+              f"minimum required is {MIN_COVERAGE:.0%}. Check for rate-limiting or service errors.")
+        sys.exit(1)
+
     if args.set_baseline:
+        if coverage < MIN_COVERAGE:
+            print(f"[ERROR] Only {evaluated}/{n_queries} queries evaluated ({coverage:.0%}). "
+                  f"Baseline not saved — minimum coverage {MIN_COVERAGE:.0%} required.")
+            sys.exit(1)
         baseline_doc = {
             "score":        round(score, 4),
             "n_queries":    evaluated,
