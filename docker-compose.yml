@@ -193,11 +193,6 @@ services:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    depends_on:
-      - gateway
-      - visual_engine
-      - attribute_tagger
-      - mlops_exporter
 
   # ── 10. Grafana ───────────────────────────────────────────────────
   grafana:
