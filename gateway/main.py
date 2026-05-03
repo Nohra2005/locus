@@ -477,7 +477,7 @@ async def limit_upload_size(request: Request, call_next):
 
 VISUAL_URL          = os.getenv("VISUAL_HOST",    "http://visual_engine:8001")
 TAGGER_HOST         = os.getenv("TAGGER_HOST",    "")
-QDRANT_URL          = os.getenv("QDRANT_URL")
+QDRANT_URL          = (os.getenv("QDRANT_URL") or "").strip()
 QDRANT_API_KEY      = os.getenv("QDRANT_API_KEY")
 OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
 GOOGLE_API_KEY      = os.getenv("GOOGLE_API_KEY", "")
@@ -502,9 +502,14 @@ if pathlib.Path("frontend/dist/assets").exists():
 if QDRANT_URL:
     print(f"[QDRANT] Connecting to cloud: {QDRANT_URL}")
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=30)
-else:
+elif os.getenv("QDRANT_HOST"):
     print(f"[QDRANT] Connecting to local: {QDRANT_HOST}:{QDRANT_PORT}")
     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=30)
+else:
+    raise RuntimeError(
+        "QDRANT_URL is not set (or is empty). "
+        "Set QDRANT_URL=https://<cluster>.qdrant.io:6333 in your .env file."
+    )
 
 
 def _compute_rating_gauges():
@@ -1766,6 +1771,8 @@ async def search_items(
             break
         except Exception as _e:
             if _attempt == 2:
+                _qdrant_target = QDRANT_URL or f"{QDRANT_HOST}:{QDRANT_PORT}"
+                print(f"[SEARCH] Qdrant unreachable after 3 attempts (target={_qdrant_target}): {_e}")
                 raise
             import time as _time
             print(f"[SEARCH] Qdrant error (attempt {_attempt+1}/3): {_e} — retrying in 2s")
