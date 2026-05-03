@@ -3359,12 +3359,8 @@ export default function App() {
           .filter(([, coords]) => haversineKm(loc, coords) <= radius)
           .map(([name]) => name)
       : [];
-    if (storeHasCoords && loc && nearbyStores.length === 0) {
-      setResults([]);
-      setSearchWarning(`No registered stores within ${radius} km — try expanding your radius`);
-      setView("results");
-      return;
-    }
+    // If location is known but no stores are within radius, proceed without radius filter
+    // so the user still gets results (they can filter by radius from the results view).
 
     const form = new FormData();
     form.append("file", imageFile);
