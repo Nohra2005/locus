@@ -1,0 +1,29 @@
+name: Link Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 */5 * *"   # every 5 days at 4am UTC
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Run link monitor on VM
+        env:
+          SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+        run: |
+          echo "$SSH_KEY" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+
+          VM="${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}"
+          SSH="ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no"
+
+          $SSH $VM "
+            cd ~/locus
+            export \$(cat .env | grep -v '#' | grep -v '^\s*\$' | xargs)
+            python gateway/repair_broken_links.py 2>&1 | tee /tmp/link_monitor_\$(date +%Y%m%d).log
+            echo '--- Link monitor finished ---'
+          "

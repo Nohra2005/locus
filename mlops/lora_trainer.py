@@ -94,8 +94,10 @@ def _embed_batch(
     so gradients flow through the LoRA adapters.
     """
     inputs = processor(images=pil_images, return_tensors="pt", padding=True)
-    vision_out     = model.vision_model(**inputs)
-    image_features = model.visual_projection(vision_out.pooler_output)
+    with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+        vision_out     = model.vision_model(**inputs)
+        image_features = model.visual_projection(vision_out.pooler_output)
+    image_features = image_features.float()  # back to fp32 for loss + norm
     image_features = image_features / image_features.norm(p=2, dim=-1, keepdim=True)
     return image_features
 
