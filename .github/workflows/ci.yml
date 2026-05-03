@@ -108,6 +108,9 @@ jobs:
           VISUAL_URL:  http://localhost:8001
           TAGGER_URL:  http://localhost:8004
 
+      - name: Wait for rate-limit window to reset
+        run: sleep 65
+
       - name: Run judge quality gate
         run: python mlops/ci_eval.py --gateway-url http://localhost:8000
         env:

@@ -39,23 +39,31 @@ _provider_state: dict = {"last_call": 0.0, "backoff_until": 0.0, "min_gap": 2.0}
 # Without this, every search re-judges the same popular products and floods
 # locus_feedback with duplicate entries, biasing LoRA training.
 
-_JUDGE_CACHE: dict[str, float] = {}   # product_key → last_judged monotonic time
+_JUDGE_CACHE: dict[str, tuple[float, float | None]] = {}  # key → (timestamp, score)
 _JUDGE_CACHE_TTL = float(os.getenv("JUDGE_CACHE_TTL_HOURS", "24")) * 3600
 _JUDGE_CACHE_LOCK = threading.Lock()
 
 
-def _is_recently_judged(key: str) -> bool:
-    """Return True (skip) if this product was judged within the TTL window."""
+def _is_recently_judged(key: str) -> tuple[bool, float | None]:
+    """Return (True, cached_score) if recently judged; (False, None) and register key otherwise."""
     now = time.monotonic()
     with _JUDGE_CACHE_LOCK:
         if len(_JUDGE_CACHE) > 10_000:
             cutoff = now - _JUDGE_CACHE_TTL
-            for k in [k for k, t in _JUDGE_CACHE.items() if t < cutoff]:
+            for k in [k for k, (t, _) in _JUDGE_CACHE.items() if t < cutoff]:
                 del _JUDGE_CACHE[k]
-        if now - _JUDGE_CACHE.get(key, 0.0) < _JUDGE_CACHE_TTL:
-            return True
-        _JUDGE_CACHE[key] = now
-        return False
+        entry = _JUDGE_CACHE.get(key)
+        if entry is not None and now - entry[0] < _JUDGE_CACHE_TTL:
+            return True, entry[1]
+        _JUDGE_CACHE[key] = (now, None)
+        return False, None
+
+
+def _set_judge_cache_score(key: str, score: float) -> None:
+    with _JUDGE_CACHE_LOCK:
+        entry = _JUDGE_CACHE.get(key)
+        if entry is not None:
+            _JUDGE_CACHE[key] = (entry[0], score)
 
 
 def _acquire_slot() -> bool:
@@ -258,8 +266,11 @@ def run_judge(
             logger.info(f"judge: skipping '{result_name}' — no image_url")
             return
 
-        if _is_recently_judged(key):
+        recently_judged, cached_score = _is_recently_judged(key)
+        if recently_judged:
             logger.info(f"judge: skipping '{result_name}' — recently judged (cache hit)")
+            if scores_out is not None and key and cached_score is not None:
+                scores_out[key] = cached_score
             return
 
         score    = None
@@ -290,6 +301,8 @@ def run_judge(
 
         if scores_out is not None and key:
             scores_out[key] = round(score, 3)
+        if key:
+            _set_judge_cache_score(key, round(score, 3))
 
         feedback_payload = {
             "result_product_id": product_id,
