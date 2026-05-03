@@ -41,7 +41,8 @@
       "Bash(git -C \"C:/Users/User/Desktop/Locus Project/locus\" log -1 --oneline origin/NewUI)",
       "Bash(taskkill //F //PID 17240)",
       "Bash(netstat -ano)",
-      "Bash(git -C \"C:/Users/User/Desktop/Locus Project/locus\" ls-remote --heads origin NewUI)"
+      "Bash(git -C \"C:/Users/User/Desktop/Locus Project/locus\" ls-remote --heads origin NewUI)",
+      "Bash(pdflatex -interaction=nonstopmode locus_report.tex)"
     ]
   }
 }
