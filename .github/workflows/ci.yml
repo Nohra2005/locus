@@ -122,5 +122,6 @@ jobs:
       - name: Tear down
         if: always()
         run: |
+          sleep 20
           docker compose down
           docker image prune -f

@@ -37,7 +37,7 @@ GOLDEN_IMAGES_DIR   = SCRIPT_DIR / "golden_images"
 BASELINE_PATH       = SCRIPT_DIR / "ci_baseline.json"
 OPENROUTER_API_KEY  = os.getenv("OPENROUTER_API_KEY", "")
 _OPENROUTER_URL     = "https://openrouter.ai/api/v1/chat/completions"
-_MODEL              = "openai/gpt-4o"
+_MODEL              = "google/gemini-2.0-flash-001"
 
 # How many points below baseline triggers a failure (e.g. 0.04 = 4 percentage points)
 REGRESSION_TOLERANCE = 0.04
@@ -63,8 +63,21 @@ def _shoe_style_from_name(name: str) -> str:
 
 _JUDGE_PROMPT = (
     "You are a fashion visual similarity expert.\n"
-    "Rate how visually similar the result image is to the query image on a scale 0.00–1.00.\n"
-    "0.00 = completely unrelated, 1.00 = identical item.\n"
+    "You will be shown two clothing images: first the QUERY image, then a RESULT image.\n"
+    "Rate how visually similar the result is to the query on a continuous scale from 0.00 to 1.00.\n"
+    "Use the full range — do not snap to round values. Fine distinctions matter.\n"
+    "Reference points (interpolate freely between them):\n"
+    "  1.00 = identical item (same product, same photo)\n"
+    "  0.92 = near-identical: same garment type, same colour family, same silhouette and fit — only model pose, lighting, or minor brand details differ\n"
+    "  0.80 = very similar: same garment type and colour family, slightly different cut detail or wash\n"
+    "  0.65 = clearly similar: same category and colour family but noticeably different cut or silhouette\n"
+    "  0.50 = partially similar: same broad category but different colour OR clearly different cut\n"
+    "  0.30 = same category only, clearly different style or design\n"
+    "  0.10 = loosely related (e.g. both outerwear but very different garments)\n"
+    "  0.00 = completely unrelated\n"
+    "Important: when both images show the same garment type, same colour family, and same fit/silhouette, score at least 0.88 even if the model, background, or exact shade differs slightly.\n"
+    "For patterned garments (floral, striped, printed): if both items share the same base colour AND the same pattern type (e.g. both are floral), treat pattern variation (different flowers, scale, density) as a minor difference only — do NOT drop below 0.80 for this alone. Score 0.88+ if garment type, base colour, and silhouette all match.\n"
+    "Consider all visual attributes: category, colour, fabric texture, silhouette, length, fit, and detailing.\n"
     "Respond with ONLY the numeric score. No explanation."
 )
 

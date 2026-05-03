@@ -23,6 +23,7 @@ services:
     build:
       context: .
       dockerfile: gateway/Dockerfile
+    stop_grace_period: 60s
     ports:
       - "8000:8000"
     depends_on:
