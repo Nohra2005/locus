@@ -453,7 +453,7 @@ function Navbar({ activeTab, onTab }) {
     }}>
       {["Discover", "Saved", "History", "Store"].map(tab => {
         const active = activeTab === tab;
-        const label = tab === "Store" ? "Studio" : tab;
+        const label = tab === "Store" ? "Stores" : tab;
         return (
           <button
             key={tab}
