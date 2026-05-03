@@ -64,3 +64,6 @@ frontend/node_modules/
 
 # ── Docker ────────────────────────────────────────────────────────────────────
 *.log
+
+# ── Deployment script (contains live secrets — never commit) ──────────────────
+deploy.sh
