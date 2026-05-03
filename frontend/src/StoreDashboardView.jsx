@@ -142,8 +142,9 @@ function AuthPage({ onAuth }) {
   const [success,   setSuccess]   = useState("");
   const [showPass,  setShowPass]  = useState(false);
   const [showNew,   setShowNew]   = useState(false);
+  const [resetCode, setResetCode] = useState("");
 
-  const goTo = (m) => { setMode(m); setError(""); setSuccess(""); };
+  const goTo = (m) => { setMode(m); setError(""); setSuccess(""); if (m === "login") setResetCode(""); };
 
   const apiPost = async (endpoint, body) => {
     const resp = await fetch(`${API}${endpoint}`, {
@@ -170,7 +171,8 @@ function AuthPage({ onAuth }) {
         onAuth(data);
 
       } else if (mode === "forgot") {
-        await apiPost("/auth/forgot-password", { email: email.trim() });
+        const data = await apiPost("/auth/forgot-password", { email: email.trim() });
+        setResetCode(data.reset_code || "");
         goTo("newpass");
 
       } else if (mode === "newpass") {
@@ -198,7 +200,7 @@ function AuthPage({ onAuth }) {
     register:"Create a retailer account to list your products.",
     forgot:  "Enter your account email to reset your password.",
     verify:  `We sent a code to ${email || "your email"}. Enter it below to continue.`,
-    newpass: "Choose a new password for your account.",
+    newpass: "Enter the reset code shown below and choose a new password.",
   };
   const btnMap = {
     login:   { idle: "Sign in",           busy: "Signing in…" },
@@ -314,50 +316,94 @@ function AuthPage({ onAuth }) {
                 onChange={setPhone} placeholder="+961 70 000 000" />
             )}
 
-            {/* ── verification code ── */}
+            {/* ── verification code (verify mode — future use) ── */}
             {mode === "verify" && (
               <AuthInput label="Verification code" value={code} onChange={setCode}
                 placeholder="Enter the code from your email" required />
             )}
 
-            {/* ── new password ── */}
+            {/* ── new password flow ── */}
             {mode === "newpass" && (
-              <div>
-                <label style={labelStyle}>New password</label>
-                <div style={{ position: "relative" }}>
-                  <input
-                    type={showNew ? "text" : "password"}
-                    value={newPass}
-                    onChange={e => setNewPass(e.target.value)}
-                    placeholder="At least 8 characters"
-                    minLength={8}
-                    maxLength={128}
-                    required
-                    style={{ ...inputStyle, paddingRight: 42 }}
-                  />
-                  <button type="button" onClick={() => setShowNew(s => !s)} style={{
-                    position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-                    background: "none", border: "none", cursor: "pointer",
-                    color: T.textMuted, fontSize: "0.8rem", padding: 0,
+              <>
+                {/* Reset code display box */}
+                {resetCode && (
+                  <div style={{
+                    background: "rgba(201,169,110,0.07)",
+                    border: `1px solid ${T.accentRing}`,
+                    borderRadius: 10, padding: "14px 16px",
                   }}>
-                    {showNew ? "hide" : "show"}
-                  </button>
+                    <div style={{ fontSize: "0.6rem", color: T.accent, letterSpacing: "0.16em",
+                      textTransform: "uppercase", marginBottom: 8 }}>Your reset code</div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                      <span style={{
+                        fontFamily: "'DM Mono', monospace", fontSize: "1.3rem",
+                        color: T.text, letterSpacing: "0.22em",
+                      }}>{resetCode}</span>
+                      <button type="button" onClick={() => navigator.clipboard?.writeText(resetCode)} style={{
+                        background: "none", border: `1px solid ${T.border}`,
+                        borderRadius: 6, padding: "4px 10px", cursor: "pointer",
+                        fontSize: "0.68rem", color: T.textMuted,
+                        fontFamily: "'DM Sans', sans-serif",
+                      }}>Copy</button>
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: "0.68rem", color: T.textMuted }}>
+                      Valid for 15 minutes. Enter it in the field below.
+                    </div>
+                  </div>
+                )}
+
+                {/* Code input */}
+                <div>
+                  <label style={labelStyle}>Reset code <span style={{ color: T.red }}>*</span></label>
+                  <input
+                    type="text"
+                    value={code}
+                    onChange={e => setCode(e.target.value.toUpperCase())}
+                    placeholder="8-character code"
+                    maxLength={8}
+                    required
+                    style={{ ...inputStyle, fontFamily: "'DM Mono', monospace", letterSpacing: "0.18em" }}
+                  />
                 </div>
-                <div style={{ marginTop: 6, fontSize: "0.72rem", color: T.textMuted }}>
-                  {newPass.length > 0 && (
-                    <>
-                      <span style={{ color: newPass.length >= 8 ? T.green : T.red }}>
-                        {newPass.length >= 8 ? "✓" : "✗"} At least 8 characters
-                      </span>
-                      {"  ·  "}
-                      <span style={{ color: newPass.length <= 128 ? T.green : T.red }}>
-                        {newPass.length <= 128 ? "✓" : "✗"} Max 128 characters
-                      </span>
-                    </>
-                  )}
-                  {newPass.length === 0 && "8–128 characters"}
+
+                {/* New password */}
+                <div>
+                  <label style={labelStyle}>New password <span style={{ color: T.red }}>*</span></label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type={showNew ? "text" : "password"}
+                      value={newPass}
+                      onChange={e => setNewPass(e.target.value)}
+                      placeholder="At least 8 characters"
+                      minLength={8}
+                      maxLength={128}
+                      required
+                      style={{ ...inputStyle, paddingRight: 42 }}
+                    />
+                    <button type="button" onClick={() => setShowNew(s => !s)} style={{
+                      position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
+                      background: "none", border: "none", cursor: "pointer",
+                      color: T.textMuted, fontSize: "0.8rem", padding: 0,
+                    }}>
+                      {showNew ? "hide" : "show"}
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: "0.72rem", color: T.textMuted }}>
+                    {newPass.length > 0 && (
+                      <>
+                        <span style={{ color: newPass.length >= 8 ? T.green : T.red }}>
+                          {newPass.length >= 8 ? "✓" : "✗"} At least 8 characters
+                        </span>
+                        {"  ·  "}
+                        <span style={{ color: newPass.length <= 128 ? T.green : T.red }}>
+                          {newPass.length <= 128 ? "✓" : "✗"} Max 128 characters
+                        </span>
+                      </>
+                    )}
+                    {newPass.length === 0 && "8–128 characters"}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
 

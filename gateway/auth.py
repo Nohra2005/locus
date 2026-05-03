@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import os
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -235,7 +236,14 @@ async def forgot_password(req: ForgotPasswordRequest):
     email = req.email.strip().lower()
     if email not in users:
         raise HTTPException(404, "No account found with that email")
-    return {"success": True}
+    code = secrets.token_hex(4).upper()  # 8-char hex code
+    users[email]["reset_code"] = code
+    users[email]["reset_code_exp"] = (
+        datetime.now(timezone.utc) + timedelta(minutes=15)
+    ).isoformat()
+    _save_users(users)
+    # No email transport — return the code so the frontend can display it to the store owner.
+    return {"success": True, "reset_code": code}
 
 
 @router.post("/reset-password")
@@ -248,7 +256,18 @@ async def reset_password(req: ResetPasswordRequest):
     email = req.email.strip().lower()
     if email not in users:
         raise HTTPException(404, "No account found with that email")
-    users[email]["password"] = _hash_password(req.new_password)
+    user = users[email]
+    stored_code = user.get("reset_code", "")
+    stored_exp  = user.get("reset_code_exp", "")
+    if not stored_code or not req.code:
+        raise HTTPException(400, "Reset code required — call /auth/forgot-password first")
+    if req.code.upper() != stored_code:
+        raise HTTPException(400, "Invalid reset code")
+    if datetime.fromisoformat(stored_exp) < datetime.now(timezone.utc):
+        raise HTTPException(400, "Reset code has expired — request a new one")
+    user["password"] = _hash_password(req.new_password)
+    user.pop("reset_code", None)
+    user.pop("reset_code_exp", None)
     _save_users(users)
     return {"success": True}
 
