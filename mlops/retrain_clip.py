@@ -192,6 +192,16 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
         mlflow.log_param("learning_rate",    1e-4)
         mlflow.log_param("model_name",       "patrickjohncyh/fashion-clip")
         mlflow.log_param("eval_method",      "judge_avg_20q_top5")
+        # Track active prompt versions so regressions can be correlated with prompt changes
+        try:
+            sys.path.insert(0, str(Path(__file__).parent.parent / "attribute_tagger"))
+            sys.path.insert(0, str(Path(__file__).parent.parent / "gateway"))
+            from tagger import TAGGER_PROMPT_VERSION
+            from judge import JUDGE_PROMPT_VERSION
+            mlflow.log_param("tagger_prompt_version", TAGGER_PROMPT_VERSION)
+            mlflow.log_param("judge_prompt_version",  JUDGE_PROMPT_VERSION)
+        except Exception as _e:
+            print(f"[RETRAIN] Warning: could not log prompt versions: {_e}")
         # Logged so the metrics_exporter can show a progress bar in Grafana
         mlflow.log_param("max_train_steps",  int(os.getenv("MAX_TRAIN_STEPS", 300)))
 

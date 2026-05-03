@@ -175,5 +175,13 @@
     "store_name": "Maison123",
     "judge_score": 0.15,
     "flagged_at": "2026-05-02T13:55:15.152454"
+  },
+  {
+    "product_id": "d5ca0e6f-1b8b-54f9-810e-f8b216011c10",
+    "image_url": "https://cdn.shopify.com/s/files/1/0283/6715/9393/files/654111936_x.jpg?v=1762262244",
+    "name": "ARY CASHMERE LICHEN JUMPER",
+    "store_name": "Maison123",
+    "judge_score": 0.35,
+    "flagged_at": "2026-05-03T17:23:51.389439"
   }
 ]

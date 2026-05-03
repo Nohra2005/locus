@@ -21,6 +21,9 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+# Bump when the scoring prompt changes; logged to MLflow via retrain_clip.py.
+JUDGE_PROMPT_VERSION = "v3"
+
 OPENROUTER_MODEL   = "google/gemini-2.0-flash-001"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
