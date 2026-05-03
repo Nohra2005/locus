@@ -4,39 +4,45 @@
     "email": "mikesport@gmail.com",
     "password": "$2b$12$ePhZeXGAiiDZEg/HhVJETOI0VsicxKUcFbn379IwtHOCaEiZAiFyy",
     "store_name": "Mikesport",
-    "mall": "",
+    "mall": "Zalka",
     "phone": "",
-    "created_at": "2026-05-01T00:00:00"
+    "created_at": "2026-05-01T00:00:00",
+    "latitude": 33.9017,
+    "longitude": 35.5709
   },
   "forever21@gmail.com": {
     "store_id": "f12169fd-5e2c-4675-8812-d005eb185734",
     "email": "forever21@gmail.com",
     "password": "$2b$12$/sRzsdWRYKD2Ws5NxbdsAOZeuRGbuJHLl0yOT1oNRdORdTZUSjA2u",
     "store_name": "Forever21",
-    "mall": "City Center",
+    "mall": "City Centre Beirut",
     "phone": "",
     "created_at": "2026-05-01T00:00:00",
     "maps_url": "https://maps.app.goo.gl/5f5GVk3s62jNJcfg8",
-    "latitude": 25.2854,
-    "longitude": 51.531
+    "latitude": 33.8975,
+    "longitude": 35.5538
   },
   "maison123@gmail.com": {
     "store_id": "c8b4625f-ed59-436c-bd65-65238be6b139",
     "email": "maison123@gmail.com",
     "password": "$2b$12$yt/cLyfWeC24vY2I68u1IumPWO5S/nd/xNZa4LjtTotzP3h00KLNu",
     "store_name": "Maison123",
-    "mall": "",
+    "mall": "ABC Achrafieh",
     "phone": "",
-    "created_at": "2026-05-01T00:00:00"
+    "created_at": "2026-05-01T00:00:00",
+    "latitude": 33.8864,
+    "longitude": 35.523
   },
   "winnerforce@gmail.com": {
     "store_id": "73dd8c12-3490-4b57-bc52-07bf5c582592",
     "email": "winnerforce@gmail.com",
     "password": "$2b$12$IaYYt8O92z51Bkvlc1MgfOlEM.xTZGnLt.LF5AVV4psCCrDkd3KVi",
-    "store_name": "Winnerfoce",
-    "mall": "",
+    "store_name": "Winnerforce",
+    "mall": "CityMall Beirut",
     "phone": "",
-    "created_at": "2026-05-01T00:00:00"
+    "created_at": "2026-05-01T00:00:00",
+    "latitude": 33.9047,
+    "longitude": 35.5541
   },
   "forever21.abc.achrafieh@gmail.com": {
     "store_id": "cf2f43e0-c208-457a-bbdf-9a2e616b265d",
