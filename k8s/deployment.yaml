@@ -21,6 +21,9 @@ spec:
           imagePullPolicy: Never
           ports:
             - containerPort: 8000
+          volumeMounts:
+            - name: frontend-dist
+              mountPath: /app/frontend/dist
           envFrom:
             - configMapRef:
                 name: locus-config
@@ -63,6 +66,11 @@ spec:
               port: 8000
             initialDelaySeconds: 10
             periodSeconds: 10
+      volumes:
+        - name: frontend-dist
+          hostPath:
+            path: /home/azureuser/locus/frontend/dist
+            type: Directory
 ---
 apiVersion: apps/v1
 kind: Deployment
