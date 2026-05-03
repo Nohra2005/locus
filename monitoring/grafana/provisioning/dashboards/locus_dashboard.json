@@ -1,8 +1,8 @@
 {
-  "title": "Locus \u00e2\u20ac\u201d Admin Dashboard",
+  "title": "Locus — Admin Dashboard",
   "uid": "locus-main",
   "schemaVersion": 38,
-  "version": 6,
+  "version": 7,
   "refresh": "15s",
   "timezone": "browser",
   "tags": [
@@ -66,7 +66,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "\u00e2\u0153\u2022 DOWN",
+                  "text": "✕ DOWN",
                   "color": "red"
                 }
               }
@@ -75,7 +75,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "\u00e2\u0153\u201c UP",
+                  "text": "✓ UP",
                   "color": "green"
                 }
               }
@@ -139,7 +139,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "\u00e2\u0153\u2022 DOWN",
+                  "text": "✕ DOWN",
                   "color": "red"
                 }
               }
@@ -148,7 +148,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "\u00e2\u0153\u201c UP",
+                  "text": "✓ UP",
                   "color": "green"
                 }
               }
@@ -212,7 +212,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "\u00e2\u0153\u2022 DOWN",
+                  "text": "✕ DOWN",
                   "color": "red"
                 }
               }
@@ -221,7 +221,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "\u00e2\u0153\u201c UP",
+                  "text": "✓ UP",
                   "color": "green"
                 }
               }
@@ -284,7 +284,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "\u00e2\u0153\u2022 DOWN",
+                  "text": "✕ DOWN",
                   "color": "red"
                 }
               }
@@ -293,7 +293,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "\u00e2\u0153\u201c UP",
+                  "text": "✓ UP",
                   "color": "green"
                 }
               }
@@ -322,7 +322,7 @@
       "id": 57,
       "type": "stat",
       "title": "Visual Engine",
-      "description": "UP immediately on start. Models load in background \u2014 /health returns {status:loading} until ready (~60s)",
+      "description": "UP immediately on start. Models load in background � /health returns {status:loading} until ready (~60s)",
       "gridPos": {
         "x": 12,
         "y": 1,
@@ -357,7 +357,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "\u00e2\u0153\u2022 DOWN",
+                  "text": "✕ DOWN",
                   "color": "red"
                 }
               }
@@ -366,7 +366,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "\u00e2\u0153\u201c READY",
+                  "text": "✓ READY",
                   "color": "green"
                 }
               }
@@ -429,7 +429,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "\u00e2\u0153\u2022 DOWN",
+                  "text": "✕ DOWN",
                   "color": "red"
                 }
               }
@@ -438,7 +438,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "\u00e2\u0153\u201c UP",
+                  "text": "✓ UP",
                   "color": "green"
                 }
               }
@@ -502,7 +502,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "\u00e2\u0153\u201c UP",
+                  "text": "✓ UP",
                   "color": "green"
                 }
               }
@@ -562,7 +562,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "\u00e2\u0153\u201c UP",
+                  "text": "✓ UP",
                   "color": "green"
                 }
               }
@@ -598,7 +598,7 @@
     {
       "id": 101,
       "type": "stat",
-      "title": "Searches \u00e2\u20ac\u201d Last Minute",
+      "title": "Searches — Last Minute",
       "description": "Total search requests in the last 60 seconds.",
       "gridPos": {
         "x": 0,
@@ -651,7 +651,7 @@
     {
       "id": 102,
       "type": "stat",
-      "title": "Errors \u00e2\u20ac\u201d Last Minute",
+      "title": "Errors — Last Minute",
       "description": "4xx + 5xx HTTP errors in the last 60 seconds.",
       "gridPos": {
         "x": 4,
@@ -823,7 +823,7 @@
       "id": 105,
       "type": "stat",
       "title": "Feedback: Positive vs Negative",
-      "description": "Positive (4-5\u00e2\u02dc\u2026) vs negative (1-2\u00e2\u02dc\u2026) feedback counts side by side.",
+      "description": "Positive (4-5★) vs negative (1-2★) feedback counts side by side.",
       "gridPos": {
         "x": 16,
         "y": 5,
@@ -896,7 +896,7 @@
       "id": 106,
       "type": "stat",
       "title": "Last Retraining",
-      "description": "Judge score delta (new \u00e2\u02c6\u2019 old) of the last completed retraining run. Green = model was promoted. Red = rejected.",
+      "description": "Judge score delta (new − old) of the last completed retraining run. Green = model was promoted. Red = rejected.",
       "gridPos": {
         "x": 20,
         "y": 5,
@@ -910,7 +910,7 @@
       "targets": [
         {
           "expr": "locus_judge_delta",
-          "legendFormat": "\u00ce\u201djudge"
+          "legendFormat": "Δjudge"
         }
       ],
       "options": {
@@ -952,7 +952,7 @@
     {
       "id": 200,
       "type": "row",
-      "title": "Gemini Judge \u00e2\u20ac\u201d Search Quality",
+      "title": "Gemini Judge — Search Quality",
       "collapsed": false,
       "gridPos": {
         "x": 0,
@@ -1218,7 +1218,7 @@
     {
       "id": 206,
       "type": "timeseries",
-      "title": "VSS@5 Trend \u00e2\u20ac\u201d Across Eval Runs",
+      "title": "VSS@5 Trend — Across Eval Runs",
       "description": "Should improve after each successful LoRA promotion.",
       "gridPos": {
         "x": 0,
@@ -1264,7 +1264,7 @@
     {
       "id": 207,
       "type": "stat",
-      "title": "Judge Score Old \u00e2\u2020\u2019 New",
+      "title": "Judge Score Old → New",
       "description": "Gemini judge avg score: old deployed model vs new candidate from last retrain.",
       "gridPos": {
         "x": 16,
@@ -1338,7 +1338,7 @@
     {
       "id": 1101,
       "type": "timeseries",
-      "title": "CLIP Confidence \u00e2\u20ac\u201d P50 & P90 (per /vectorize call)",
+      "title": "CLIP Confidence — P50 & P90 (per /vectorize call)",
       "description": "Tracks how confident CLIP is in its top category label. Sustained P50 < 0.4 or a sudden drop indicates model drift or distribution shift.",
       "gridPos": {
         "x": 0,
@@ -1428,7 +1428,7 @@
     {
       "id": 1102,
       "type": "stat",
-      "title": "CLIP Confidence \u00e2\u20ac\u201d Current Median",
+      "title": "CLIP Confidence — Current Median",
       "description": "P50 CLIP category confidence over the last 5 minutes. Below 0.35 = consider retraining.",
       "gridPos": {
         "x": 16,
@@ -1695,7 +1695,7 @@
       "id": 304,
       "type": "stat",
       "title": "Baseline hit@5",
-      "description": "hit@5 of the currently deployed model. New models must beat this \u00e2\u02c6\u2019 0.02 to be promoted.",
+      "description": "hit@5 of the currently deployed model. New models must beat this − 0.02 to be promoted.",
       "gridPos": {
         "x": 18,
         "y": 34,
@@ -1734,7 +1734,7 @@
     {
       "id": 305,
       "type": "stat",
-      "title": "Latest \u00ce\u201djudge",
+      "title": "Latest Δjudge",
       "description": "Judge score improvement of the last retrain vs baseline. Positive = new model is better.",
       "gridPos": {
         "x": 0,
@@ -1749,7 +1749,7 @@
       "targets": [
         {
           "expr": "locus_judge_delta",
-          "legendFormat": "\u00ce\u201djudge"
+          "legendFormat": "Δjudge"
         }
       ],
       "options": {
@@ -1826,7 +1826,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "\u00e2\u0153\u2022 REJECTED",
+                  "text": "✕ REJECTED",
                   "color": "red"
                 }
               }
@@ -1835,7 +1835,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "\u00e2\u0153\u201c PROMOTED",
+                  "text": "✓ PROMOTED",
                   "color": "green"
                 }
               }
@@ -1939,7 +1939,7 @@
     {
       "id": 309,
       "type": "timeseries",
-      "title": "Recall@K Trend \u00e2\u20ac\u201d Across Eval Runs",
+      "title": "Recall@K Trend — Across Eval Runs",
       "description": "Recall at top-5, 10, 25 improving over time as models are retrained.",
       "gridPos": {
         "x": 0,
@@ -2844,7 +2844,7 @@
       "id": 511,
       "type": "stat",
       "title": "Positive / Negative",
-      "description": "Count of positive (4-5\u00e2\u02dc\u2026) vs negative (1-2\u00e2\u02dc\u2026) training signals.",
+      "description": "Count of positive (4-5★) vs negative (1-2★) training signals.",
       "gridPos": {
         "x": 16,
         "y": 71,
@@ -2917,7 +2917,7 @@
       "id": 512,
       "type": "stat",
       "title": "Ready to Train",
-      "description": "Green when positive + negative ratings \u00e2\u2030\u00a5 50 (LoRA training threshold).",
+      "description": "Green when positive + negative ratings ≥ 50 (LoRA training threshold).",
       "gridPos": {
         "x": 20,
         "y": 71,
@@ -2988,7 +2988,7 @@
     {
       "id": 513,
       "type": "bargauge",
-      "title": "Star Distribution \u00e2\u20ac\u201d All",
+      "title": "Star Distribution — All",
       "description": "Rating count per star level (users + AI judge combined).",
       "gridPos": {
         "x": 0,
@@ -3003,23 +3003,23 @@
       "targets": [
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"5\"}",
-          "legendFormat": "5 \u00e2\u02dc\u2026"
+          "legendFormat": "5 ★"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"4\"}",
-          "legendFormat": "4 \u00e2\u02dc\u2026"
+          "legendFormat": "4 ★"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"3\"}",
-          "legendFormat": "3 \u00e2\u02dc\u2026"
+          "legendFormat": "3 ★"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"2\"}",
-          "legendFormat": "2 \u00e2\u02dc\u2026"
+          "legendFormat": "2 ★"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"1\"}",
-          "legendFormat": "1 \u00e2\u02dc\u2026"
+          "legendFormat": "1 ★"
         }
       ],
       "options": {
@@ -3040,7 +3040,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "5 \u00e2\u02dc\u2026"
+              "options": "5 ★"
             },
             "properties": [
               {
@@ -3055,7 +3055,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "4 \u00e2\u02dc\u2026"
+              "options": "4 ★"
             },
             "properties": [
               {
@@ -3070,7 +3070,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "3 \u00e2\u02dc\u2026"
+              "options": "3 ★"
             },
             "properties": [
               {
@@ -3085,7 +3085,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "2 \u00e2\u02dc\u2026"
+              "options": "2 ★"
             },
             "properties": [
               {
@@ -3100,7 +3100,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "1 \u00e2\u02dc\u2026"
+              "options": "1 ★"
             },
             "properties": [
               {
@@ -3118,7 +3118,7 @@
     {
       "id": 514,
       "type": "bargauge",
-      "title": "Star Distribution \u00e2\u20ac\u201d Users Only",
+      "title": "Star Distribution — Users Only",
       "description": "Rating count per star from actual shoppers only.",
       "gridPos": {
         "x": 8,
@@ -3133,23 +3133,23 @@
       "targets": [
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"5\"}",
-          "legendFormat": "5 \u00e2\u02dc\u2026"
+          "legendFormat": "5 ★"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"4\"}",
-          "legendFormat": "4 \u00e2\u02dc\u2026"
+          "legendFormat": "4 ★"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"3\"}",
-          "legendFormat": "3 \u00e2\u02dc\u2026"
+          "legendFormat": "3 ★"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"2\"}",
-          "legendFormat": "2 \u00e2\u02dc\u2026"
+          "legendFormat": "2 ★"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"1\"}",
-          "legendFormat": "1 \u00e2\u02dc\u2026"
+          "legendFormat": "1 ★"
         }
       ],
       "options": {
@@ -3170,7 +3170,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "5 \u00e2\u02dc\u2026"
+              "options": "5 ★"
             },
             "properties": [
               {
@@ -3185,7 +3185,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "4 \u00e2\u02dc\u2026"
+              "options": "4 ★"
             },
             "properties": [
               {
@@ -3200,7 +3200,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "3 \u00e2\u02dc\u2026"
+              "options": "3 ★"
             },
             "properties": [
               {
@@ -3215,7 +3215,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "2 \u00e2\u02dc\u2026"
+              "options": "2 ★"
             },
             "properties": [
               {
@@ -3230,7 +3230,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "1 \u00e2\u02dc\u2026"
+              "options": "1 ★"
             },
             "properties": [
               {
@@ -3248,7 +3248,7 @@
     {
       "id": 515,
       "type": "bargauge",
-      "title": "Star Distribution \u00e2\u20ac\u201d AI Judge Only",
+      "title": "Star Distribution — AI Judge Only",
       "description": "Rating count per star from automated AI quality judge.",
       "gridPos": {
         "x": 16,
@@ -3263,23 +3263,23 @@
       "targets": [
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"5\"}",
-          "legendFormat": "5 \u00e2\u02dc\u2026"
+          "legendFormat": "5 ★"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"4\"}",
-          "legendFormat": "4 \u00e2\u02dc\u2026"
+          "legendFormat": "4 ★"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"3\"}",
-          "legendFormat": "3 \u00e2\u02dc\u2026"
+          "legendFormat": "3 ★"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"2\"}",
-          "legendFormat": "2 \u00e2\u02dc\u2026"
+          "legendFormat": "2 ★"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"1\"}",
-          "legendFormat": "1 \u00e2\u02dc\u2026"
+          "legendFormat": "1 ★"
         }
       ],
       "options": {
@@ -3300,7 +3300,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "5 \u00e2\u02dc\u2026"
+              "options": "5 ★"
             },
             "properties": [
               {
@@ -3315,7 +3315,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "4 \u00e2\u02dc\u2026"
+              "options": "4 ★"
             },
             "properties": [
               {
@@ -3330,7 +3330,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "3 \u00e2\u02dc\u2026"
+              "options": "3 ★"
             },
             "properties": [
               {
@@ -3345,7 +3345,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "2 \u00e2\u02dc\u2026"
+              "options": "2 ★"
             },
             "properties": [
               {
@@ -3360,7 +3360,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "1 \u00e2\u02dc\u2026"
+              "options": "1 ★"
             },
             "properties": [
               {
@@ -3379,7 +3379,7 @@
       "id": 516,
       "type": "bargauge",
       "title": "Training Signal Breakdown",
-      "description": "Ratings grouped into positive (4-5\u00e2\u02dc\u2026), neutral (3\u00e2\u02dc\u2026), negative (1-2\u00e2\u02dc\u2026) training signals.",
+      "description": "Ratings grouped into positive (4-5★), neutral (3★), negative (1-2★) training signals.",
       "gridPos": {
         "x": 0,
         "y": 83,
@@ -3393,15 +3393,15 @@
       "targets": [
         {
           "expr": "locus_rating_by_signal_total{signal=\"positive\"}",
-          "legendFormat": "Positive (4-5\u00e2\u02dc\u2026)"
+          "legendFormat": "Positive (4-5★)"
         },
         {
           "expr": "locus_rating_by_signal_total{signal=\"neutral\"}",
-          "legendFormat": "Neutral (3\u00e2\u02dc\u2026)"
+          "legendFormat": "Neutral (3★)"
         },
         {
           "expr": "locus_rating_by_signal_total{signal=\"negative\"}",
-          "legendFormat": "Negative (1-2\u00e2\u02dc\u2026)"
+          "legendFormat": "Negative (1-2★)"
         }
       ],
       "options": {
@@ -3422,7 +3422,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Positive (4-5\u00e2\u02dc\u2026)"
+              "options": "Positive (4-5★)"
             },
             "properties": [
               {
@@ -3437,7 +3437,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Neutral (3\u00e2\u02dc\u2026)"
+              "options": "Neutral (3★)"
             },
             "properties": [
               {
@@ -3452,7 +3452,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Negative (1-2\u00e2\u02dc\u2026)"
+              "options": "Negative (1-2★)"
             },
             "properties": [
               {
@@ -3814,7 +3814,7 @@
       "id": 604,
       "type": "stat",
       "title": "Corrupt Items Flagged",
-      "description": "Products with corrupt_flag_count \u00e2\u2030\u00a5 1. A second flag triggers auto-deletion.",
+      "description": "Products with corrupt_flag_count ≥ 1. A second flag triggers auto-deletion.",
       "gridPos": {
         "x": 12,
         "y": 91,
@@ -3926,7 +3926,7 @@
       "id": 606,
       "type": "stat",
       "title": "Stores with Missing Info",
-      "description": "Stores where products are missing store name, image URL, or coordinates. Requires backend endpoint \u00e2\u20ac\u201d noted for later.",
+      "description": "Stores where products are missing store name, image URL, or coordinates. Requires backend endpoint — noted for later.",
       "gridPos": {
         "x": 20,
         "y": 91,
@@ -4097,7 +4097,7 @@
     {
       "id": 702,
       "type": "timeseries",
-      "title": "P95 Response Latency by Endpoint (s)",
+      "title": "Response Latency (p50 + p95) by Endpoint",
       "gridPos": {
         "x": 12,
         "y": 104,
@@ -4124,6 +4124,14 @@
         {
           "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{handler=\"/search\"}[2m]))",
           "legendFormat": "/search p50"
+        },
+        {
+          "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{handler=\"/detect\"}[2m]))",
+          "legendFormat": "/detect p50"
+        },
+        {
+          "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{handler=\"/feedback\"}[2m]))",
+          "legendFormat": "/feedback p50"
         }
       ],
       "fieldConfig": {
@@ -4295,7 +4303,7 @@
     {
       "id": 706,
       "type": "timeseries",
-      "title": "Attribute Tagger \u00e2\u20ac\u201d Request Rate & Failures",
+      "title": "Attribute Tagger — Request Rate & Failures",
       "gridPos": {
         "x": 12,
         "y": 118,
@@ -4352,7 +4360,7 @@
     {
       "id": 707,
       "type": "timeseries",
-      "title": "Attribute Tagger \u00e2\u20ac\u201d P95 Latency",
+      "title": "Attribute Tagger � P50 + P95 Latency",
       "gridPos": {
         "x": 0,
         "y": 125,
@@ -4367,6 +4375,10 @@
         {
           "expr": "histogram_quantile(0.95, rate(locus_tagger_latency_seconds_bucket[2m]))",
           "legendFormat": "Tagger p95"
+        },
+        {
+          "expr": "histogram_quantile(0.50, rate(locus_tagger_latency_seconds_bucket[2m]))",
+          "legendFormat": "Tagger p50"
         }
       ],
       "fieldConfig": {
@@ -4878,7 +4890,7 @@
       "id": 1003,
       "type": "bargauge",
       "title": "Website Clicks per Store",
-      "description": "Times a user clicked 'View on store \u00e2\u2020\u2019' \u00e2\u20ac\u201d intent to buy.",
+      "description": "Times a user clicked 'View on store →' — intent to buy.",
       "gridPos": {
         "x": 0,
         "y": 161,
@@ -4919,7 +4931,7 @@
       "id": 1004,
       "type": "bargauge",
       "title": "Directions Clicks per Store",
-      "description": "Times a user clicked 'Get directions \u00e2\u2020\u2019' \u00e2\u20ac\u201d intent to visit in person.",
+      "description": "Times a user clicked 'Get directions →' — intent to visit in person.",
       "gridPos": {
         "x": 8,
         "y": 161,
@@ -5092,7 +5104,7 @@
       "targets": [
         {
           "expr": "topk(10, sum by (store, item_name) (locus_store_item_impressions_total))",
-          "legendFormat": "{{store}} \u00e2\u20ac\u201d {{item_name}}"
+          "legendFormat": "{{store}} — {{item_name}}"
         }
       ],
       "options": {
@@ -5258,7 +5270,7 @@
     {
       "id": 1011,
       "type": "table",
-      "title": "Store Inventory \u00e2\u20ac\u201d Items by Store & Category",
+      "title": "Store Inventory — Items by Store & Category",
       "description": "All stores currently in the system with a breakdown of indexed items per category. Refreshed every 60s from Qdrant.",
       "gridPos": {
         "x": 0,
@@ -5571,7 +5583,9 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "colorMode": "background",
         "graphMode": "none",
@@ -5584,12 +5598,23 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": 0 },
-              { "color": "yellow", "value": 50 },
-              { "color": "green", "value": 80 }
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
             ]
           },
-          "color": { "mode": "thresholds" }
+          "color": {
+            "mode": "thresholds"
+          }
         }
       }
     },
@@ -5617,7 +5642,9 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "colorMode": "background",
         "graphMode": "none",
@@ -5630,12 +5657,23 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": 0 },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 3 }
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
             ]
           },
-          "color": { "mode": "thresholds" }
+          "color": {
+            "mode": "thresholds"
+          }
         }
       }
     },
@@ -5912,7 +5950,9 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "orientation": "horizontal",
         "displayMode": "gradient",
@@ -5926,12 +5966,23 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": 0 },
-              { "color": "yellow", "value": 1 },
-              { "color": "green", "value": 10 }
+              {
+                "color": "red",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 10
+              }
             ]
           },
-          "color": { "mode": "thresholds" }
+          "color": {
+            "mode": "thresholds"
+          }
         }
       }
     },
@@ -5960,10 +6011,15 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "pieType": "donut",
-        "displayLabels": ["name", "value"],
+        "displayLabels": [
+          "name",
+          "value"
+        ],
         "legend": {
           "displayMode": "list",
           "placement": "bottom"
@@ -5972,7 +6028,9 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "color": { "mode": "palette-classic" }
+          "color": {
+            "mode": "palette-classic"
+          }
         }
       }
     },
@@ -6007,10 +6065,15 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "pieType": "donut",
-        "displayLabels": ["name", "percent"],
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
         "legend": {
           "displayMode": "list",
           "placement": "bottom"
@@ -6019,22 +6082,255 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "color": { "mode": "palette-classic" }
+          "color": {
+            "mode": "palette-classic"
+          }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Active" },
+            "matcher": {
+              "id": "byName",
+              "options": "Active"
+            },
             "properties": [
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Empty" },
+            "matcher": {
+              "id": "byName",
+              "options": "Empty"
+            },
             "properties": [
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
             ]
           }
         ]
+      }
+    },
+    {
+      "id": 1300,
+      "type": "row",
+      "title": "Visual Engine Performance",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 244,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": 1301,
+      "type": "timeseries",
+      "title": "Visual Engine � Request Latency (p50 + p95)",
+      "description": "HTTP request latency percentiles for the visual_engine service (CLIP + YOLO).",
+      "gridPos": {
+        "x": 0,
+        "y": 245,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"visual_engine\"}[2m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"visual_engine\"}[2m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 1302,
+      "type": "timeseries",
+      "title": "Visual Engine � Request Throughput (req/s)",
+      "gridPos": {
+        "x": 12,
+        "y": 245,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{job=\"visual_engine\"}[1m])",
+          "legendFormat": "{{handler}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 1303,
+      "type": "timeseries",
+      "title": "Visual Engine � Error Rate (4xx + 5xx per second)",
+      "gridPos": {
+        "x": 0,
+        "y": 252,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total{job=\"visual_engine\", status_code=~\"5..\"}[1m])",
+          "legendFormat": "5xx errors"
+        },
+        {
+          "expr": "rate(http_requests_total{job=\"visual_engine\", status_code=~\"4..\"}[1m])",
+          "legendFormat": "4xx errors"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 20
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4xx errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
+    },
+    {
+      "id": 1304,
+      "type": "timeseries",
+      "title": "Visual Engine � CLIP Confidence (ML Signal, p50 + p95)",
+      "description": "p50 and p95 of CLIP category confidence scores. Low p50 signals out-of-distribution or low-quality input images.",
+      "gridPos": {
+        "x": 12,
+        "y": 252,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, rate(locus_clip_confidence_bucket[5m]))",
+          "legendFormat": "CLIP confidence p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, rate(locus_clip_confidence_bucket[5m]))",
+          "legendFormat": "CLIP confidence p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        }
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
       }
     }
   ],
