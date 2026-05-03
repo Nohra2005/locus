@@ -728,7 +728,6 @@ function DiscoverSection({ title, subtitle, badge, items, saved, onToggleSave, o
               isSaved={isItemSaved(item.product_id)}
               onToggleSave={() => onToggleSave?.(wrapDiscover(item))}
               onCardClick={onCardClick}
-              onFeedback={onFeedback}
             />
           ))}
         </div>
