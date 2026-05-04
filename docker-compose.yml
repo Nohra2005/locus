@@ -114,15 +114,19 @@ services:
     image: ghcr.io/mlflow/mlflow:v2.13.0
     ports:
       - "5000:5000"
-    command: >
-      mlflow server
-      --host 0.0.0.0
-      --port 5000
-      --backend-store-uri /mlflow/mlruns
-      --default-artifact-root mlflow-artifacts:/
-      --serve-artifacts
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=/mlflow/mlruns
+      - --default-artifact-root=mlflow-artifacts:/
+      - --serve-artifacts
+      - --gunicorn-opts=--workers 2 --timeout 120
     volumes:
       - mlflow_data:/mlflow
+    mem_limit: 700m
+    restart: on-failure
 
   # ── 6. Link Health Monitor (disabled — runs via GitHub Actions / manual) ──
   # To run manually: docker compose run --rm gateway python repair_broken_links.py

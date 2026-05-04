@@ -19,14 +19,15 @@ client = MlflowClient()
 # ── 1. Delete KILLED runs from locus_lora_retraining ─────────────────────────
 
 exp = client.get_experiment_by_name(RETRAIN_EXP)
-killed = client.search_runs(
-    experiment_ids=[exp.experiment_id],
-    filter_string="attributes.status = 'KILLED'",
-    max_results=100,
-)
-for run in killed:
-    client.delete_run(run.info.run_id)
-    print(f"Deleted KILLED run: {run.info.run_name}")
+if exp:
+    killed = client.search_runs(
+        experiment_ids=[exp.experiment_id],
+        filter_string="attributes.status = 'KILLED'",
+        max_results=100,
+    )
+    for run in killed:
+        client.delete_run(run.info.run_id)
+        print(f"Deleted KILLED run: {run.info.run_name}")
 
 
 # ── 2. Seed locus_hyperparam_search experiment ────────────────────────────────

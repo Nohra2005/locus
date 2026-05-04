@@ -55,21 +55,30 @@ def _get_qdrant_client():
     return QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
 
 
-def _fetch_image(url: str, timeout: int = 15) -> Optional[Image.Image]:
+def _fetch_image(url: str, timeout: int = 30, retries: int = 3) -> Optional[Image.Image]:
     """Download an image from URL. Returns None on failure."""
     if url.startswith("http://localhost:"):
         url = url.replace("http://localhost:8000", GATEWAY_URL, 1)
-    try:
-        req = urllib.request.Request(
-            url, headers={"User-Agent": "Mozilla/5.0 (Locus-Trainer/1.0)"}
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = resp.read()
-        img = Image.open(io.BytesIO(data)).convert("RGB")
-        return img
-    except Exception as e:
-        print(f"  [SKIP] Could not fetch {url[:60]}: {e}")
-        return None
+    last_err = None
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "Mozilla/5.0 (Locus-Trainer/1.0)"}
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = resp.read()
+            img = Image.open(io.BytesIO(data)).convert("RGB")
+            return img
+        except urllib.error.HTTPError as e:
+            # 4xx errors won't recover on retry
+            print(f"  [SKIP] Could not fetch {url[:60]}: {e}")
+            return None
+        except Exception as e:
+            last_err = e
+            if attempt < retries - 1:
+                time.sleep(10 * (attempt + 1))  # 10s, 20s backoff
+    print(f"  [SKIP] Could not fetch {url[:60]}: {last_err}")
+    return None
 
 
 def _augment(img: Image.Image, seed: int) -> Image.Image:

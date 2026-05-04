@@ -1,8 +1,8 @@
 {
-  "title": "Locus — Admin Dashboard",
+  "title": "Locus \u00e2\u20ac\u201d Admin Dashboard",
   "uid": "locus-main",
   "schemaVersion": 38,
-  "version": 7,
+  "version": 8,
   "refresh": "15s",
   "timezone": "browser",
   "tags": [
@@ -66,7 +66,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ DOWN",
+                  "text": "\u00e2\u0153\u2022 DOWN",
                   "color": "red"
                 }
               }
@@ -75,7 +75,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -139,7 +139,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ DOWN",
+                  "text": "\u00e2\u0153\u2022 DOWN",
                   "color": "red"
                 }
               }
@@ -148,7 +148,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -212,7 +212,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ DOWN",
+                  "text": "\u00e2\u0153\u2022 DOWN",
                   "color": "red"
                 }
               }
@@ -221,7 +221,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -284,7 +284,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ DOWN",
+                  "text": "\u00e2\u0153\u2022 DOWN",
                   "color": "red"
                 }
               }
@@ -293,7 +293,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -322,7 +322,7 @@
       "id": 57,
       "type": "stat",
       "title": "Visual Engine",
-      "description": "UP immediately on start. Models load in background � /health returns {status:loading} until ready (~60s)",
+      "description": "UP immediately on start. Models load in background \u2014 /health returns {status:loading} until ready (~60s)",
       "gridPos": {
         "x": 12,
         "y": 1,
@@ -357,7 +357,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ DOWN",
+                  "text": "\u00e2\u0153\u2022 DOWN",
                   "color": "red"
                 }
               }
@@ -366,7 +366,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ READY",
+                  "text": "\u00e2\u0153\u201c READY",
                   "color": "green"
                 }
               }
@@ -429,7 +429,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ DOWN",
+                  "text": "\u00e2\u0153\u2022 DOWN",
                   "color": "red"
                 }
               }
@@ -438,7 +438,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -502,7 +502,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -562,7 +562,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ UP",
+                  "text": "\u00e2\u0153\u201c UP",
                   "color": "green"
                 }
               }
@@ -598,7 +598,7 @@
     {
       "id": 101,
       "type": "stat",
-      "title": "Searches — Last Minute",
+      "title": "Searches \u00e2\u20ac\u201d Last Minute",
       "description": "Total search requests in the last 60 seconds.",
       "gridPos": {
         "x": 0,
@@ -651,7 +651,7 @@
     {
       "id": 102,
       "type": "stat",
-      "title": "Errors — Last Minute",
+      "title": "Errors \u00e2\u20ac\u201d Last Minute",
       "description": "4xx + 5xx HTTP errors in the last 60 seconds.",
       "gridPos": {
         "x": 4,
@@ -823,7 +823,7 @@
       "id": 105,
       "type": "stat",
       "title": "Feedback: Positive vs Negative",
-      "description": "Positive (4-5★) vs negative (1-2★) feedback counts side by side.",
+      "description": "Positive (4-5\u00e2\u02dc\u2026) vs negative (1-2\u00e2\u02dc\u2026) feedback counts side by side.",
       "gridPos": {
         "x": 16,
         "y": 5,
@@ -896,7 +896,7 @@
       "id": 106,
       "type": "stat",
       "title": "Last Retraining",
-      "description": "Judge score delta (new − old) of the last completed retraining run. Green = model was promoted. Red = rejected.",
+      "description": "Judge score delta (new \u00e2\u02c6\u2019 old) of the last completed retraining run. Green = model was promoted. Red = rejected.",
       "gridPos": {
         "x": 20,
         "y": 5,
@@ -910,7 +910,7 @@
       "targets": [
         {
           "expr": "locus_judge_delta",
-          "legendFormat": "Δjudge"
+          "legendFormat": "\u00ce\u201djudge"
         }
       ],
       "options": {
@@ -952,7 +952,7 @@
     {
       "id": 200,
       "type": "row",
-      "title": "Gemini Judge — Search Quality",
+      "title": "Gemini Judge \u00e2\u20ac\u201d Search Quality",
       "collapsed": false,
       "gridPos": {
         "x": 0,
@@ -1218,7 +1218,7 @@
     {
       "id": 206,
       "type": "timeseries",
-      "title": "VSS@5 Trend — Across Eval Runs",
+      "title": "VSS@5 Trend \u00e2\u20ac\u201d Across Eval Runs",
       "description": "Should improve after each successful LoRA promotion.",
       "gridPos": {
         "x": 0,
@@ -1264,7 +1264,7 @@
     {
       "id": 207,
       "type": "stat",
-      "title": "Judge Score Old → New",
+      "title": "Judge Score Old \u00e2\u2020\u2019 New",
       "description": "Gemini judge avg score: old deployed model vs new candidate from last retrain.",
       "gridPos": {
         "x": 16,
@@ -1338,7 +1338,7 @@
     {
       "id": 1101,
       "type": "timeseries",
-      "title": "CLIP Confidence — P50 & P90 (per /vectorize call)",
+      "title": "CLIP Confidence \u00e2\u20ac\u201d P50 & P90 (per /vectorize call)",
       "description": "Tracks how confident CLIP is in its top category label. Sustained P50 < 0.4 or a sudden drop indicates model drift or distribution shift.",
       "gridPos": {
         "x": 0,
@@ -1428,7 +1428,7 @@
     {
       "id": 1102,
       "type": "stat",
-      "title": "CLIP Confidence — Current Median",
+      "title": "CLIP Confidence \u00e2\u20ac\u201d Current Median",
       "description": "P50 CLIP category confidence over the last 5 minutes. Below 0.35 = consider retraining.",
       "gridPos": {
         "x": 16,
@@ -1695,7 +1695,7 @@
       "id": 304,
       "type": "stat",
       "title": "Baseline hit@5",
-      "description": "hit@5 of the currently deployed model. New models must beat this − 0.02 to be promoted.",
+      "description": "hit@5 of the currently deployed model. New models must beat this \u00e2\u02c6\u2019 0.02 to be promoted.",
       "gridPos": {
         "x": 18,
         "y": 34,
@@ -1734,7 +1734,7 @@
     {
       "id": 305,
       "type": "stat",
-      "title": "Latest Δjudge",
+      "title": "Latest \u00ce\u201djudge",
       "description": "Judge score improvement of the last retrain vs baseline. Positive = new model is better.",
       "gridPos": {
         "x": 0,
@@ -1749,7 +1749,7 @@
       "targets": [
         {
           "expr": "locus_judge_delta",
-          "legendFormat": "Δjudge"
+          "legendFormat": "\u00ce\u201djudge"
         }
       ],
       "options": {
@@ -1826,7 +1826,7 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "✕ REJECTED",
+                  "text": "\u00e2\u0153\u2022 REJECTED",
                   "color": "red"
                 }
               }
@@ -1835,7 +1835,7 @@
               "type": "value",
               "options": {
                 "1": {
-                  "text": "✓ PROMOTED",
+                  "text": "\u00e2\u0153\u201c PROMOTED",
                   "color": "green"
                 }
               }
@@ -1939,7 +1939,7 @@
     {
       "id": 309,
       "type": "timeseries",
-      "title": "Recall@K Trend — Across Eval Runs",
+      "title": "Recall@K Trend \u00e2\u20ac\u201d Across Eval Runs",
       "description": "Recall at top-5, 10, 25 improving over time as models are retrained.",
       "gridPos": {
         "x": 0,
@@ -2844,7 +2844,7 @@
       "id": 511,
       "type": "stat",
       "title": "Positive / Negative",
-      "description": "Count of positive (4-5★) vs negative (1-2★) training signals.",
+      "description": "Count of positive (4-5\u00e2\u02dc\u2026) vs negative (1-2\u00e2\u02dc\u2026) training signals.",
       "gridPos": {
         "x": 16,
         "y": 71,
@@ -2917,7 +2917,7 @@
       "id": 512,
       "type": "stat",
       "title": "Ready to Train",
-      "description": "Green when positive + negative ratings ≥ 50 (LoRA training threshold).",
+      "description": "Green when positive + negative ratings \u00e2\u2030\u00a5 50 (LoRA training threshold).",
       "gridPos": {
         "x": 20,
         "y": 71,
@@ -2988,7 +2988,7 @@
     {
       "id": 513,
       "type": "bargauge",
-      "title": "Star Distribution — All",
+      "title": "Star Distribution \u00e2\u20ac\u201d All",
       "description": "Rating count per star level (users + AI judge combined).",
       "gridPos": {
         "x": 0,
@@ -3003,23 +3003,23 @@
       "targets": [
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"5\"}",
-          "legendFormat": "5 ★"
+          "legendFormat": "5 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"4\"}",
-          "legendFormat": "4 ★"
+          "legendFormat": "4 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"3\"}",
-          "legendFormat": "3 ★"
+          "legendFormat": "3 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"2\"}",
-          "legendFormat": "2 ★"
+          "legendFormat": "2 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"all\",stars=\"1\"}",
-          "legendFormat": "1 ★"
+          "legendFormat": "1 \u00e2\u02dc\u2026"
         }
       ],
       "options": {
@@ -3040,7 +3040,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "5 ★"
+              "options": "5 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3055,7 +3055,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "4 ★"
+              "options": "4 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3070,7 +3070,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "3 ★"
+              "options": "3 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3085,7 +3085,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "2 ★"
+              "options": "2 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3100,7 +3100,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "1 ★"
+              "options": "1 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3118,7 +3118,7 @@
     {
       "id": 514,
       "type": "bargauge",
-      "title": "Star Distribution — Users Only",
+      "title": "Star Distribution \u00e2\u20ac\u201d Users Only",
       "description": "Rating count per star from actual shoppers only.",
       "gridPos": {
         "x": 8,
@@ -3133,23 +3133,23 @@
       "targets": [
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"5\"}",
-          "legendFormat": "5 ★"
+          "legendFormat": "5 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"4\"}",
-          "legendFormat": "4 ★"
+          "legendFormat": "4 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"3\"}",
-          "legendFormat": "3 ★"
+          "legendFormat": "3 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"2\"}",
-          "legendFormat": "2 ★"
+          "legendFormat": "2 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"user\",stars=\"1\"}",
-          "legendFormat": "1 ★"
+          "legendFormat": "1 \u00e2\u02dc\u2026"
         }
       ],
       "options": {
@@ -3170,7 +3170,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "5 ★"
+              "options": "5 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3185,7 +3185,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "4 ★"
+              "options": "4 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3200,7 +3200,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "3 ★"
+              "options": "3 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3215,7 +3215,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "2 ★"
+              "options": "2 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3230,7 +3230,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "1 ★"
+              "options": "1 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3248,7 +3248,7 @@
     {
       "id": 515,
       "type": "bargauge",
-      "title": "Star Distribution — AI Judge Only",
+      "title": "Star Distribution \u00e2\u20ac\u201d AI Judge Only",
       "description": "Rating count per star from automated AI quality judge.",
       "gridPos": {
         "x": 16,
@@ -3263,23 +3263,23 @@
       "targets": [
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"5\"}",
-          "legendFormat": "5 ★"
+          "legendFormat": "5 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"4\"}",
-          "legendFormat": "4 ★"
+          "legendFormat": "4 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"3\"}",
-          "legendFormat": "3 ★"
+          "legendFormat": "3 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"2\"}",
-          "legendFormat": "2 ★"
+          "legendFormat": "2 \u00e2\u02dc\u2026"
         },
         {
           "expr": "locus_rating_by_star_total{source=\"judge\",stars=\"1\"}",
-          "legendFormat": "1 ★"
+          "legendFormat": "1 \u00e2\u02dc\u2026"
         }
       ],
       "options": {
@@ -3300,7 +3300,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "5 ★"
+              "options": "5 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3315,7 +3315,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "4 ★"
+              "options": "4 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3330,7 +3330,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "3 ★"
+              "options": "3 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3345,7 +3345,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "2 ★"
+              "options": "2 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3360,7 +3360,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "1 ★"
+              "options": "1 \u00e2\u02dc\u2026"
             },
             "properties": [
               {
@@ -3379,7 +3379,7 @@
       "id": 516,
       "type": "bargauge",
       "title": "Training Signal Breakdown",
-      "description": "Ratings grouped into positive (4-5★), neutral (3★), negative (1-2★) training signals.",
+      "description": "Ratings grouped into positive (4-5\u00e2\u02dc\u2026), neutral (3\u00e2\u02dc\u2026), negative (1-2\u00e2\u02dc\u2026) training signals.",
       "gridPos": {
         "x": 0,
         "y": 83,
@@ -3393,15 +3393,15 @@
       "targets": [
         {
           "expr": "locus_rating_by_signal_total{signal=\"positive\"}",
-          "legendFormat": "Positive (4-5★)"
+          "legendFormat": "Positive (4-5\u00e2\u02dc\u2026)"
         },
         {
           "expr": "locus_rating_by_signal_total{signal=\"neutral\"}",
-          "legendFormat": "Neutral (3★)"
+          "legendFormat": "Neutral (3\u00e2\u02dc\u2026)"
         },
         {
           "expr": "locus_rating_by_signal_total{signal=\"negative\"}",
-          "legendFormat": "Negative (1-2★)"
+          "legendFormat": "Negative (1-2\u00e2\u02dc\u2026)"
         }
       ],
       "options": {
@@ -3422,7 +3422,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Positive (4-5★)"
+              "options": "Positive (4-5\u00e2\u02dc\u2026)"
             },
             "properties": [
               {
@@ -3437,7 +3437,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Neutral (3★)"
+              "options": "Neutral (3\u00e2\u02dc\u2026)"
             },
             "properties": [
               {
@@ -3452,7 +3452,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Negative (1-2★)"
+              "options": "Negative (1-2\u00e2\u02dc\u2026)"
             },
             "properties": [
               {
@@ -3814,7 +3814,7 @@
       "id": 604,
       "type": "stat",
       "title": "Corrupt Items Flagged",
-      "description": "Products with corrupt_flag_count ≥ 1. A second flag triggers auto-deletion.",
+      "description": "Products with corrupt_flag_count \u00e2\u2030\u00a5 1. A second flag triggers auto-deletion.",
       "gridPos": {
         "x": 12,
         "y": 91,
@@ -3926,7 +3926,7 @@
       "id": 606,
       "type": "stat",
       "title": "Stores with Missing Info",
-      "description": "Stores where products are missing store name, image URL, or coordinates. Requires backend endpoint — noted for later.",
+      "description": "Stores where products are missing store name, image URL, or coordinates. Requires backend endpoint \u00e2\u20ac\u201d noted for later.",
       "gridPos": {
         "x": 20,
         "y": 91,
@@ -4303,7 +4303,7 @@
     {
       "id": 706,
       "type": "timeseries",
-      "title": "Attribute Tagger — Request Rate & Failures",
+      "title": "Attribute Tagger \u00e2\u20ac\u201d Request Rate & Failures",
       "gridPos": {
         "x": 12,
         "y": 118,
@@ -4360,7 +4360,7 @@
     {
       "id": 707,
       "type": "timeseries",
-      "title": "Attribute Tagger � P50 + P95 Latency",
+      "title": "Attribute Tagger \u2014 P50 + P95 Latency",
       "gridPos": {
         "x": 0,
         "y": 125,
@@ -4890,7 +4890,7 @@
       "id": 1003,
       "type": "bargauge",
       "title": "Website Clicks per Store",
-      "description": "Times a user clicked 'View on store →' — intent to buy.",
+      "description": "Times a user clicked 'View on store \u00e2\u2020\u2019' \u00e2\u20ac\u201d intent to buy.",
       "gridPos": {
         "x": 0,
         "y": 161,
@@ -4931,7 +4931,7 @@
       "id": 1004,
       "type": "bargauge",
       "title": "Directions Clicks per Store",
-      "description": "Times a user clicked 'Get directions →' — intent to visit in person.",
+      "description": "Times a user clicked 'Get directions \u00e2\u2020\u2019' \u00e2\u20ac\u201d intent to visit in person.",
       "gridPos": {
         "x": 8,
         "y": 161,
@@ -5104,7 +5104,7 @@
       "targets": [
         {
           "expr": "topk(10, sum by (store, item_name) (locus_store_item_impressions_total))",
-          "legendFormat": "{{store}} — {{item_name}}"
+          "legendFormat": "{{store}} \u00e2\u20ac\u201d {{item_name}}"
         }
       ],
       "options": {
@@ -5270,7 +5270,7 @@
     {
       "id": 1011,
       "type": "table",
-      "title": "Store Inventory — Items by Store & Category",
+      "title": "Store Inventory \u00e2\u20ac\u201d Items by Store & Category",
       "description": "All stores currently in the system with a breakdown of indexed items per category. Refreshed every 60s from Qdrant.",
       "gridPos": {
         "x": 0,
@@ -5387,7 +5387,7 @@
     {
       "id": 1200,
       "type": "row",
-      "title": "Store Admin — Registry & Management",
+      "title": "Store Admin \u00e2\u20ac\u201d Registry & Management",
       "collapsed": false,
       "gridPos": {
         "x": 0,
@@ -5622,7 +5622,7 @@
       "id": 1231,
       "type": "stat",
       "title": "Missing Info",
-      "description": "Stores where product data is incomplete — missing name, image URL, or location.",
+      "description": "Stores where product data is incomplete \u00e2\u20ac\u201d missing name, image URL, or location.",
       "gridPos": {
         "x": 16,
         "y": 206,
@@ -5696,7 +5696,7 @@
       "id": 1220,
       "type": "table",
       "title": "Store Directory - All Registered Accounts",
-      "description": "All store accounts. Refreshed every 30s. Email is first — click any address to open a mailto link.",
+      "description": "All store accounts. Refreshed every 30s. Email is first \u00e2\u20ac\u201d click any address to open a mailto link.",
       "gridPos": {
         "x": 0,
         "y": 211,
@@ -5821,7 +5821,7 @@
     {
       "id": 1243,
       "type": "table",
-      "title": "Store Emails — Quick Reference",
+      "title": "Store Emails \u00e2\u20ac\u201d Quick Reference",
       "description": "Focused view: store name and email only. Sorted alphabetically. Click email to open mailto.",
       "gridPos": {
         "x": 0,
@@ -6135,7 +6135,7 @@
     {
       "id": 1301,
       "type": "timeseries",
-      "title": "Visual Engine � Request Latency (p50 + p95)",
+      "title": "Visual Engine \u2014 Request Latency (p50 + p95)",
       "description": "HTTP request latency percentiles for the visual_engine service (CLIP + YOLO).",
       "gridPos": {
         "x": 0,
@@ -6179,7 +6179,7 @@
     {
       "id": 1302,
       "type": "timeseries",
-      "title": "Visual Engine � Request Throughput (req/s)",
+      "title": "Visual Engine \u2014 Request Throughput (req/s)",
       "gridPos": {
         "x": 12,
         "y": 245,
@@ -6218,7 +6218,7 @@
     {
       "id": 1303,
       "type": "timeseries",
-      "title": "Visual Engine � Error Rate (4xx + 5xx per second)",
+      "title": "Visual Engine \u2014 Error Rate (4xx + 5xx per second)",
       "gridPos": {
         "x": 0,
         "y": 252,
@@ -6290,7 +6290,7 @@
     {
       "id": 1304,
       "type": "timeseries",
-      "title": "Visual Engine � CLIP Confidence (ML Signal, p50 + p95)",
+      "title": "Visual Engine \u2014 CLIP Confidence (ML Signal, p50 + p95)",
       "description": "p50 and p95 of CLIP category confidence scores. Low p50 signals out-of-distribution or low-quality input images.",
       "gridPos": {
         "x": 12,
@@ -6331,6 +6331,93 @@
         "tooltip": {
           "mode": "multi"
         }
+      }
+    },
+    {
+      "id": 1305,
+      "type": "row",
+      "title": "Whitelist Approvals",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 259,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 1306,
+      "type": "stat",
+      "title": "Pending Whitelist Requests",
+      "description": "Count of word\u2192category suggestions awaiting a developer decision.",
+      "gridPos": {
+        "x": 0,
+        "y": 260,
+        "w": 4,
+        "h": 10
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "expr": "locus_whitelist_pending_total",
+          "instant": true,
+          "legendFormat": "Pending",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none",
+        "colorMode": "background",
+        "textMode": "value_and_name",
+        "justifyMode": "center",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        }
+      }
+    },
+    {
+      "id": 1307,
+      "type": "text",
+      "title": "Review & Approve Whitelist Suggestions",
+      "description": "Store owners submit word\u2192category mappings. Approve to add to the visual engine token map; reject to discard.",
+      "gridPos": {
+        "x": 4,
+        "y": 260,
+        "w": 20,
+        "h": 10
+      },
+      "options": {
+        "mode": "html",
+        "content": "<div id=\"wl-root\" style=\"font-family:Inter,sans-serif;padding:8px;height:100%;overflow:auto\"><div id=\"wl-status\" style=\"color:#aaa;font-size:0.8rem;margin-bottom:6px;text-align:right\"></div><div id=\"wl-list\"></div></div><script>var API=\"http://localhost:8000\";function load(){fetch(API+\"/whitelist-suggestions?status=pending\").then(function(r){return r.json()}).then(function(data){var el=document.getElementById(\"wl-list\");var st=document.getElementById(\"wl-status\");el.innerHTML=\"\";if(!data.suggestions||data.suggestions.length===0){el.innerHTML='<div style=\"text-align:center;padding:24px;color:#4caf50;font-size:1.1rem\">&#10003; No pending suggestions</div>';st.textContent=\"\";return;}st.textContent=data.total+\" pending \u2022 auto-refresh 30s\";data.suggestions.forEach(function(s){var card=document.createElement(\"div\");card.id=\"card-\"+s.word;card.style.cssText=\"display:flex;align-items:center;gap:10px;padding:9px 14px;margin-bottom:7px;background:#1e2030;border-radius:6px;border-left:3px solid #f0b429\";var aBtn=document.createElement(\"button\");aBtn.textContent=\"\u2713\";aBtn.title=\"Approve\";aBtn.style.cssText=\"background:#4caf50;color:#fff;border:none;padding:5px 18px;border-radius:4px;cursor:pointer;font-size:0.95rem;font-weight:700;flex-shrink:0\";var rBtn=document.createElement(\"button\");rBtn.textContent=\"\u2717\";rBtn.title=\"Reject\";rBtn.style.cssText=\"background:#ef5350;color:#fff;border:none;padding:5px 18px;border-radius:4px;cursor:pointer;font-size:0.95rem;font-weight:700;flex-shrink:0\";(function(w,ab,rb){ab.onclick=function(){decide(w,\"approve\",ab,rb)};rb.onclick=function(){decide(w,\"reject\",ab,rb)};})(s.word,aBtn,rBtn);var info=document.createElement(\"div\");info.style.flex=\"1\";info.innerHTML='<span style=\"color:#f0b429;font-weight:700;font-size:1rem\">\"'+s.word+'\"</span><span style=\"color:#666;margin:0 8px\">&rarr;</span><span style=\"color:#61dafb;font-weight:600\">'+s.category+'</span>'+(s.store_name?'<span style=\"color:#888;font-size:0.78rem;margin-left:10px\">by '+s.store_name+\"</span>\":\"\")+(s.example_product?'<div style=\"color:#556;font-size:0.72rem;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:500px\">'+s.example_product+\"</div>\":\"\");card.appendChild(info);card.appendChild(aBtn);card.appendChild(rBtn);el.appendChild(card);});}).catch(function(e){document.getElementById(\"wl-status\").innerHTML='<span style=\"color:#f44\">&#9888; Cannot reach gateway: '+e+\"</span>\";});}function decide(word,action,aBtn,rBtn){aBtn.disabled=true;rBtn.disabled=true;var card=document.getElementById(\"card-\"+word);if(card)card.style.opacity=\"0.45\";fetch(API+\"/whitelist-\"+action,{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({word:word})}).then(function(){load()}).catch(function(e){alert(\"Error: \"+e);aBtn.disabled=false;rBtn.disabled=false;if(card)card.style.opacity=\"1\";});}load();setInterval(load,30000);</script>"
       }
     }
   ],
