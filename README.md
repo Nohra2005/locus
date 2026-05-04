@@ -1,6 +1,6 @@
 # Locus — Visual Fashion Search Engine
 
-AI Engineering Capstone — EECE503N / EECE798N
+AI in Industry — EECE503N / EECE798N
 **Team:** Marc El Nawar, Tatiana Nohra
 
 ---
