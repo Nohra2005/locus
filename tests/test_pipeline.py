@@ -59,39 +59,6 @@ def search_result(pants_image):
     return r.json()
 
 
-# ── Rate Limiting ──────────────────────────────────────────────────────────────
-# Run first so we measure against a clean slate within the test minute window.
-
-class TestRateLimiting:
-    def test_search_rate_limit_enforced(self, pants_image):
-        """10/min limit on /search — sending 15 requests should trigger a 429."""
-        got_429 = False
-        for _ in range(15):
-            r = requests.post(
-                f"{GATEWAY_URL}/search",
-                files={"file": ("pants.jpg", io.BytesIO(pants_image), "image/jpeg")},
-                timeout=TIMEOUT,
-            )
-            if r.status_code == 429:
-                got_429 = True
-                break
-        assert got_429, "Expected a 429 after exceeding /search rate limit (10/min)"
-
-    def test_detect_rate_limit_enforced(self, pants_image):
-        """5/min limit on /detect — sending 10 requests with a real image should trigger a 429."""
-        got_429 = False
-        for _ in range(10):
-            r = requests.post(
-                f"{GATEWAY_URL}/detect",
-                files={"file": ("pants.jpg", io.BytesIO(pants_image), "image/jpeg")},
-                timeout=TIMEOUT,
-            )
-            if r.status_code == 429:
-                got_429 = True
-                break
-        assert got_429, "Expected a 429 after exceeding /detect rate limit (5/min)"
-
-
 # ── Search ─────────────────────────────────────────────────────────────────────
 
 class TestSearch:
@@ -423,3 +390,37 @@ class TestDeterminism:
         assert data.get("training_signal") == "negative", (
             f"Expected training_signal='negative' for 1-star, got: {data}"
         )
+
+
+# ── Rate Limiting ──────────────────────────────────────────────────────────────
+# Runs last so rate-limit exhaustion doesn't block fixtures in earlier tests.
+# CI's sleep 65 after this file resets the window before quality gate / e2e.
+
+class TestRateLimiting:
+    def test_search_rate_limit_enforced(self, pants_image):
+        """10/min limit on /search — sending 15 requests should trigger a 429."""
+        got_429 = False
+        for _ in range(15):
+            r = requests.post(
+                f"{GATEWAY_URL}/search",
+                files={"file": ("pants.jpg", io.BytesIO(pants_image), "image/jpeg")},
+                timeout=TIMEOUT,
+            )
+            if r.status_code == 429:
+                got_429 = True
+                break
+        assert got_429, "Expected a 429 after exceeding /search rate limit (10/min)"
+
+    def test_detect_rate_limit_enforced(self, pants_image):
+        """5/min limit on /detect — sending 10 requests with a real image should trigger a 429."""
+        got_429 = False
+        for _ in range(10):
+            r = requests.post(
+                f"{GATEWAY_URL}/detect",
+                files={"file": ("pants.jpg", io.BytesIO(pants_image), "image/jpeg")},
+                timeout=TIMEOUT,
+            )
+            if r.status_code == 429:
+                got_429 = True
+                break
+        assert got_429, "Expected a 429 after exceeding /detect rate limit (5/min)"
