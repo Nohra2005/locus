@@ -197,6 +197,7 @@ services:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    restart: unless-stopped
 
   # ── 10. Grafana ───────────────────────────────────────────────────
   grafana:
@@ -212,6 +213,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    restart: unless-stopped
 
 volumes:
   qdrant_data:  # uncomment qdrant service block above to use local mode
