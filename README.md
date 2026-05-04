@@ -146,7 +146,7 @@ python mlops/migrate_local_runs.py  # 8 historical runs across 3 experiments
 
 ## Monitoring
 
-**Grafana dashboard:** `http://20.240.203.22:3000` — login: `admin` / `admin`
+**Grafana dashboard:** `http://20.240.203.22:3000` — login: `admin` / `moushou`
 
 The dashboard shows per-service latency (p50, p95), error rates, request throughput,
 CLIP confidence histogram, tagger failure rate, and MLflow recall metrics bridged via
