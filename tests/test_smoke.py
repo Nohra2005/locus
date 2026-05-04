@@ -2,22 +2,29 @@
 tests/test_smoke.py — Smoke tests for Locus services.
 
 These tests verify that all services are reachable and responding correctly.
-They require the full stack to be running:
+
+CI (K3s): runs automatically — gateway and visual engine are reachable via
+    K3s NodePort / port-forward; MLflow tests are skipped (not in K3s).
+
+Local dev: requires the full stack running:
     docker compose up -d
 
 Run with:
-    cd tests/
-    pip install pytest requests
-    pytest test_smoke.py -v
+    pytest tests/test_smoke.py -v
+    GATEWAY_URL=http://20.240.203.22:8000 pytest tests/test_smoke.py -v
 """
+import os
+
 import pytest
 import requests
 
-GATEWAY_URL      = "http://localhost:8000"
-VISUAL_URL       = "http://localhost:8001"
-MLFLOW_URL       = "http://localhost:5000"
+GATEWAY_URL      = os.getenv("GATEWAY_URL", "http://localhost:8000").rstrip("/")
+VISUAL_URL       = os.getenv("VISUAL_URL",  "http://localhost:8001").rstrip("/")
+MLFLOW_URL       = os.getenv("MLFLOW_URL",  "http://localhost:5000").rstrip("/")
 TIMEOUT          = 10   # fast endpoints
 TIMEOUT_SLOW     = 60   # Qdrant-heavy endpoints (scroll full collection)
+
+_mlflow_available = bool(os.getenv("MLFLOW_URL"))
 
 
 # ── Gateway ───────────────────────────────────────────────────────────────────
@@ -112,6 +119,7 @@ class TestVisualEngine:
 
 # ── MLflow ────────────────────────────────────────────────────────────────────
 
+@pytest.mark.skipif(not _mlflow_available, reason="MLFLOW_URL not set — MLflow not deployed in K3s")
 class TestMLflow:
     def test_mlflow_reachable(self):
         """MLflow tracking server is reachable."""

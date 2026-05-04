@@ -867,8 +867,9 @@ function UploadPage({ auth }) {
         padding: 4, width: "fit-content",
       }}>
         {[
-          { id: "csv",    label: "CSV / Excel", icon: "📋" },
-          { id: "scrape", label: "Scrape Website", icon: "🌐" },
+          { id: "csv",       label: "CSV / Excel",     icon: "📋" },
+          { id: "scrape",    label: "Scrape Website",  icon: "🌐" },
+          { id: "whitelist", label: "Suggest Category", icon: "◈" },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             padding: "8px 20px", borderRadius: 7, border: "none", cursor: "pointer",
@@ -883,8 +884,9 @@ function UploadPage({ auth }) {
         ))}
       </div>
 
-      {tab === "csv"    && <CsvUploadPanel    auth={auth} />}
-      {tab === "scrape" && <ScrapeWebsitePanel auth={auth} />}
+      {tab === "csv"       && <CsvUploadPanel       auth={auth} />}
+      {tab === "scrape"    && <ScrapeWebsitePanel   auth={auth} />}
+      {tab === "whitelist" && <WhitelistSuggestPanel auth={auth} />}
     </div>
   );
 }
@@ -1326,6 +1328,146 @@ function ScrapeWebsitePanel({ auth }) {
 
       {status === "indexing" && <IndexingProgress progress={progress} />}
       {status === "done"     && <DoneCard progress={progress} errors={errors} storeName={auth.store_name} />}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WHITELIST SUGGEST PANEL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const KNOWN_CATEGORIES = [
+  "shirt", "sweater", "jacket", "coat", "dress", "jumpsuit",
+  "skirt", "pants", "shorts", "shoes", "bag", "glasses", "hat", "watch", "scarf",
+];
+
+function WhitelistSuggestPanel({ auth }) {
+  const [word,    setWord]    = useState("");
+  const [cat,     setCat]     = useState("");
+  const [example, setExample] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState("");
+  const [error,   setError]   = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const w = word.trim().toLowerCase();
+    if (!w || !cat) { setError("Word and category are required."); return; }
+    setLoading(true); setError(""); setSuccess("");
+    try {
+      const resp = await fetch(`${API}/whitelist-suggest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          word: w,
+          category: cat,
+          example_product: example.trim(),
+          store_name: auth.store_name,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || `Error ${resp.status}`);
+      setSuccess(`"${data.word}" → ${data.category} submitted. A developer will review it shortly.`);
+      setWord(""); setCat(""); setExample("");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <InfoBox title="What is this?">
+        <div style={{ fontSize: "0.72rem", color: T.textMuted, lineHeight: 1.8 }}>
+          If Locus is miscategorising one of your products — e.g. tagging a jumpsuit as a dress —
+          you can suggest a word or phrase that should always map to a specific category.
+          A developer will review and approve it, then it takes effect automatically.
+        </div>
+      </InfoBox>
+
+      <form onSubmit={handleSubmit} style={{
+        background: T.surface, border: `1px solid ${T.border}`,
+        borderRadius: 14, padding: "28px 28px",
+        display: "flex", flexDirection: "column", gap: 20,
+      }}>
+        <div style={{ fontSize: "0.65rem", color: T.accent, letterSpacing: "0.14em",
+          textTransform: "uppercase" }}>
+          New suggestion
+        </div>
+
+        {error   && <ErrorBanner msg={error} />}
+        {success && (
+          <div style={{ background: "rgba(122,171,138,0.07)", border: `1px solid rgba(122,171,138,0.25)`,
+            borderRadius: 8, padding: "10px 14px", fontSize: "0.78rem", color: T.green }}>
+            ✓ {success}
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div>
+            <label style={labelStyle}>Word or phrase <span style={{ color: T.red }}>*</span></label>
+            <input
+              value={word}
+              onChange={e => setWord(e.target.value)}
+              placeholder='e.g. "wide-leg" or "midi skirt"'
+              maxLength={60}
+              required
+              style={inputStyle}
+            />
+            <div style={{ fontSize: "0.65rem", color: T.textMuted, marginTop: 5 }}>
+              The term that appears in your product titles
+            </div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Should map to <span style={{ color: T.red }}>*</span></label>
+            <select
+              value={cat}
+              onChange={e => setCat(e.target.value)}
+              required
+              style={{ ...inputStyle, cursor: "pointer" }}
+            >
+              <option value="">Select a category…</option>
+              {KNOWN_CATEGORIES.map(c => (
+                <option key={c} value={c} style={{ background: T.bgDeep, color: T.text }}>
+                  {c.charAt(0).toUpperCase() + c.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label style={labelStyle}>Example product name <span style={{ color: T.textMuted }}>(optional)</span></label>
+          <input
+            value={example}
+            onChange={e => setExample(e.target.value)}
+            placeholder="e.g. Wide-Leg Linen Trousers — helps the reviewer understand the context"
+            maxLength={120}
+            style={inputStyle}
+          />
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <button type="submit" disabled={loading || !word.trim() || !cat} style={{
+            padding: "11px 28px",
+            background: (loading || !word.trim() || !cat) ? T.surfaceHov : T.accentBg,
+            border: `1px solid ${T.accentRing}`,
+            borderRadius: 9, cursor: (loading || !word.trim() || !cat) ? "not-allowed" : "pointer",
+            fontSize: "0.82rem", color: T.accent,
+            fontFamily: "'DM Sans', sans-serif",
+            display: "flex", alignItems: "center", gap: 8,
+            opacity: (loading || !word.trim() || !cat) ? 0.55 : 1,
+            transition: "opacity 0.2s",
+          }}>
+            {loading ? <><Spinner small /> Submitting…</> : "Submit suggestion"}
+          </button>
+          <span style={{ fontSize: "0.7rem", color: T.textMuted }}>
+            Submitted as <strong style={{ color: T.text }}>{auth.store_name}</strong>
+          </span>
+        </div>
+      </form>
     </div>
   );
 }

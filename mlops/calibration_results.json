@@ -3,18 +3,18 @@
     "query_name": "blue high waisted straight leg jeans",
     "category": "pants",
     "generic": false,
-    "avg_score": 0.882,
+    "avg_score": 0.88,
     "pair_scores": [
       0.88,
       0.88,
-      0.89,
+      0.88,
       0.88,
       0.88
     ],
     "scores_by_id": {
       "82908c06-9d43-5c26-bac2-8a597151e100": 0.88,
       "06d26d81-09f1-5025-93f8-1acf81f7678e": 0.88,
-      "92629cd8-527c-5afc-b7d5-33ca9f91715b": 0.89,
+      "92629cd8-527c-5afc-b7d5-33ca9f91715b": 0.88,
       "fc31bb72-f9dc-57fe-a455-2fdea8d20b5c": 0.88,
       "9866866a-8612-5856-af3f-4010d1c70180": 0.88
     },
@@ -171,18 +171,18 @@
     "query_name": "brown leather biker jacket",
     "category": "jacket",
     "generic": false,
-    "avg_score": 0.856,
+    "avg_score": 0.858,
     "pair_scores": [
       0.88,
       0.88,
-      0.97,
+      0.98,
       0.65,
       0.9
     ],
     "scores_by_id": {
       "2a1b641d-1e79-5709-a4fa-a1603196ddd9": 0.88,
       "52eebc76-a466-5230-ac54-8ac52070ed99": 0.88,
-      "9483c94a-4bc9-5931-928f-b097ef7a8656": 0.97,
+      "9483c94a-4bc9-5931-928f-b097ef7a8656": 0.98,
       "e2b1c521-752d-56b9-9907-f4641c94ddda": 0.65,
       "9538cab5-f6fb-5426-8f64-82cefb830300": 0.9
     },
@@ -213,17 +213,17 @@
     "query_name": "brown open front cardigan",
     "category": "sweater",
     "generic": false,
-    "avg_score": 0.872,
+    "avg_score": 0.862,
     "pair_scores": [
-      0.89,
-      0.82,
+      0.88,
+      0.78,
       0.85,
       0.92,
       0.88
     ],
     "scores_by_id": {
-      "be4b8f3c-3f5c-5e37-ad1f-76bd2782e41a": 0.89,
-      "732104c6-527d-5ddc-8d25-d7b322a5049f": 0.82,
+      "be4b8f3c-3f5c-5e37-ad1f-76bd2782e41a": 0.88,
+      "732104c6-527d-5ddc-8d25-d7b322a5049f": 0.78,
       "1cd5c10d-793f-5178-97c6-522406ab69e9": 0.85,
       "18f5d801-c402-589e-9c4e-e26351456f2d": 0.92,
       "c1ad4b6d-a455-5ecd-bb3e-54b79e568c6a": 0.88
@@ -423,16 +423,16 @@
     "query_name": "black shoulder bag",
     "category": "bag",
     "generic": true,
-    "avg_score": 0.876,
+    "avg_score": 0.88,
     "pair_scores": [
-      0.88,
+      0.9,
       0.9,
       0.85,
       0.9,
       0.85
     ],
     "scores_by_id": {
-      "6d82e4da-7f58-5259-a1c9-2cfcdee30ab1": 0.88,
+      "6d82e4da-7f58-5259-a1c9-2cfcdee30ab1": 0.9,
       "5edd9e54-76f5-5286-8291-6ea4615f0398": 0.9,
       "317ca124-1663-56ef-b51f-83eabb858f52": 0.85,
       "aea7cba4-c7ae-54e3-b13d-dd10078e985c": 0.9,
