@@ -28,10 +28,13 @@ jobs:
   integration-tests:
     runs-on: self-hosted
     needs: unit-tests
-    env:
-      KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-
     steps:
+      - name: Expose k3s kubeconfig to runner user
+        run: |
+          mkdir -p ~/.kube
+          sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+          sudo chown "$(id -u):$(id -g)" ~/.kube/config
+
       - name: Fix workspace permissions
         run: sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE" 2>/dev/null || true
 
