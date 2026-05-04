@@ -27,14 +27,14 @@ Copy `.env.example` to `.env` and fill in the values before running anything loc
 
 The system is deployed on Azure (Standard_B2s, Ubuntu 22.04) running Kubernetes (K3s).
 
-**Public endpoint:** `http://20.240.203.22:8000`
+**Public endpoint:** `http://20.240.203.22:30800`
 
 ```bash
 # Health check
-curl http://20.240.203.22:8000/health
+curl http://20.240.203.22:30800/health
 
 # Visual search (replace path with any clothing image)
-curl -X POST http://20.240.203.22:8000/search \
+curl -X POST http://20.240.203.22:38000/search \
   -F "file=@/path/to/image.jpg" \
   -F "top_k=5"
 ```
@@ -166,7 +166,7 @@ Key metrics:
 
 ---
 
-## Key Documentation
+## Key Documentation (the bulk is available in the Latex document on Moodle)
 
 | File | Contents |
 |------|----------|
