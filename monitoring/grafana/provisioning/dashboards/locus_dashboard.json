@@ -4695,61 +4695,6 @@
       }
     },
     {
-      "id": 901,
-      "type": "stat",
-      "title": "Pending Whitelist Suggestions",
-      "gridPos": {
-        "x": 0,
-        "y": 146,
-        "w": 5,
-        "h": 6
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "expr": "locus_whitelist_pending_total",
-          "legendFormat": "Pending"
-        }
-      ],
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "colorMode": "background",
-        "graphMode": "none"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": 0
-              },
-              {
-                "color": "yellow",
-                "value": 1
-              },
-              {
-                "color": "orange",
-                "value": 5
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          }
-        }
-      }
-    },
-    {
       "id": 902,
       "type": "bargauge",
       "title": "Searches by Category (all-time)",
@@ -4783,21 +4728,6 @@
         "defaults": {
           "unit": "short"
         }
-      }
-    },
-    {
-      "id": 903,
-      "type": "text",
-      "title": "Whitelist Management",
-      "gridPos": {
-        "x": 16,
-        "y": 146,
-        "w": 8,
-        "h": 6
-      },
-      "options": {
-        "mode": "html",
-        "content": "<div style=\"padding:10px 14px;line-height:2;font-size:0.87rem;color:#ccc\">\n  <div style=\"margin-bottom:8px;font-weight:700;color:#fff\">Whitelist API Endpoints</div>\n  <div><a href=\"http://localhost:8000/whitelist-suggestions\" target=\"_blank\" style=\"color:#c9a96e\">GET /whitelist-suggestions</a></div>\n  <div><span style=\"color:#aaa\">POST /whitelist-approve</span>&nbsp;<span style=\"color:#555\">{word, category}</span></div>\n  <div><span style=\"color:#aaa\">POST /whitelist-reject</span>&nbsp;&nbsp;<span style=\"color:#555\">{word, category}</span></div>\n  <div style=\"margin-top:8px\"><a href=\"http://localhost:8000/docs\" target=\"_blank\" style=\"color:#6bb5ff;font-size:0.82rem\">&#9654; Open Swagger UI</a></div>\n</div><script>(function(){document.querySelectorAll('a[href]').forEach(function(a){a.href=a.href.replace('localhost',location.hostname)});})();</script>"
       }
     },
     {
@@ -6402,22 +6332,6 @@
             "mode": "thresholds"
           }
         }
-      }
-    },
-    {
-      "id": 1307,
-      "type": "text",
-      "title": "Review & Approve Whitelist Suggestions",
-      "description": "Store owners submit word→category mappings. Approve to add to the visual engine token map; reject to discard.",
-      "gridPos": {
-        "x": 4,
-        "y": 260,
-        "w": 20,
-        "h": 10
-      },
-      "options": {
-        "mode": "html",
-        "content": "<div id=\"wl-root\" style=\"font-family:Inter,sans-serif;padding:8px;height:100%;overflow:auto\"><div id=\"wl-status\" style=\"color:#aaa;font-size:0.8rem;margin-bottom:6px;text-align:right\"></div><div id=\"wl-list\"></div></div><script>var API=location.protocol+'//'+location.hostname+':8000';function load(){fetch(API+\"/whitelist-suggestions?status=pending\").then(function(r){return r.json()}).then(function(data){var el=document.getElementById(\"wl-list\");var st=document.getElementById(\"wl-status\");el.innerHTML=\"\";if(!data.suggestions||data.suggestions.length===0){el.innerHTML='<div style=\"text-align:center;padding:24px;color:#4caf50;font-size:1.1rem\">&#10003; No pending suggestions</div>';st.textContent=\"\";return;}st.textContent=data.total+\" pending • auto-refresh 30s\";data.suggestions.forEach(function(s){var card=document.createElement(\"div\");card.id=\"card-\"+s.word;card.style.cssText=\"display:flex;align-items:center;gap:10px;padding:9px 14px;margin-bottom:7px;background:#1e2030;border-radius:6px;border-left:3px solid #f0b429\";var aBtn=document.createElement(\"button\");aBtn.textContent=\"✓\";aBtn.title=\"Approve\";aBtn.style.cssText=\"background:#4caf50;color:#fff;border:none;padding:5px 18px;border-radius:4px;cursor:pointer;font-size:0.95rem;font-weight:700;flex-shrink:0\";var rBtn=document.createElement(\"button\");rBtn.textContent=\"✗\";rBtn.title=\"Reject\";rBtn.style.cssText=\"background:#ef5350;color:#fff;border:none;padding:5px 18px;border-radius:4px;cursor:pointer;font-size:0.95rem;font-weight:700;flex-shrink:0\";(function(w,ab,rb){ab.onclick=function(){decide(w,\"approve\",ab,rb)};rb.onclick=function(){decide(w,\"reject\",ab,rb)};})(s.word,aBtn,rBtn);var info=document.createElement(\"div\");info.style.flex=\"1\";info.innerHTML='<span style=\"color:#f0b429;font-weight:700;font-size:1rem\">\"'+s.word+'\"</span><span style=\"color:#666;margin:0 8px\">&rarr;</span><span style=\"color:#61dafb;font-weight:600\">'+s.category+'</span>'+(s.store_name?'<span style=\"color:#888;font-size:0.78rem;margin-left:10px\">by '+s.store_name+\"</span>\":\"\")+(s.example_product?'<div style=\"color:#556;font-size:0.72rem;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:500px\">'+s.example_product+\"</div>\":\"\");card.appendChild(info);card.appendChild(aBtn);card.appendChild(rBtn);el.appendChild(card);});}).catch(function(e){document.getElementById(\"wl-status\").innerHTML='<span style=\"color:#f44\">&#9888; Cannot reach gateway: '+e+\"</span>\";});}function decide(word,action,aBtn,rBtn){aBtn.disabled=true;rBtn.disabled=true;var card=document.getElementById(\"card-\"+word);if(card)card.style.opacity=\"0.45\";fetch(API+\"/whitelist-\"+action,{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({word:word})}).then(function(){load()}).catch(function(e){alert(\"Error: \"+e);aBtn.disabled=false;rBtn.disabled=false;if(card)card.style.opacity=\"1\";});}load();setInterval(load,30000);</script>"
       }
     }
   ],

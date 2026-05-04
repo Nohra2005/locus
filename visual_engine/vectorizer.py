@@ -41,8 +41,6 @@
 # =============================================================================
 
 import copy
-import json
-import os
 import io
 import base64
 import time
@@ -63,8 +61,6 @@ from clip_labels import (
     LABEL_DESCRIPTIONS,
     UNAMBIGUOUS_TOKEN_MAP,
 )
-
-OVERRIDES_PATH = "/app/whitelist_overrides.json"
 
 # =============================================================================
 # SHOE STYLE — sub-category within the "shoes" collection.
@@ -240,54 +236,13 @@ class LocusVisualizer:
             desc_texts, convert_to_tensor=True, normalize_embeddings=True
         )
 
-        # Load token map — static whitelist + approved overrides merged on top
-        self._load_token_map()
+        self.token_map = copy.deepcopy(UNAMBIGUOUS_TOKEN_MAP)
 
         print("=" * 50)
         print("LOCUS VISUAL ENGINE READY")
         print(f"CLIP labels: {self.clip_labels}")
-        print(f"Whitelist tokens: {len(self.token_map)} "
-              f"({len(UNAMBIGUOUS_TOKEN_MAP)} static + "
-              f"{len(self.token_map) - len(UNAMBIGUOUS_TOKEN_MAP)} overrides)")
+        print(f"Whitelist tokens: {len(self.token_map)}")
         print("=" * 50)
-
-    # =========================================================================
-    # PRIVATE: _load_token_map()
-    # =========================================================================
-    def _load_token_map(self):
-        self.token_map = copy.deepcopy(UNAMBIGUOUS_TOKEN_MAP)
-
-        if not os.path.exists(OVERRIDES_PATH):
-            print(f"[WHITELIST] No overrides file at {OVERRIDES_PATH} — using static map only")
-            return
-
-        try:
-            with open(OVERRIDES_PATH, "r") as f:
-                overrides = json.load(f)
-
-            count = 0
-            for entry in overrides:
-                if entry.get("status") == "approved":
-                    word     = entry.get("word", "").strip().lower()
-                    category = entry.get("category", "").strip()
-                    if word and category:
-                        self.token_map[word] = category
-                        count += 1
-
-            print(f"[WHITELIST] Loaded {count} approved overrides from {OVERRIDES_PATH}")
-
-        except Exception as e:
-            print(f"[WHITELIST] Failed to load overrides: {e} — using static map only")
-
-    # =========================================================================
-    # PUBLIC: reload_overrides()
-    # =========================================================================
-    def reload_overrides(self):
-        old_count = len(self.token_map)
-        self._load_token_map()
-        new_count = len(self.token_map)
-        print(f"[WHITELIST] Reloaded: {old_count} → {new_count} tokens")
-        return {"tokens_before": old_count, "tokens_after": new_count}
 
     # =========================================================================
     # PUBLIC: reload_adapter()

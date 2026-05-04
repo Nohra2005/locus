@@ -321,65 +321,6 @@ class TestMe:
         assert r.json()["store_name"] == "Renamed Store"
 
 
-class TestForgotPassword:
-    @pytest.fixture(autouse=True)
-    def register_user(self, auth_client):
-        auth_client.post("/auth/register", json={
-            "email": "forgot@store.com", "password": "ForgotPass1!",
-            "store_name": "Forgot Store", "mall": "Mall", "phone": ""
-        })
-
-    def test_known_email_returns_success(self, auth_client):
-        r = auth_client.post("/auth/forgot-password", json={"email": "forgot@store.com"})
-        assert r.status_code == 200
-        assert r.json()["success"] is True
-
-    def test_unknown_email_returns_404(self, auth_client):
-        r = auth_client.post("/auth/forgot-password", json={"email": "nobody@store.com"})
-        assert r.status_code == 404
-
-
-class TestResetPassword:
-    @pytest.fixture(autouse=True)
-    def register_user(self, auth_client):
-        auth_client.post("/auth/register", json={
-            "email": "reset@store.com", "password": "OldPass1!",
-            "store_name": "Reset Store", "mall": "Mall", "phone": ""
-        })
-
-    def test_reset_allows_new_password(self, auth_client):
-        r = auth_client.post("/auth/reset-password", json={
-            "email": "reset@store.com", "code": "", "new_password": "NewPass1!"
-        })
-        assert r.status_code == 200
-        # Now login with the new password
-        login = auth_client.post("/auth/login", json={
-            "email": "reset@store.com", "password": "NewPass1!"
-        })
-        assert login.status_code == 200
-
-    def test_old_password_fails_after_reset(self, auth_client):
-        auth_client.post("/auth/reset-password", json={
-            "email": "reset@store.com", "code": "", "new_password": "NewPass1!"
-        })
-        login = auth_client.post("/auth/login", json={
-            "email": "reset@store.com", "password": "OldPass1!"
-        })
-        assert login.status_code == 401
-
-    def test_reset_too_short_password_rejected(self, auth_client):
-        r = auth_client.post("/auth/reset-password", json={
-            "email": "reset@store.com", "code": "", "new_password": "short"
-        })
-        assert r.status_code == 400
-
-    def test_reset_nonexistent_email_returns_404(self, auth_client):
-        r = auth_client.post("/auth/reset-password", json={
-            "email": "nobody@store.com", "code": "", "new_password": "NewPass1!"
-        })
-        assert r.status_code == 404
-
-
 class TestUpdateProfile:
     @pytest.fixture
     def auth_header(self, auth_client):
@@ -858,18 +799,11 @@ class TestAppJsxStructure:
         assert "maps_url" in src
         assert "mapsUrl"  in src
 
-    def test_forgot_password_navigates_to_newpass(self):
-        """Forgot flow must go to newpass (not verify) since no email step."""
-        src = self._read(self.STORE_JSX)
-        assert 'goTo("newpass")' in src
-
     def test_auth_endpoints_correct(self):
         src = self._read(self.STORE_JSX)
-        assert "/auth/login"            in src
-        assert "/auth/register"         in src
-        assert "/auth/forgot-password"  in src
-        assert "/auth/reset-password"   in src
-        assert "/auth/profile"          in src
+        assert "/auth/login"    in src
+        assert "/auth/register" in src
+        assert "/auth/profile"  in src
 
     def test_store_stats_endpoint_used(self):
         src = self._read(self.STORE_JSX)

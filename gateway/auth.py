@@ -2,7 +2,6 @@ import base64
 import hashlib
 import json
 import os
-import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -128,16 +127,6 @@ class ProfileUpdateRequest(BaseModel):
     longitude:  float | None = None
 
 
-class ForgotPasswordRequest(BaseModel):
-    email: str
-
-
-class ResetPasswordRequest(BaseModel):
-    email:        str
-    code:         str = ""
-    new_password: str
-
-
 # ── Router ─────────────────────────────────────────────────────────────────────
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -228,54 +217,6 @@ async def me(payload=Depends(verify_token)):
         "longitude":  u.get("longitude"),
         "created_at": u.get("created_at", ""),
     }
-
-
-@router.post("/forgot-password")
-async def forgot_password(req: ForgotPasswordRequest):
-    users = _load_users()
-    email = req.email.strip().lower()
-    if email not in users:
-        raise HTTPException(404, "No account found with that email")
-    code = secrets.token_hex(4).upper()  # 8-char hex code
-    users[email]["reset_code"] = code
-    users[email]["reset_code_exp"] = (
-        datetime.now(timezone.utc) + timedelta(minutes=15)
-    ).isoformat()
-    try:
-        _save_users(users)
-    except Exception as e:
-        raise HTTPException(500, f"Could not save reset code: {e}")
-    # No email transport — return the code so the frontend can display it to the store owner.
-    return {"success": True, "reset_code": code}
-
-
-@router.post("/reset-password")
-async def reset_password(req: ResetPasswordRequest):
-    if len(req.new_password) < 8:
-        raise HTTPException(400, "Password must be at least 8 characters")
-    if len(req.new_password) > 128:
-        raise HTTPException(400, "Password must be no more than 128 characters")
-    users = _load_users()
-    email = req.email.strip().lower()
-    if email not in users:
-        raise HTTPException(404, "No account found with that email")
-    user = users[email]
-    stored_code = user.get("reset_code", "")
-    stored_exp  = user.get("reset_code_exp", "")
-    if not stored_code or not req.code:
-        raise HTTPException(400, "Reset code required — call /auth/forgot-password first")
-    if req.code.upper() != stored_code:
-        raise HTTPException(400, "Invalid reset code")
-    if datetime.fromisoformat(stored_exp) < datetime.now(timezone.utc):
-        raise HTTPException(400, "Reset code has expired — request a new one")
-    user["password"] = _hash_password(req.new_password)
-    user.pop("reset_code", None)
-    user.pop("reset_code_exp", None)
-    try:
-        _save_users(users)
-    except Exception as e:
-        raise HTTPException(500, f"Could not save new password: {e}")
-    return {"success": True}
 
 
 @router.put("/profile")

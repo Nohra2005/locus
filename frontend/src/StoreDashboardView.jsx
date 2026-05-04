@@ -128,23 +128,19 @@ export default function StoreDashboardView() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function AuthPage({ onAuth }) {
-  // mode: "login" | "register" | "forgot" | "verify" | "newpass"
+  // mode: "login" | "register"
   const [mode,      setMode]      = useState("login");
   const [email,     setEmail]     = useState("");
   const [pass,      setPass]      = useState("");
   const [name,      setName]      = useState("");
   const [mall,      setMall]      = useState("");
   const [phone,     setPhone]     = useState("");
-  const [code,      setCode]      = useState("");
-  const [newPass,   setNewPass]   = useState("");
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState("");
   const [success,   setSuccess]   = useState("");
   const [showPass,  setShowPass]  = useState(false);
-  const [showNew,   setShowNew]   = useState(false);
-  const [resetCode, setResetCode] = useState("");
 
-  const goTo = (m) => { setMode(m); setError(""); setSuccess(""); if (m === "login") setResetCode(""); };
+  const goTo = (m) => { setMode(m); setError(""); setSuccess(""); };
 
   const apiPost = async (endpoint, body) => {
     const resp = await fetch(`${API}${endpoint}`, {
@@ -162,25 +158,12 @@ function AuthPage({ onAuth }) {
     e.preventDefault();
     setError(""); setSuccess(""); setLoading(true);
     try {
-      if (mode === "login" || mode === "register") {
-        const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
-        const body = mode === "login"
-          ? { email: email.trim(), password: pass }
-          : { email: email.trim(), password: pass, store_name: name.trim(), mall: mall.trim(), phone: phone.trim() };
-        const data = await apiPost(endpoint, body);
-        onAuth(data);
-
-      } else if (mode === "forgot") {
-        const data = await apiPost("/auth/forgot-password", { email: email.trim() });
-        setResetCode(data.reset_code || "");
-        goTo("newpass");
-
-      } else if (mode === "newpass") {
-        await apiPost("/auth/reset-password", { email: email.trim(), code: code.trim(), new_password: newPass });
-        setCode(""); setNewPass("");
-        goTo("login");
-        setSuccess("Password reset successfully. You can now sign in.");
-      }
+      const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
+      const body = mode === "login"
+        ? { email: email.trim(), password: pass }
+        : { email: email.trim(), password: pass, store_name: name.trim(), mall: mall.trim(), phone: phone.trim() };
+      const data = await apiPost(endpoint, body);
+      onAuth(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -191,23 +174,14 @@ function AuthPage({ onAuth }) {
   const headingMap = {
     login:   "Welcome back",
     register:"Join Locus",
-    forgot:  "Reset password",
-    verify:  "Check your email",
-    newpass: "New password",
   };
   const subMap = {
     login:   "Sign in to manage your store's catalogue.",
     register:"Create a retailer account to list your products.",
-    forgot:  "Enter your account email to reset your password.",
-    verify:  `We sent a code to ${email || "your email"}. Enter it below to continue.`,
-    newpass: "Enter the reset code shown below and choose a new password.",
   };
   const btnMap = {
-    login:   { idle: "Sign in",           busy: "Signing in…" },
-    register:{ idle: "Create account",    busy: "Creating account…" },
-    forgot:  { idle: "Continue",           busy: "Verifying…" },
-    verify:  { idle: "Verify",            busy: "Verifying…" },
-    newpass: { idle: "Reset password",    busy: "Saving…" },
+    login:   { idle: "Sign in",        busy: "Signing in…" },
+    register:{ idle: "Create account", busy: "Creating account…" },
   };
 
   return (
@@ -279,8 +253,8 @@ function AuthPage({ onAuth }) {
               </div>
             )}
 
-            {/* ── email (all modes except verify + newpass) ── */}
-            {(mode === "login" || mode === "register" || mode === "forgot") && (
+            {/* ── email ── */}
+            {(mode === "login" || mode === "register") && (
               <AuthInput label="Email address" type="email" value={email}
                 onChange={setEmail} placeholder="you@store.com" required />
             )}
@@ -316,109 +290,7 @@ function AuthPage({ onAuth }) {
                 onChange={setPhone} placeholder="+961 70 000 000" />
             )}
 
-            {/* ── verification code (verify mode — future use) ── */}
-            {mode === "verify" && (
-              <AuthInput label="Verification code" value={code} onChange={setCode}
-                placeholder="Enter the code from your email" required />
-            )}
-
-            {/* ── new password flow ── */}
-            {mode === "newpass" && (
-              <>
-                {/* Reset code display box */}
-                {resetCode && (
-                  <div style={{
-                    background: "rgba(201,169,110,0.07)",
-                    border: `1px solid ${T.accentRing}`,
-                    borderRadius: 10, padding: "14px 16px",
-                  }}>
-                    <div style={{ fontSize: "0.6rem", color: T.accent, letterSpacing: "0.16em",
-                      textTransform: "uppercase", marginBottom: 8 }}>Your reset code</div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                      <span style={{
-                        fontFamily: "'DM Mono', monospace", fontSize: "1.3rem",
-                        color: T.text, letterSpacing: "0.22em",
-                      }}>{resetCode}</span>
-                      <button type="button" onClick={() => navigator.clipboard?.writeText(resetCode)} style={{
-                        background: "none", border: `1px solid ${T.border}`,
-                        borderRadius: 6, padding: "4px 10px", cursor: "pointer",
-                        fontSize: "0.68rem", color: T.textMuted,
-                        fontFamily: "'DM Sans', sans-serif",
-                      }}>Copy</button>
-                    </div>
-                    <div style={{ marginTop: 8, fontSize: "0.68rem", color: T.textMuted }}>
-                      Valid for 15 minutes. Enter it in the field below.
-                    </div>
-                  </div>
-                )}
-
-                {/* Code input */}
-                <div>
-                  <label style={labelStyle}>Reset code <span style={{ color: T.red }}>*</span></label>
-                  <input
-                    type="text"
-                    value={code}
-                    onChange={e => setCode(e.target.value.toUpperCase())}
-                    placeholder="8-character code"
-                    maxLength={8}
-                    required
-                    style={{ ...inputStyle, fontFamily: "'DM Mono', monospace", letterSpacing: "0.18em" }}
-                  />
-                </div>
-
-                {/* New password */}
-                <div>
-                  <label style={labelStyle}>New password <span style={{ color: T.red }}>*</span></label>
-                  <div style={{ position: "relative" }}>
-                    <input
-                      type={showNew ? "text" : "password"}
-                      value={newPass}
-                      onChange={e => setNewPass(e.target.value)}
-                      placeholder="At least 8 characters"
-                      minLength={8}
-                      maxLength={128}
-                      required
-                      style={{ ...inputStyle, paddingRight: 42 }}
-                    />
-                    <button type="button" onClick={() => setShowNew(s => !s)} style={{
-                      position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-                      background: "none", border: "none", cursor: "pointer",
-                      color: T.textMuted, fontSize: "0.8rem", padding: 0,
-                    }}>
-                      {showNew ? "hide" : "show"}
-                    </button>
-                  </div>
-                  <div style={{ marginTop: 6, fontSize: "0.72rem", color: T.textMuted }}>
-                    {newPass.length > 0 && (
-                      <>
-                        <span style={{ color: newPass.length >= 8 ? T.green : T.red }}>
-                          {newPass.length >= 8 ? "✓" : "✗"} At least 8 characters
-                        </span>
-                        {"  ·  "}
-                        <span style={{ color: newPass.length <= 128 ? T.green : T.red }}>
-                          {newPass.length <= 128 ? "✓" : "✗"} Max 128 characters
-                        </span>
-                      </>
-                    )}
-                    {newPass.length === 0 && "8–128 characters"}
-                  </div>
-                </div>
-              </>
-            )}
           </div>
-
-          {/* ── forgot password link (login only) ── */}
-          {mode === "login" && (
-            <div style={{ textAlign: "right", marginTop: 6 }}>
-              <button type="button" onClick={() => goTo("forgot")} style={{
-                background: "none", border: "none", cursor: "pointer",
-                color: T.textMuted, fontSize: "0.75rem", padding: 0,
-                fontFamily: "'DM Sans', sans-serif",
-              }}>
-                Forgot password?
-              </button>
-            </div>
-          )}
 
           <button type="submit" disabled={loading} style={{
             width: "100%", marginTop: 28, padding: "13px 20px",
@@ -446,13 +318,6 @@ function AuthPage({ onAuth }) {
                 </button>
               </>
             )}
-            {(mode === "forgot" || mode === "verify" || mode === "newpass") && (
-              <button type="button" onClick={() => goTo("login")}
-                style={{ background: "none", border: "none", cursor: "pointer",
-                  color: T.accent, fontSize: "0.78rem", padding: 0, fontFamily: "'DM Sans', sans-serif" }}>
-                ← Back to sign in
-              </button>
-            )}
           </div>
         </form>
       </div>
@@ -468,7 +333,6 @@ const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard",        icon: "⊞" },
   { id: "inventory", label: "Inventory",         icon: "◫" },
   { id: "upload",    label: "Upload",            icon: "↑" },
-  { id: "suggest",   label: "Suggest Category",  icon: "◈" },
   { id: "settings",  label: "Settings",          icon: "⚙" },
 ];
 
@@ -539,7 +403,6 @@ function PortalLayout({ auth, page, onPage, onLogout, onProfileUpdate }) {
           {page === "dashboard" && <DashboardPage auth={auth} onPage={onPage} />}
           {page === "inventory" && <InventoryPage auth={auth} />}
           {page === "upload"    && <UploadPage    auth={auth} />}
-          {page === "suggest"   && <WhitelistSuggestPanel auth={auth} />}
           {page === "settings"  && <SettingsPage  auth={auth} onProfileUpdate={onProfileUpdate} onLogout={onLogout} />}
         </div>
       </main>
@@ -1328,146 +1191,6 @@ function ScrapeWebsitePanel({ auth }) {
 
       {status === "indexing" && <IndexingProgress progress={progress} />}
       {status === "done"     && <DoneCard progress={progress} errors={errors} storeName={auth.store_name} />}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// WHITELIST SUGGEST PANEL
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const KNOWN_CATEGORIES = [
-  "shirt", "sweater", "jacket", "coat", "dress", "jumpsuit",
-  "skirt", "pants", "shorts", "shoes", "bag", "glasses", "hat", "watch", "scarf",
-];
-
-function WhitelistSuggestPanel({ auth }) {
-  const [word,    setWord]    = useState("");
-  const [cat,     setCat]     = useState("");
-  const [example, setExample] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState("");
-  const [error,   setError]   = useState("");
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const w = word.trim().toLowerCase();
-    if (!w || !cat) { setError("Word and category are required."); return; }
-    setLoading(true); setError(""); setSuccess("");
-    try {
-      const resp = await fetch(`${API}/whitelist-suggest`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          word: w,
-          category: cat,
-          example_product: example.trim(),
-          store_name: auth.store_name,
-        }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || `Error ${resp.status}`);
-      setSuccess(`"${data.word}" → ${data.category} submitted. A developer will review it shortly.`);
-      setWord(""); setCat(""); setExample("");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <InfoBox title="What is this?">
-        <div style={{ fontSize: "0.72rem", color: T.textMuted, lineHeight: 1.8 }}>
-          If Locus is miscategorising one of your products — e.g. tagging a jumpsuit as a dress —
-          you can suggest a word or phrase that should always map to a specific category.
-          A developer will review and approve it, then it takes effect automatically.
-        </div>
-      </InfoBox>
-
-      <form onSubmit={handleSubmit} style={{
-        background: T.surface, border: `1px solid ${T.border}`,
-        borderRadius: 14, padding: "28px 28px",
-        display: "flex", flexDirection: "column", gap: 20,
-      }}>
-        <div style={{ fontSize: "0.65rem", color: T.accent, letterSpacing: "0.14em",
-          textTransform: "uppercase" }}>
-          New suggestion
-        </div>
-
-        {error   && <ErrorBanner msg={error} />}
-        {success && (
-          <div style={{ background: "rgba(122,171,138,0.07)", border: `1px solid rgba(122,171,138,0.25)`,
-            borderRadius: 8, padding: "10px 14px", fontSize: "0.78rem", color: T.green }}>
-            ✓ {success}
-          </div>
-        )}
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <div>
-            <label style={labelStyle}>Word or phrase <span style={{ color: T.red }}>*</span></label>
-            <input
-              value={word}
-              onChange={e => setWord(e.target.value)}
-              placeholder='e.g. "wide-leg" or "midi skirt"'
-              maxLength={60}
-              required
-              style={inputStyle}
-            />
-            <div style={{ fontSize: "0.65rem", color: T.textMuted, marginTop: 5 }}>
-              The term that appears in your product titles
-            </div>
-          </div>
-
-          <div>
-            <label style={labelStyle}>Should map to <span style={{ color: T.red }}>*</span></label>
-            <select
-              value={cat}
-              onChange={e => setCat(e.target.value)}
-              required
-              style={{ ...inputStyle, cursor: "pointer" }}
-            >
-              <option value="">Select a category…</option>
-              {KNOWN_CATEGORIES.map(c => (
-                <option key={c} value={c} style={{ background: T.bgDeep, color: T.text }}>
-                  {c.charAt(0).toUpperCase() + c.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label style={labelStyle}>Example product name <span style={{ color: T.textMuted }}>(optional)</span></label>
-          <input
-            value={example}
-            onChange={e => setExample(e.target.value)}
-            placeholder="e.g. Wide-Leg Linen Trousers — helps the reviewer understand the context"
-            maxLength={120}
-            style={inputStyle}
-          />
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-          <button type="submit" disabled={loading || !word.trim() || !cat} style={{
-            padding: "11px 28px",
-            background: (loading || !word.trim() || !cat) ? T.surfaceHov : T.accentBg,
-            border: `1px solid ${T.accentRing}`,
-            borderRadius: 9, cursor: (loading || !word.trim() || !cat) ? "not-allowed" : "pointer",
-            fontSize: "0.82rem", color: T.accent,
-            fontFamily: "'DM Sans', sans-serif",
-            display: "flex", alignItems: "center", gap: 8,
-            opacity: (loading || !word.trim() || !cat) ? 0.55 : 1,
-            transition: "opacity 0.2s",
-          }}>
-            {loading ? <><Spinner small /> Submitting…</> : "Submit suggestion"}
-          </button>
-          <span style={{ fontSize: "0.7rem", color: T.textMuted }}>
-            Submitted as <strong style={{ color: T.text }}>{auth.store_name}</strong>
-          </span>
-        </div>
-      </form>
     </div>
   );
 }

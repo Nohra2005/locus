@@ -1,8 +1,6 @@
 import asyncio
 import io
 import base64
-import json
-import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
@@ -61,9 +59,6 @@ locus_clip_confidence = Histogram(
 )
 
 
-OVERRIDES_PATH = "/app/whitelist_overrides.json"
-
-
 # ── Response models ────────────────────────────────────────────────────────────
 
 class DetectionResponse(BaseModel):
@@ -87,18 +82,6 @@ class TextEmbeddingResponse(BaseModel):
 class ReloadAdapterResponse(BaseModel):
     success: bool
     error: Optional[str] = None
-
-
-class WhitelistAddResponse(BaseModel):
-    status: str
-    word: str
-    category: str
-    reload: Any
-
-
-class WhitelistOverridesResponse(BaseModel):
-    total: int
-    entries: list[dict]
 
 
 @app.get("/")
@@ -307,68 +290,6 @@ async def classify_text(req: ClassifyTextRequest):
     v = _require_visualizer()
     category, confidence = v.classify_text(req.title)
     return {"category": category, "confidence": confidence}
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# WHITELIST OVERRIDE ENDPOINTS
-# ══════════════════════════════════════════════════════════════════════════════
-
-class WhitelistAddRequest(BaseModel):
-    word:     str
-    category: str
-
-
-def _read_overrides() -> list:
-    if not os.path.exists(OVERRIDES_PATH):
-        return []
-    try:
-        with open(OVERRIDES_PATH, "r") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-
-def _write_overrides(data: list):
-    with open(OVERRIDES_PATH, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-@app.post("/whitelist-add", response_model=WhitelistAddResponse)
-async def whitelist_add(req: WhitelistAddRequest):
-    v = _require_visualizer()
-    word     = req.word.strip().lower()
-    category = req.category.strip()
-
-    if not word or not category:
-        return {"error": "word and category are required"}
-
-    overrides = _read_overrides()
-    existing  = next((e for e in overrides if e.get("word") == word), None)
-    if existing:
-        existing["category"] = category
-        existing["status"]   = "approved"
-    else:
-        overrides.append({"word": word, "category": category, "status": "approved"})
-
-    _write_overrides(overrides)
-    result = v.reload_overrides()
-
-    print(f"[WHITELIST] Added override: '{word}' → '{category}'")
-    return {"status": "added", "word": word, "category": category, "reload": result}
-
-
-@app.post("/whitelist-reload")
-async def whitelist_reload():
-    v = _require_visualizer()
-    result = v.reload_overrides()
-    return {"status": "reloaded", **result}
-
-
-@app.get("/whitelist-overrides", response_model=WhitelistOverridesResponse)
-async def whitelist_overrides():
-    overrides = _read_overrides()
-    active    = [e for e in overrides if e.get("status") == "approved"]
-    return {"total": len(active), "entries": active}
 
 
 # ══════════════════════════════════════════════════════════════════════════════

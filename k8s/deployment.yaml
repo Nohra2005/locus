@@ -24,8 +24,6 @@ spec:
           volumeMounts:
             - name: frontend-dist
               mountPath: /app/frontend/dist
-            - name: whitelist-data
-              mountPath: /app/pending_whitelist.json
           envFrom:
             - configMapRef:
                 name: locus-config
@@ -73,10 +71,6 @@ spec:
           hostPath:
             path: /home/azureuser/locus/frontend/dist
             type: Directory
-        - name: whitelist-data
-          hostPath:
-            path: /home/azureuser/locus/pending_whitelist.json
-            type: FileOrCreate
 ---
 apiVersion: apps/v1
 kind: Deployment

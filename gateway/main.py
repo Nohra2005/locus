@@ -373,10 +373,6 @@ locus_active_sessions = Gauge(
     "locus_active_sessions",
     "Live search sessions (judge + attribute caches currently held in memory)",
 )
-locus_whitelist_pending = Gauge(
-    "locus_whitelist_pending_total",
-    "Pending whitelist suggestions awaiting approve/reject",
-)
 locus_corrupt_items = Gauge(
     "locus_corrupt_items_total",
     "Products with corrupt_flag_count >= 1 in locus_items collection",
@@ -488,7 +484,6 @@ QDRANT_PORT         = int(os.getenv("QDRANT_PORT", 6333))
 COLLECTION_NAME     = "locus_items"
 SKIPPED_COLLECTION  = "locus_skipped"
 FEEDBACK_COLLECTION = "locus_feedback"
-PENDING_PATH        = "/app/pending_whitelist.json"
 GOLDEN_DATASET_PATH      = os.getenv("GOLDEN_DATASET_PATH", "/mlops/golden_dataset.json")
 GOLDEN_IMAGES_DIR        = pathlib.Path(os.getenv("GOLDEN_IMAGES_DIR", "/mlops/golden_images"))
 LINK_HEALTH_REPORT       = pathlib.Path("/mlops/link_health_report.json")
@@ -641,16 +636,9 @@ async def _refresh_link_monitor_metrics():
 
 
 async def _refresh_admin_metrics():
-    """Background task: update session count, whitelist pending, and corrupt items every 30s."""
+    """Background task: update session count and corrupt items every 30s."""
     while True:
         locus_active_sessions.set(len(_judge_scores) + len(_attribute_cache))
-        try:
-            pending = _read_pending()
-            locus_whitelist_pending.set(
-                sum(1 for p in pending if p.get("status") == "pending")
-            )
-        except Exception:
-            pass
         try:
             hits, _ = await asyncio.to_thread(
                 client.scroll,
@@ -816,11 +804,6 @@ def _init_qdrant_collections():
     except Exception:
         pass
 
-    # ── Pending whitelist ─────────────────────────────────────────────────────
-    if not os.path.exists(PENDING_PATH):
-        with open(PENDING_PATH, "w") as f:
-            _json.dump([], f)
-
 
 @app.on_event("startup")
 def startup_event():
@@ -857,21 +840,6 @@ def _crop_image_bytes(image_bytes: bytes, x1: float, y1: float, x2: float, y2: f
     buf  = io.BytesIO()
     crop.save(buf, format="JPEG")
     return buf.getvalue()
-
-
-def _read_pending() -> list:
-    if not os.path.exists(PENDING_PATH):
-        return []
-    try:
-        with open(PENDING_PATH, "r") as f:
-            return _json.load(f)
-    except Exception:
-        return []
-
-
-def _write_pending(data: list):
-    with open(PENDING_PATH, "w") as f:
-        _json.dump(data, f, indent=2)
 
 
 def _store_skipped(
@@ -2228,29 +2196,6 @@ async def admin_list_stores(request: Request):
     return {"stores": stores, "total": len(stores)}
 
 
-class AdminPasswordResetRequest(BaseModel):
-    new_password: str
-
-
-@app.post("/admin/stores/{store_id}/reset-password")
-async def admin_reset_store_password(store_id: str, body: AdminPasswordResetRequest, request: Request):
-    """Reset a store account password by store_id."""
-    _require_admin(request)
-    if len(body.new_password) < 8:
-        raise HTTPException(400, "Password must be at least 8 characters")
-    from auth import _save_users, _hash_password
-    users = _load_users()
-    for email, u in users.items():
-        if u.get("store_id") == store_id:
-            u["password"] = _hash_password(body.new_password)
-            try:
-                _save_users(users)
-            except Exception as exc:
-                raise HTTPException(500, f"Failed to save users: {exc}")
-            return {"status": "reset", "store_id": store_id, "email": email}
-    raise HTTPException(404, "Store not found")
-
-
 @app.delete("/admin/stores/{store_id}")
 async def admin_delete_store(store_id: str, request: Request):
     """Remove a store account. Does not delete Qdrant products."""
@@ -2265,217 +2210,6 @@ async def admin_delete_store(store_id: str, request: Request):
     _refresh_store_registry_metrics()
     print(f"[ADMIN] Deleted store account {target_email} (id={store_id})")
     return {"status": "deleted", "store_id": store_id, "email": target_email}
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# WHITELIST SUGGESTIONS
-# ══════════════════════════════════════════════════════════════════════════════
-
-class WhitelistSuggestRequest(BaseModel):
-    word:            str
-    category:        str
-    example_product: str = ""
-    store_name:      str = ""
-
-
-class WhitelistDecisionRequest(BaseModel):
-    word: str
-
-
-@app.post("/whitelist-suggest")
-async def whitelist_suggest(req: WhitelistSuggestRequest):
-    word     = req.word.strip().lower()
-    category = req.category.strip()
-
-    if not word or not category:
-        raise HTTPException(status_code=400, detail="word and category are required")
-
-    pending  = _read_pending()
-    existing = next((e for e in pending if e.get("word") == word), None)
-    if existing:
-        existing["category"]        = category
-        existing["example_product"] = req.example_product
-        existing["store_name"]      = req.store_name
-        existing["status"]          = "pending"
-        existing["updated_at"]      = datetime.utcnow().isoformat()
-    else:
-        pending.append({
-            "word":            word,
-            "category":        category,
-            "example_product": req.example_product,
-            "store_name":      req.store_name,
-            "status":          "pending",
-            "created_at":      datetime.utcnow().isoformat(),
-        })
-
-    _write_pending(pending)
-    print(f"[WHITELIST] Suggestion added: '{word}' → '{category}'")
-    return {"status": "suggested", "word": word, "category": category}
-
-
-@app.get("/whitelist-suggestions")
-async def whitelist_suggestions(status: str = ""):
-    pending = _read_pending()
-    if status:
-        pending = [e for e in pending if e.get("status") == status]
-    return {"total": len(pending), "suggestions": pending}
-
-
-@app.post("/whitelist-approve")
-async def whitelist_approve(req: WhitelistDecisionRequest):
-    word    = req.word.strip().lower()
-    pending = _read_pending()
-
-    entry = next((e for e in pending if e.get("word") == word), None)
-    if not entry:
-        raise HTTPException(status_code=404, detail=f"No suggestion found for word '{word}'")
-
-    category             = entry["category"]
-    entry["status"]      = "approved"
-    entry["approved_at"] = datetime.utcnow().isoformat()
-    _write_pending(pending)
-
-    try:
-        async with httpx.AsyncClient() as http:
-            resp = await http.post(
-                f"{VISUAL_URL}/whitelist-add",
-                json={"word": word, "category": category},
-                timeout=10.0,
-            )
-            resp.raise_for_status()
-            ve_result = resp.json()
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Visual engine whitelist-add failed: {e}")
-
-    asyncio.create_task(_reindex_matching_skipped(word, category))
-
-    return {
-        "status":        "approved",
-        "word":          word,
-        "category":      category,
-        "visual_engine": ve_result,
-        "reindex":       "triggered in background",
-    }
-
-
-@app.post("/whitelist-reject")
-async def whitelist_reject(req: WhitelistDecisionRequest):
-    word    = req.word.strip().lower()
-    pending = _read_pending()
-
-    entry = next((e for e in pending if e.get("word") == word), None)
-    if not entry:
-        raise HTTPException(status_code=404, detail=f"No suggestion found for word '{word}'")
-
-    entry["status"]      = "rejected"
-    entry["rejected_at"] = datetime.utcnow().isoformat()
-    _write_pending(pending)
-    return {"status": "rejected", "word": word}
-
-
-async def _reindex_matching_skipped(word: str, category: str):
-    print(f"[REINDEX] Starting background re-index for word='{word}' category='{category}'")
-
-    all_skipped = []
-    offset      = None
-    while True:
-        results, next_offset = client.scroll(
-            collection_name=SKIPPED_COLLECTION,
-            limit=250,
-            offset=offset,
-            with_payload=True,
-            with_vectors=False,
-        )
-        if not results:
-            break
-        for pt in results:
-            p = pt.payload
-            if word.lower() in p.get("name", "").lower():
-                all_skipped.append({"point_id": str(pt.id), **p})
-        if next_offset is None:
-            break
-        offset = next_offset
-
-    if not all_skipped:
-        print(f"[REINDEX] No skipped products match word='{word}'")
-        return
-
-    print(f"[REINDEX] Found {len(all_skipped)} skipped products matching '{word}'")
-    semaphore = asyncio.Semaphore(3)
-
-    async def reindex_one(product: dict):
-        async with semaphore:
-            name       = product.get("name", "")
-            img_url    = product.get("image_url", "")
-            point_id   = product.get("point_id", "")
-            store      = product.get("store_name", "")
-            mall       = product.get("mall_name", "")
-            price      = product.get("price", "")
-            product_id = product.get("product_id", "")
-
-            if not img_url:
-                return
-
-            try:
-                async with httpx.AsyncClient() as http:
-                    img_resp = await http.get(img_url, timeout=15.0, follow_redirects=True)
-                    img_resp.raise_for_status()
-                    img_bytes    = img_resp.content
-                    content_type = img_resp.headers.get("content-type", "image/jpeg")
-
-                    idx_resp = await http.post(
-                        f"{VISUAL_URL}/index-image",
-                        files={"file": ("product.jpg", img_bytes, content_type)},
-                        data={"title": name},
-                        timeout=90.0,
-                    )
-                    idx_resp.raise_for_status()
-                    idx_data = idx_resp.json()
-
-                if idx_data.get("skipped"):
-                    print(f"  [REINDEX] Still skipped: '{name}' — {idx_data.get('skip_reason')}")
-                    return
-
-                vector_normal  = idx_data["vector_normal"]
-                final_category = idx_data.get("category", category)
-                new_box_source = idx_data.get("box_source", "unknown")
-                shoe_style     = idx_data.get("shoe_style")
-
-                payload = {
-                    "name":         name,
-                    "store_name":   store,
-                    "mall_name":    mall,
-                    "image_url":    img_url,
-                    "category_tag": final_category,
-                    "price":        price,
-                    "product_id":   product_id,
-                    "box_source":   new_box_source,
-                }
-                if shoe_style:
-                    payload["shoe_style"] = shoe_style
-
-                client.upsert(
-                    collection_name=COLLECTION_NAME,
-                    points=[PointStruct(
-                        id      = str(uuid.uuid5(uuid.NAMESPACE_URL, img_url)),
-                        vector  = vector_normal,
-                        payload = payload,
-                    )]
-                )
-
-                if point_id:
-                    client.delete(
-                        collection_name=SKIPPED_COLLECTION,
-                        points_selector=models.PointIdsList(points=[point_id]),
-                    )
-
-                print(f"  [REINDEX] OK: '{name}' → {final_category} ({new_box_source})")
-
-            except Exception as e:
-                print(f"  [REINDEX] Failed: '{name}' — {e}")
-
-    await asyncio.gather(*[reindex_one(p) for p in all_skipped])
-    print(f"[REINDEX] Done for word='{word}'")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

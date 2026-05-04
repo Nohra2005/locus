@@ -49,10 +49,6 @@ export default defineConfig({
       "/store-stats":     { target: "http://localhost:8000", changeOrigin: true },
       "/add-bulk-batch":  { target: "http://localhost:8000", changeOrigin: true },
       "/scrape":              { target: "http://localhost:8000", changeOrigin: true },
-      "/whitelist-suggest":     { target: "http://localhost:8000", changeOrigin: true },
-      "/whitelist-suggestions": { target: "http://localhost:8000", changeOrigin: true },
-      "/whitelist-approve":     { target: "http://localhost:8000", changeOrigin: true },
-      "/whitelist-reject":      { target: "http://localhost:8000", changeOrigin: true },
     },
   },
 });
