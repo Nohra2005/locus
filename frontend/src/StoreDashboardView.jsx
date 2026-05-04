@@ -869,9 +869,8 @@ function UploadPage({ auth }) {
         padding: 4, width: "fit-content",
       }}>
         {[
-          { id: "csv",       label: "CSV / Excel",     icon: "📋" },
-          { id: "scrape",    label: "Scrape Website",  icon: "🌐" },
-          { id: "whitelist", label: "Suggest Category", icon: "◈" },
+          { id: "csv",    label: "CSV / Excel",    icon: "📋" },
+          { id: "scrape", label: "Scrape Website", icon: "🌐" },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             padding: "8px 20px", borderRadius: 7, border: "none", cursor: "pointer",
@@ -886,9 +885,8 @@ function UploadPage({ auth }) {
         ))}
       </div>
 
-      {tab === "csv"       && <CsvUploadPanel       auth={auth} />}
-      {tab === "scrape"    && <ScrapeWebsitePanel   auth={auth} />}
-      {tab === "whitelist" && <WhitelistSuggestPanel auth={auth} />}
+      {tab === "csv"    && <CsvUploadPanel     auth={auth} />}
+      {tab === "scrape" && <ScrapeWebsitePanel auth={auth} />}
     </div>
   );
 }
