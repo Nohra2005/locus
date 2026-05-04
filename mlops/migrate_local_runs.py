@@ -6,9 +6,10 @@ The original mlops/mlflow.db is gone, so metrics are hardcoded from known result
 Run once:
     python mlops/migrate_local_runs.py
 """
+import os
 import mlflow
 
-REMOTE_URI = "http://localhost:5000"
+REMOTE_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 
 mlflow.set_tracking_uri(REMOTE_URI)
 

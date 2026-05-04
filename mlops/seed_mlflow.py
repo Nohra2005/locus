@@ -4,11 +4,12 @@ seed_mlflow.py — Cleans up killed/zombie runs and seeds hyperparameter search 
 Run once:
     python mlops/seed_mlflow.py
 """
+import os
 import time
 import mlflow
 from mlflow.tracking import MlflowClient
 
-TRACKING_URI  = "http://localhost:5000"
+TRACKING_URI  = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 RETRAIN_EXP   = "locus_lora_retraining"
 HPARAM_EXP    = "locus_hyperparam_search"
 

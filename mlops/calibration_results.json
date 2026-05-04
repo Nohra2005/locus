@@ -192,18 +192,18 @@
     "query_name": "cream chunky knit oversized sweater",
     "category": "sweater",
     "generic": false,
-    "avg_score": 0.86,
+    "avg_score": 0.858,
     "pair_scores": [
       0.92,
       0.82,
-      0.89,
+      0.88,
       0.82,
       0.85
     ],
     "scores_by_id": {
       "6f70e536-aa97-53e7-810d-a8ed3c4d8731": 0.92,
       "cbf3f03c-846d-5dc0-ada0-24017941a78e": 0.82,
-      "a75477bc-92c0-52f1-ae5f-dfa362bf5f15": 0.89,
+      "a75477bc-92c0-52f1-ae5f-dfa362bf5f15": 0.88,
       "b0398833-63f4-540e-86fb-677fa70dcdd3": 0.82,
       "b6b01fa3-2d67-579d-82d1-0d1990091a64": 0.85
     },
@@ -213,18 +213,18 @@
     "query_name": "brown open front cardigan",
     "category": "sweater",
     "generic": false,
-    "avg_score": 0.868,
+    "avg_score": 0.872,
     "pair_scores": [
-      0.88,
-      0.78,
-      0.88,
+      0.89,
+      0.82,
+      0.85,
       0.92,
       0.88
     ],
     "scores_by_id": {
-      "be4b8f3c-3f5c-5e37-ad1f-76bd2782e41a": 0.88,
-      "732104c6-527d-5ddc-8d25-d7b322a5049f": 0.78,
-      "1cd5c10d-793f-5178-97c6-522406ab69e9": 0.88,
+      "be4b8f3c-3f5c-5e37-ad1f-76bd2782e41a": 0.89,
+      "732104c6-527d-5ddc-8d25-d7b322a5049f": 0.82,
+      "1cd5c10d-793f-5178-97c6-522406ab69e9": 0.85,
       "18f5d801-c402-589e-9c4e-e26351456f2d": 0.92,
       "c1ad4b6d-a455-5ecd-bb3e-54b79e568c6a": 0.88
     },
@@ -423,16 +423,16 @@
     "query_name": "black shoulder bag",
     "category": "bag",
     "generic": true,
-    "avg_score": 0.88,
+    "avg_score": 0.876,
     "pair_scores": [
-      0.9,
+      0.88,
       0.9,
       0.85,
       0.9,
       0.85
     ],
     "scores_by_id": {
-      "6d82e4da-7f58-5259-a1c9-2cfcdee30ab1": 0.9,
+      "6d82e4da-7f58-5259-a1c9-2cfcdee30ab1": 0.88,
       "5edd9e54-76f5-5286-8291-6ea4615f0398": 0.9,
       "317ca124-1663-56ef-b51f-83eabb858f52": 0.85,
       "aea7cba4-c7ae-54e3-b13d-dd10078e985c": 0.9,
@@ -549,20 +549,18 @@
     "query_name": "black cap",
     "category": "hat",
     "generic": true,
-    "avg_score": 0.83,
+    "avg_score": 0.873,
     "pair_scores": [
-      0.95,
-      0.65,
+      0.88,
+      0.88,
       0.85,
-      0.85,
-      0.85
+      0.88
     ],
     "scores_by_id": {
-      "ee3da7e3-9516-543c-96eb-5a79a7a25fe8": 0.95,
-      "4327840b-94d7-5d68-ae2c-e48292064a21": 0.65,
-      "e97d4fbc-496c-5ed2-862d-768c7d26acbe": 0.85,
+      "4327840b-94d7-5d68-ae2c-e48292064a21": 0.88,
+      "e97d4fbc-496c-5ed2-862d-768c7d26acbe": 0.88,
       "2818e90d-e5f5-5880-860a-13ac59dd8767": 0.85,
-      "83266ad5-4d9f-5c43-be32-626fc4e22369": 0.85
+      "83266ad5-4d9f-5c43-be32-626fc4e22369": 0.88
     },
     "label": "PASS"
   },

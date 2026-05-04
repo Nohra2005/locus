@@ -122,10 +122,12 @@ services:
       - --backend-store-uri=/mlflow/mlruns
       - --default-artifact-root=mlflow-artifacts:/
       - --serve-artifacts
-      - --gunicorn-opts=--workers 2 --timeout 120
+      - --workers=1
+      - --gunicorn-opts=--timeout 120
     volumes:
       - mlflow_data:/mlflow
-    mem_limit: 700m
+    mem_limit: 1.2g
+    memswap_limit: 1.2g
     restart: on-failure
 
   # ── 6. Link Health Monitor (disabled — runs via GitHub Actions / manual) ──
@@ -166,6 +168,8 @@ services:
     depends_on:
       - gateway
       - mlflow
+    mem_limit: 2g
+    memswap_limit: 2g
     restart: "no"
     dns:
       - 8.8.8.8
@@ -195,8 +199,14 @@ services:
     image: prom/prometheus:latest
     ports:
       - "9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=512MB
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    mem_limit: 512m
+    memswap_limit: 512m
     restart: unless-stopped
 
   # ── 10. Grafana ───────────────────────────────────────────────────
@@ -213,6 +223,8 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    mem_limit: 300m
+    memswap_limit: 300m
     restart: unless-stopped
 
 volumes:

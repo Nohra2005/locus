@@ -21,6 +21,7 @@ Usage:
 """
 
 import argparse
+import gc
 import json
 import os
 import sys
@@ -240,6 +241,7 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
             output_dir     = str(run_dir),
             mlflow_run_id  = mlflow_run_id,
         )
+        gc.collect()  # release fashion-CLIP + training tensors before loading eval models
 
         # ── Step 4: Evaluate via judge benchmark ──────────────────────────
         print("\n[RETRAIN] Step 4/5: Judge benchmark — old vs new model (20 queries × top-5)...")
@@ -250,6 +252,7 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
             api_key                    = OPENROUTER_API_KEY,
         )
         delta = new_avg - old_avg
+        gc.collect()  # release eval models before triggering reindex + artifact upload
         print(f"[RETRAIN] OLD avg={old_avg:.4f}  NEW avg={new_avg:.4f}  delta={delta:+.4f}")
         print(f"[RETRAIN] Promotion threshold: new_avg > old_avg + {PROMOTION_DELTA}")
 
