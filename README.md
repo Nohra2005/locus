@@ -45,7 +45,6 @@ Supporting services on the same VM (accessible for demo/review):
 |---------|------|-----|
 | MLflow | 5000 | `http://20.240.203.22:5000` |
 | Grafana | 3000 | `http://20.240.203.22:3000` (admin / admin) |
-| Prometheus | 9090 | `http://20.240.203.22:9090` |
 
 ---
 
