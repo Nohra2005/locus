@@ -465,10 +465,11 @@ function AuthPage({ onAuth }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const NAV_ITEMS = [
-  { id: "dashboard", label: "Dashboard",  icon: "⊞" },
-  { id: "inventory", label: "Inventory",  icon: "◫" },
-  { id: "upload",    label: "Upload",     icon: "↑" },
-  { id: "settings",  label: "Settings",   icon: "⚙" },
+  { id: "dashboard", label: "Dashboard",        icon: "⊞" },
+  { id: "inventory", label: "Inventory",         icon: "◫" },
+  { id: "upload",    label: "Upload",            icon: "↑" },
+  { id: "suggest",   label: "Suggest Category",  icon: "◈" },
+  { id: "settings",  label: "Settings",          icon: "⚙" },
 ];
 
 function PortalLayout({ auth, page, onPage, onLogout, onProfileUpdate }) {
@@ -538,6 +539,7 @@ function PortalLayout({ auth, page, onPage, onLogout, onProfileUpdate }) {
           {page === "dashboard" && <DashboardPage auth={auth} onPage={onPage} />}
           {page === "inventory" && <InventoryPage auth={auth} />}
           {page === "upload"    && <UploadPage    auth={auth} />}
+          {page === "suggest"   && <WhitelistSuggestPanel auth={auth} />}
           {page === "settings"  && <SettingsPage  auth={auth} onProfileUpdate={onProfileUpdate} onLogout={onLogout} />}
         </div>
       </main>
