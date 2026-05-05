@@ -443,6 +443,14 @@ locus_stores_registered = Gauge(
     "locus_stores_registered_total",
     "Total number of registered store accounts",
 )
+locus_stores_missing_info = Gauge(
+    "locus_stores_missing_info_total",
+    "Registered stores missing store_name, phone, or email in users.json",
+)
+locus_link_monitor_broken = Gauge(
+    "locus_link_monitor_broken_total",
+    "Product URLs that returned 404 or failed in the last link health check",
+)
 _known_store_label_sets: set[tuple] = set()  # tracks label combos so deleted stores can be zeroed
 
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
@@ -630,6 +638,7 @@ async def _refresh_link_monitor_metrics():
                     next_ts = last_ts + LINK_MONITOR_INTERVAL
                     locus_link_monitor_last_run.set(last_ts)
                     locus_link_monitor_next_run.set(next_ts)
+                locus_link_monitor_broken.set(report.get("broken_found", 0))
         except Exception as e:
             print(f"[METRICS] Could not refresh link monitor metrics: {e}")
         await asyncio.sleep(60)
@@ -711,6 +720,11 @@ def _refresh_store_registry_metrics() -> None:
             pass
     _known_store_label_sets = current
     locus_stores_registered.set(len(users))
+    missing = sum(
+        1 for u in users.values()
+        if not u.get("store_name") or not u.get("email") or not u.get("phone")
+    )
+    locus_stores_missing_info.set(missing)
 
 
 @app.on_event("startup")
@@ -1784,6 +1798,7 @@ async def search_items(
             best_per_product[product_id] = {
                 "name":       hit.payload.get("name", "Unknown"),
                 "store_name": hit.payload.get("store_name", "Unknown"),
+                "store":      hit.payload.get("store_name", ""),
                 "mall_name":  hit.payload.get("mall_name", "Unknown"),
                 "price":      hit.payload.get("price", ""),
                 "score":      round(hit.score, 3),
@@ -1967,6 +1982,7 @@ async def refine_results(body: RefineRequest):
             best_per_product[pid] = {
                 "name":       hit.payload.get("name", "Unknown"),
                 "store_name": hit.payload.get("store_name", "Unknown"),
+                "store":      hit.payload.get("store_name", ""),
                 "mall_name":  hit.payload.get("mall_name", "Unknown"),
                 "price":      hit.payload.get("price", ""),
                 "score":      round(hit.score, 3),

@@ -92,6 +92,23 @@ gemini_score_bucket       = Gauge("locus_gemini_score_bucket",          "Count o
 gemini_avg_vss5_by_cat    = Gauge("locus_gemini_avg_vss5_by_category", "Avg VSS@5 per clothing category",    ["category"])
 golden_dataset_size       = Gauge("locus_golden_dataset_size",          "Number of queries in golden_dataset.json")
 
+# ── LoRA run health (populated from MLflow run history) ───────────────────────
+lora_failed_runs      = Gauge("locus_lora_failed_runs_total",        "Runs that ended with FAILED status")
+lora_avg_duration     = Gauge("locus_lora_avg_run_duration_seconds", "Average wall-clock time of completed retrain runs")
+lora_last_duration    = Gauge("locus_lora_last_run_duration_seconds","Duration of the most recent completed run in seconds")
+lora_data_points      = Gauge("locus_lora_data_points_used",         "training_pairs count from the last training run")
+
+# TODO: populate these from a post-train hit@5 eval step in retrain_clip.py
+lora_new_hit5         = Gauge("locus_lora_new_hit5",                 "New model hit@5 (requires post-train eval in retrain_clip.py)")
+lora_new_acs5         = Gauge("locus_lora_new_acs5",                 "New model ACS@5 (requires post-train eval in retrain_clip.py)")
+lora_baseline_hit5    = Gauge("locus_baseline_hit5",                 "Baseline model hit@5 (requires post-train eval in retrain_clip.py)")
+lora_last_error_code  = Gauge("locus_lora_last_error_code",          "Error code of last failed run (0=none; requires error tagging in pipeline)")
+
+# ── Recall eval (populated from locus_recall_eval MLflow experiment) ──────────
+recall_at_5           = Gauge("locus_recall_at_5",  "Recall@5 from latest locus_recall_eval MLflow run")
+recall_at_10          = Gauge("locus_recall_at_10", "Recall@10 from latest locus_recall_eval MLflow run")
+recall_at_25          = Gauge("locus_recall_at_25", "Recall@25 from latest locus_recall_eval MLflow run")
+
 
 def _get_mlflow_client():
     import mlflow
@@ -143,8 +160,31 @@ def _refresh_retrain_metrics(client) -> None:
         if j_d is not None:
             judge_delta.set(round(float(j_d), 4))
 
+        # ── Run health metrics ────────────────────────────────────────────────
+        failed = [r for r in all_runs if r.info.status == "FAILED"]
+        lora_failed_runs.set(len(failed))
+
+        # Duration stats from FINISHED runs (MLflow timestamps are milliseconds)
+        durations = [
+            (r.info.end_time - r.info.start_time) / 1000.0
+            for r in finished
+            if r.info.end_time
+        ]
+        if durations:
+            lora_last_duration.set(round(durations[0], 1))  # latest first (sorted above)
+            lora_avg_duration.set(round(sum(durations) / len(durations), 1))
+
+        # Data points used (training_pairs param)
+        dp = latest.data.params.get("training_pairs")
+        if dp is not None:
+            try:
+                lora_data_points.set(int(dp))
+            except (ValueError, TypeError):
+                pass
+
         print(
             f"[exporter] Retrain — runs={len(all_runs)} promoted={promoted_count} "
+            f"failed={len(failed)} "
             f"latest_outcome={outcome} "
             f"judge_old={j_old} judge_new={j_new} judge_delta={j_d}"
         )
@@ -284,6 +324,35 @@ def _refresh_gemini_metrics() -> None:
     )
 
 
+def _refresh_recall_metrics(client) -> None:
+    """Pull recall@K scores from the latest locus_recall_eval MLflow run."""
+    try:
+        exp = client.get_experiment_by_name("locus_recall_eval")
+        if exp is None:
+            return
+        runs = client.search_runs(
+            experiment_ids=[exp.experiment_id],
+            filter_string="attributes.status = 'FINISHED'",
+            order_by=["start_time DESC"],
+            max_results=1,
+        )
+        if not runs:
+            return
+        latest = runs[0]
+        for k, gauge in ((5, recall_at_5), (10, recall_at_10), (25, recall_at_25)):
+            val = latest.data.metrics.get(f"recall_at_{k}")
+            if val is not None:
+                gauge.set(round(float(val), 4))
+        print(
+            f"[exporter] Recall eval — "
+            f"recall@5={latest.data.metrics.get('recall_at_5')} "
+            f"recall@10={latest.data.metrics.get('recall_at_10')} "
+            f"recall@25={latest.data.metrics.get('recall_at_25')}"
+        )
+    except Exception as e:
+        print(f"[exporter] Could not read locus_recall_eval from MLflow: {e}")
+
+
 def _refresh_golden_dataset_size() -> None:
     if not os.path.exists(GOLDEN_DATASET_PATH):
         return
@@ -301,6 +370,7 @@ def refresh() -> None:
         client = _get_mlflow_client()
         _refresh_retrain_metrics(client)
         _refresh_live_training_metrics(client)
+        _refresh_recall_metrics(client)
     except Exception as e:
         print(f"[exporter] MLflow connection error: {e}")
     _refresh_gemini_metrics()

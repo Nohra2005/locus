@@ -205,6 +205,7 @@ services:
       - --storage.tsdb.retention.size=512MB
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
     mem_limit: 512m
     memswap_limit: 512m
     restart: unless-stopped

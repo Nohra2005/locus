@@ -5,6 +5,28 @@ AI in Industry — EECE503N / EECE798N
 
 ---
 
+## Professor / Reviewer Access
+
+The repository has read-only access via the shared GitHub link.
+
+**SSH into the VM (read-only review):**
+```bash
+ssh -i locus-vm_key.pem azureuser@20.240.203.22
+```
+The `.pem` key and `.env` file (containing all API keys) were shared separately via email.
+
+All services are accessible over HTTP on the public IP — no authentication is required for demo endpoints (`/search`, `/health`, `/detect`).
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Frontend | `http://20.240.203.22:5173` | — |
+| API | `http://20.240.203.22:30800` | — |
+| Grafana | `http://20.240.203.22:3000` | admin / moushou |
+| Prometheus | `http://20.240.203.22:9090` | — |
+| MLflow | `http://20.240.203.22:5000` | — |
+
+---
+
 ## Required API Keys
 
 | Key | Required for | Where to obtain |
@@ -44,7 +66,8 @@ Supporting services on the same VM (accessible for demo/review):
 | Service | Port | URL |
 |---------|------|-----|
 | MLflow | 5000 | `http://20.240.203.22:5000` |
-| Grafana | 3000 | `http://20.240.203.22:3000` (admin / admin) |
+| Grafana | 3000 | `http://20.240.203.22:3000` (admin / moushou) |
+| Prometheus | 9090 | `http://20.240.203.22:9090` |
 
 ---
 
@@ -88,25 +111,118 @@ curl http://20.240.203.22:8000/health
 
 ---
 
-## Running the Test Suite
+## Comprehensive Testing Guide
 
-All tests run against a live stack (local or cloud). Start services before running integration/E2E tests.
+### 1. Automated test suites
+
+All tests run against a live stack. Start services before running integration/E2E tests.
 
 ```bash
-# Install test dependencies
 pip install -r requirements-test.txt   # or: pip install pytest httpx requests pillow
 
-# Unit tests (no running services needed)
+# Unit tests — no running services needed
 pytest tests/test_vectorizer.py -v
 
-# Integration tests (requires local stack on localhost:8000 and localhost:8001)
+# Integration tests — requires local stack on localhost:8000 and localhost:8001
 pytest tests/test_smoke.py tests/test_pipeline.py tests/test_auth_store.py -v
 
-# End-to-end tests (runs against the live Azure deployment)
+# End-to-end tests — runs against the live Azure deployment
 pytest tests/test_e2e.py -v
 ```
 
 CI runs all four suites automatically on every push to `main` via `.github/workflows/ci.yml`.
+
+---
+
+### 2. Service health checks
+
+Verify every service is reachable:
+
+```bash
+BASE=http://20.240.203.22   # or http://localhost for local stack
+
+curl $BASE:8000/health       # Gateway        → {"status": "ok", ...}
+curl $BASE:8001/health       # Visual Engine  → {"status": "ok"}
+curl $BASE:8004/health       # Attr Tagger    → {"status": "ok"}
+curl $BASE:8003/metrics      # MLops Exporter → Prometheus text format
+```
+
+---
+
+### 3. Manual end-to-end walkthrough
+
+**Step 1 — Run a visual search:**
+```bash
+curl -X POST $BASE:8000/search \
+  -F "file=@/path/to/clothing.jpg" \
+  -F "top_k=5"
+# Expect: {"matches": [...], "search_id": "...", "detected_category": "..."}
+```
+Each match will have `name`, `store_name`, `store`, `price`, `score`, `image_url`.
+
+**Step 2 — Submit feedback:**
+```bash
+curl -X POST $BASE:8000/feedback \
+  -H "Content-Type: application/json" \
+  -d '{"product_id": "<product_id from search>", "stars": 5}'
+# Expect: {"status": "ok"}
+```
+
+**Step 3 — Track a click event (store analytics):**
+```bash
+curl -X POST $BASE:8000/track-event \
+  -H "Content-Type: application/json" \
+  -d '{"event_type": "result_click", "position": 1, "store": "Mikesport"}'
+# Then verify the counter appeared in Prometheus:
+curl $BASE:8000/metrics | grep locus_store_result_clicks
+```
+
+---
+
+### 4. Prometheus target verification
+
+Open `http://20.240.203.22:9090/targets` — all 4 jobs should show **State: UP**:
+
+| Job | Target |
+|-----|--------|
+| gateway | gateway:8000 |
+| visual_engine | visual_engine:8001 |
+| attribute_tagger | attribute_tagger:8004 |
+| mlops_exporter | mlops_exporter:8003 |
+
+Open `http://20.240.203.22:9090/alerts` — 10 alert rules should appear (all **Inactive** in normal operation).
+
+---
+
+### 5. Grafana dashboard walkthrough
+
+Open `http://20.240.203.22:3000` → login `admin / moushou` → open **Locus — Admin Dashboard**.
+
+| Section | What to verify |
+|---------|----------------|
+| Service Health Bulbs | All 8 bulbs green |
+| System Overview | Searches/min counter ticks after a search |
+| Gemini Judge — Search Quality | Avg VSS@5 ≥ 0.85 |
+| LoRA Retraining Pipeline | LoRA run outcomes visible after any retrain |
+| Customer Feedback & Ratings | Total Ratings increments after feedback |
+| Store & Retailer Analytics | Impressions/Clicks panels show 0 (not NO DATA) before first search; populate after interactions |
+| Visual Engine Performance | CLIP Confidence P50 visible after a search |
+
+---
+
+### 6. MLflow experiment verification
+
+```bash
+# Seed historical data (demo runs) if starting fresh
+python mlops/seed_mlflow.py
+
+# Run recall evaluation and log to MLflow
+python mlops/evaluate_recall.py --gateway-url http://20.240.203.22:8000 --k 5 --mlflow
+```
+
+Open `http://20.240.203.22:5000` → experiment **locus_recall_eval** → latest run should show `recall_at_5 ≥ 0.9`.
+
+After the recall eval run, the Prometheus metric `locus_recall_at_5` will appear at `http://20.240.203.22:8003/metrics` within 30 seconds (the exporter refresh interval).
 
 ---
 

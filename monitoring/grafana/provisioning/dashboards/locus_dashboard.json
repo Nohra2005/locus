@@ -6399,12 +6399,211 @@
       "type": "table"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Times a product from each store appeared in search results. Refreshed on each search.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 165
+      },
+      "id": 1400,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "text": {}
+      },
+      "pluginVersion": "10.4.3",
+      "targets": [
+        {
+          "expr": "sort_desc(locus_store_impressions_total) or on() vector(0)",
+          "instant": true,
+          "legendFormat": "{{store}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Impressions per Store",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Times a result card from each store was clicked to open the detail sheet.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 165
+      },
+      "id": 1401,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "text": {}
+      },
+      "pluginVersion": "10.4.3",
+      "targets": [
+        {
+          "expr": "sort_desc(locus_store_result_clicks_total) or on() vector(0)",
+          "instant": true,
+          "legendFormat": "{{store}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Result Clicks per Store",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Times a user clicked View on store website for each store.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "gradientMode": "none"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 173
+      },
+      "id": 1402,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "text": {}
+      },
+      "pluginVersion": "10.4.3",
+      "targets": [
+        {
+          "expr": "sort_desc(locus_store_website_clicks_total) or on() vector(0)",
+          "instant": true,
+          "legendFormat": "{{store}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Website Clicks per Store",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Website clicks divided by impressions per store. Shows which stores convert search views into actual visits.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.05
+              },
+              {
+                "color": "green",
+                "value": 0.15
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 173
+      },
+      "id": 1403,
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "text": {}
+      },
+      "pluginVersion": "10.4.3",
+      "targets": [
+        {
+          "expr": "locus_store_website_clicks_total / clamp_min(locus_store_impressions_total, 1)",
+          "instant": true,
+          "legendFormat": "{{store}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Store Conversion Rate (clicks / impressions)",
+      "type": "bargauge"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 165
+        "y": 181
       },
       "id": 1200,
       "title": "Store Admin â€” Registry & Management",
@@ -6440,7 +6639,7 @@
         "h": 5,
         "w": 4,
         "x": 0,
-        "y": 166
+        "y": 182
       },
       "id": 1210,
       "options": {
@@ -6500,7 +6699,7 @@
         "h": 5,
         "w": 4,
         "x": 4,
-        "y": 166
+        "y": 182
       },
       "id": 1211,
       "options": {
@@ -6568,7 +6767,7 @@
         "h": 5,
         "w": 4,
         "x": 8,
-        "y": 166
+        "y": 182
       },
       "id": 1212,
       "options": {
@@ -6639,7 +6838,7 @@
         "h": 5,
         "w": 4,
         "x": 12,
-        "y": 166
+        "y": 182
       },
       "id": 1230,
       "options": {
@@ -6708,7 +6907,7 @@
         "h": 5,
         "w": 4,
         "x": 16,
-        "y": 166
+        "y": 182
       },
       "id": 1231,
       "options": {
@@ -6743,7 +6942,7 @@
         "h": 5,
         "w": 4,
         "x": 20,
-        "y": 166
+        "y": 182
       },
       "id": 1213,
       "options": {
@@ -6838,7 +7037,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 171
+        "y": 187
       },
       "id": 1220,
       "options": {
@@ -6948,7 +7147,7 @@
         "h": 10,
         "w": 14,
         "x": 0,
-        "y": 183
+        "y": 199
       },
       "id": 1240,
       "options": {
@@ -7008,7 +7207,7 @@
         "h": 10,
         "w": 5,
         "x": 14,
-        "y": 183
+        "y": 199
       },
       "id": 1241,
       "options": {
@@ -7103,7 +7302,7 @@
         "h": 10,
         "w": 5,
         "x": 19,
-        "y": 183
+        "y": 199
       },
       "id": 1242,
       "options": {
@@ -7209,7 +7408,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 193
+        "y": 209
       },
       "id": 1243,
       "options": {
@@ -7284,7 +7483,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 203
+        "y": 219
       },
       "id": 1300,
       "title": "Visual Engine Performance",
@@ -7355,7 +7554,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 204
+        "y": 220
       },
       "id": 1301,
       "options": {
@@ -7449,7 +7648,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 204
+        "y": 220
       },
       "id": 1302,
       "options": {
@@ -7541,7 +7740,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 211
+        "y": 227
       },
       "id": 1304,
       "options": {
