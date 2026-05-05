@@ -64,14 +64,16 @@ def _fetch_image(url: str, timeout: int = 5, retries: int = 1) -> Optional[Image
     # Serve golden-dataset images from the git-tracked local copy (avoids gateway timeout in CI)
     if "/golden-dataset/images/" in url:
         image_id = url.split("/golden-dataset/images/")[-1].strip("/")
-        candidates = list(GOLDEN_IMAGES_DIR.glob(f"{image_id}*.jpeg"))
+        # Strip extension if the URL already includes it (e.g. .../images/abc123.jpeg)
+        image_stem = image_id.rsplit(".", 1)[0] if "." in image_id else image_id
+        candidates = list(GOLDEN_IMAGES_DIR.glob(f"{image_stem}*.jpeg"))
         if candidates:
             try:
                 return Image.open(candidates[0]).convert("RGB")
             except Exception as e:
-                print(f"  [WARN] Disk image load failed for {image_id}: {e}")
+                print(f"  [WARN] Disk image load failed for {image_stem}: {e}")
         else:
-            print(f"  [WARN] golden-dataset image not found on disk: {image_id} (dir={GOLDEN_IMAGES_DIR}, exists={GOLDEN_IMAGES_DIR.exists()})")
+            print(f"  [WARN] golden-dataset image not found on disk: {image_stem} (dir={GOLDEN_IMAGES_DIR}, exists={GOLDEN_IMAGES_DIR.exists()})")
 
     last_err = None
     for attempt in range(retries):
