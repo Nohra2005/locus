@@ -2877,7 +2877,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px\">\n  <button onclick=\"fetch(location.protocol+'//'+location.hostname+':8000'+'/trigger-retrain',{method:'POST'}).then(r=>r.json()).then(d=>alert('Triggered: '+JSON.stringify(d))).catch(e=>alert('Error: '+e))\" style=\"background:#4caf50;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:0.9rem;font-weight:700;cursor:pointer\">&#9654; Trigger Retrain</button>\n  <p style=\"color:#666;font-size:0.72rem;text-align:center;margin:0\">POST /trigger-retrain</p>\n</div>",
+        "content": "<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px\">\n  <button onclick=\"fetch(location.protocol+'//'+location.hostname+':30800'+'/trigger-retrain',{method:'POST'}).then(r=>r.json()).then(d=>alert('Triggered: '+JSON.stringify(d))).catch(e=>alert('Error: '+e))\" style=\"background:#4caf50;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:0.9rem;font-weight:700;cursor:pointer\">&#9654; Trigger Retrain</button>\n  <p style=\"color:#666;font-size:0.72rem;text-align:center;margin:0\">POST /trigger-retrain</p>\n</div>",
         "mode": "html"
       },
       "pluginVersion": "10.4.3",
@@ -5869,7 +5869,17 @@
       },
       "fieldConfig": {
         "defaults": {
-          "mappings": [],
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Never run",
+                  "index": 0
+                }
+              }
+            }
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -5935,7 +5945,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px\">\n  <a href=\"http://localhost:8000/trigger-link-check\" target=\"_blank\" style=\"text-decoration:none\">\n    <button style=\"background:#c9a96e;color:#0a0a0a;border:none;padding:10px 24px;border-radius:6px;font-size:0.9rem;font-weight:700;cursor:pointer\">&#9654; Run Link Check Now</button>\n  </a>\n  <p style=\"color:#555;font-size:0.72rem;text-align:center;margin:0\">GET /trigger-link-check</p>\n</div><script>(function(){document.querySelectorAll('a[href]').forEach(function(a){a.href=a.href.replace('localhost',location.hostname)});})();</script>",
+        "content": "<div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:10px\">\n  <a href=\"http://localhost:30800/trigger-link-check\" target=\"_blank\" style=\"text-decoration:none\">\n    <button style=\"background:#c9a96e;color:#0a0a0a;border:none;padding:10px 24px;border-radius:6px;font-size:0.9rem;font-weight:700;cursor:pointer\">&#9654; Run Link Check Now</button>\n  </a>\n  <p style=\"color:#555;font-size:0.72rem;text-align:center;margin:0\">GET /trigger-link-check</p>\n</div><script>(function(){document.querySelectorAll('a[href]').forEach(function(a){a.href=a.href.replace('localhost',location.hostname)});})();</script>",
         "mode": "html"
       },
       "pluginVersion": "10.4.3",

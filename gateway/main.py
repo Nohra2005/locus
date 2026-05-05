@@ -636,8 +636,8 @@ async def _refresh_link_monitor_metrics():
                         run_at = run_at.replace(tzinfo=timezone.utc)
                     last_ts = run_at.timestamp()
                     next_ts = last_ts + LINK_MONITOR_INTERVAL
-                    locus_link_monitor_last_run.set(last_ts)
-                    locus_link_monitor_next_run.set(next_ts)
+                    locus_link_monitor_last_run.set(last_ts * 1000)
+                    locus_link_monitor_next_run.set(next_ts * 1000)
                 locus_link_monitor_broken.set(report.get("broken_found", 0))
         except Exception as e:
             print(f"[METRICS] Could not refresh link monitor metrics: {e}")

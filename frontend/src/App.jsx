@@ -951,30 +951,17 @@ function LandingView({ onUpload, error, history, saved, onToggleSave, onCardClic
         <div style={{ display: "flex", alignItems: "center", gap: 14, paddingLeft: 24, paddingRight: 24, marginBottom: 32 }}>
           <div style={{ flex: 1, height: "1px", background: T.borderFaint }} />
           <span style={{ fontSize: "0.48rem", letterSpacing: "0.2em", textTransform: "uppercase", color: T.textFaint, whiteSpace: "nowrap" }}>
-            hot nearby
+            hot right now
           </span>
           <div style={{ flex: 1, height: "1px", background: T.borderFaint }} />
         </div>
 
-        {/* Hot Nearby — Women */}
+        {/* Hot Right Now */}
         <DiscoverSection
-          title="Women's Picks"
-          subtitle="Hot nearby · Women"
-          badge="women"
-          items={discover?.women ?? []}
-          saved={saved}
-          onToggleSave={onToggleSave}
-          onCardClick={onCardClick}
-          onFeedback={onFeedback}
-          loading={loading}
-        />
-
-        {/* Hot Nearby — Men */}
-        <DiscoverSection
-          title="Men's Picks"
-          subtitle="Hot nearby · Men"
-          badge="men"
-          items={discover?.men ?? []}
+          title="Hot Right Now"
+          subtitle="Trending across all styles"
+          badge="trending"
+          items={discover?.trending ?? []}
           saved={saved}
           onToggleSave={onToggleSave}
           onCardClick={onCardClick}
