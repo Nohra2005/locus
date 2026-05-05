@@ -17,33 +17,36 @@ kind: Service
 metadata:
   name: visual-engine
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: visual-engine
   ports:
     - port: 8001
       targetPort: 8001
+      nodePort: 30801
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: attribute-tagger
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: attribute-tagger
   ports:
     - port: 8004
       targetPort: 8004
+      nodePort: 30804
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: mlops-exporter
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: mlops-exporter
   ports:
     - port: 8003
       targetPort: 8003
+      nodePort: 30803

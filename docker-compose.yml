@@ -206,6 +206,8 @@ services:
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     mem_limit: 512m
     memswap_limit: 512m
     restart: unless-stopped
