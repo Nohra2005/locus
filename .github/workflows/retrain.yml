@@ -33,9 +33,7 @@ jobs:
           OPENROUTER_API_KEY:  ${{ secrets.OPENROUTER_API_KEY }}
           GATEWAY_URL:         http://${{ secrets.VM_HOST }}:8000
           VISUAL_HOST:         http://${{ secrets.VM_HOST }}:8001
-          # Use local SQLite backend — GH runner can't reach VM's internal MLflow.
-          # Experiment metadata is written to mlops/mlflow.db (gitignored).
-          MLFLOW_TRACKING_URI: "sqlite:///mlflow.db"
+          MLFLOW_TRACKING_URI: "http://20.240.203.22:5000"
           SKIP_PROMOTE:        "true"
           # 150 steps ≈ 35 min on a free-tier 2-core runner; keeps total job < 90 min.
           MAX_TRAIN_STEPS:     "150"

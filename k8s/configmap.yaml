@@ -11,7 +11,7 @@ data:
   CORS_ORIGINS: "*"
   VISUAL_HOST: "http://visual-engine:8001"
   TAGGER_HOST: "http://attribute-tagger:8004"
-  MLFLOW_TRACKING_URI: "http://host.k3s.internal:5000"
+  MLFLOW_TRACKING_URI: "http://20.240.203.22:5000"
   GOLDEN_DATASET_PATH: "/mlops/golden_dataset.json"
   METRICS_PORT: "8003"
   REFRESH_SECS: "30"
