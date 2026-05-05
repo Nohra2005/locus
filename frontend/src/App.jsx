@@ -947,27 +947,6 @@ function LandingView({ onUpload, error, history, saved, onToggleSave, onCardClic
           />
         )}
 
-        {/* Section divider */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, paddingLeft: 24, paddingRight: 24, marginBottom: 32 }}>
-          <div style={{ flex: 1, height: "1px", background: T.borderFaint }} />
-          <span style={{ fontSize: "0.48rem", letterSpacing: "0.2em", textTransform: "uppercase", color: T.textFaint, whiteSpace: "nowrap" }}>
-            hot right now
-          </span>
-          <div style={{ flex: 1, height: "1px", background: T.borderFaint }} />
-        </div>
-
-        {/* Hot Right Now */}
-        <DiscoverSection
-          title="Hot Right Now"
-          subtitle="Trending across all styles"
-          badge="trending"
-          items={discover?.trending ?? []}
-          saved={saved}
-          onToggleSave={onToggleSave}
-          onCardClick={onCardClick}
-          onFeedback={onFeedback}
-          loading={loading}
-        />
 
       </div>
     </div>
