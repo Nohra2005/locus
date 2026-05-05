@@ -66,7 +66,12 @@ def _fetch_image(url: str, timeout: int = 5, retries: int = 1) -> Optional[Image
         image_id = url.split("/golden-dataset/images/")[-1].strip("/")
         candidates = list(GOLDEN_IMAGES_DIR.glob(f"{image_id}*.jpeg"))
         if candidates:
-            return Image.open(candidates[0]).convert("RGB")
+            try:
+                return Image.open(candidates[0]).convert("RGB")
+            except Exception as e:
+                print(f"  [WARN] Disk image load failed for {image_id}: {e}")
+        else:
+            print(f"  [WARN] golden-dataset image not found on disk: {image_id} (dir={GOLDEN_IMAGES_DIR}, exists={GOLDEN_IMAGES_DIR.exists()})")
 
     last_err = None
     for attempt in range(retries):
