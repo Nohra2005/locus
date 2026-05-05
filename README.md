@@ -19,7 +19,7 @@ All services are accessible over HTTP on the public IP — no authentication is 
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| Frontend | `http://20.240.203.22:5173` | — |
+| Frontend | `http://20.240.203.22:30800` | — |
 | API | `http://20.240.203.22:30800` | — |
 | Grafana | `http://20.240.203.22:3000` | admin / moushou |
 | Prometheus | `http://20.240.203.22:9090` | — |
@@ -158,7 +158,7 @@ curl http://20.240.203.22:30803/metrics   # MLops Exporter
 
 **Step 1 — Run a visual search:**
 ```bash
-curl -X POST $BASE:8000/search \
+curl -X POST http://20.240.203.22:30800/search \
   -F "file=@/path/to/clothing.jpg" \
   -F "top_k=5"
 # Expect: {"matches": [...], "search_id": "...", "detected_category": "..."}
@@ -167,7 +167,7 @@ Each match will have `name`, `store_name`, `store`, `price`, `score`, `image_url
 
 **Step 2 — Submit feedback:**
 ```bash
-curl -X POST $BASE:8000/feedback \
+curl -X POST http://20.240.203.22:30800/feedback \
   -H "Content-Type: application/json" \
   -d '{"product_id": "<product_id from search>", "stars": 5}'
 # Expect: {"status": "ok"}
@@ -175,11 +175,11 @@ curl -X POST $BASE:8000/feedback \
 
 **Step 3 — Track a click event (store analytics):**
 ```bash
-curl -X POST $BASE:8000/track-event \
+curl -X POST http://20.240.203.22:30800/track-event \
   -H "Content-Type: application/json" \
   -d '{"event_type": "result_click", "position": 1, "store": "Mikesport"}'
 # Then verify the counter appeared in Prometheus:
-curl $BASE:8000/metrics | grep locus_store_result_clicks
+curl http://20.240.203.22:30800/metrics | grep locus_store_result_clicks
 ```
 
 ---
@@ -190,10 +190,10 @@ Open `http://20.240.203.22:9090/targets` — all 4 jobs should show **State: UP*
 
 | Job | Target |
 |-----|--------|
-| gateway | gateway:8000 |
-| visual_engine | visual_engine:8001 |
-| attribute_tagger | attribute_tagger:8004 |
-| mlops_exporter | mlops_exporter:8003 |
+| gateway | host.docker.internal:30800 |
+| visual_engine | host.docker.internal:30801 |
+| attribute_tagger | host.docker.internal:30804 |
+| mlops_exporter | host.docker.internal:30803 |
 
 Open `http://20.240.203.22:9090/alerts` — 10 alert rules should appear (all **Inactive** in normal operation).
 
@@ -222,12 +222,12 @@ Open `http://20.240.203.22:3000` → login `admin / moushou` → open **Locus �
 python mlops/seed_mlflow.py
 
 # Run recall evaluation and log to MLflow
-python mlops/evaluate_recall.py --gateway-url http://20.240.203.22:8000 --k 5 --mlflow
+python mlops/evaluate_recall.py --gateway-url http://20.240.203.22:30800 --k 5 --mlflow
 ```
 
 Open `http://20.240.203.22:5000` → experiment **locus_recall_eval** → latest run should show `recall_at_5 ≥ 0.9`.
 
-After the recall eval run, the Prometheus metric `locus_recall_at_5` will appear at `http://20.240.203.22:8003/metrics` within 30 seconds (the exporter refresh interval).
+After the recall eval run, the Prometheus metric `locus_recall_at_5` will appear at `http://20.240.203.22:30803/metrics` within 30 seconds (the exporter refresh interval).
 
 ---
 
@@ -240,7 +240,7 @@ After the recall eval run, the Prometheus metric `locus_recall_at_5` will appear
 python mlops/evaluate_recall.py --gateway-url http://localhost:8000 --k 5 --mlflow
 
 # Against cloud deployment
-python mlops/evaluate_recall.py --gateway-url http://20.240.203.22:8000 --k 5 --mlflow
+python mlops/evaluate_recall.py --gateway-url http://20.240.203.22:30800 --k 5 --mlflow
 ```
 
 Results are logged to MLflow experiment `locus_recall_eval`.
