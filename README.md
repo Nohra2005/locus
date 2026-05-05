@@ -56,7 +56,7 @@ The system is deployed on Azure (Standard_B2s, Ubuntu 22.04) running Kubernetes 
 curl http://20.240.203.22:30800/health
 
 # Visual search (replace path with any clothing image)
-curl -X POST http://20.240.203.22:38000/search \
+curl -X POST http://20.240.203.22:30800/search \
   -F "file=@/path/to/image.jpg" \
   -F "top_k=5"
 ```
@@ -106,7 +106,7 @@ kubectl apply -f k8s/
 kubectl rollout status deployment/gateway
 
 # 4. Verify
-curl http://20.240.203.22:8000/health
+curl http://20.240.203.22:30800/health
 ```
 
 ---
@@ -139,12 +139,17 @@ CI runs all four suites automatically on every push to `main` via `.github/workf
 Verify every service is reachable:
 
 ```bash
-BASE=http://20.240.203.22   # or http://localhost for local stack
+# Local docker-compose
+curl http://localhost:8000/health     # Gateway
+curl http://localhost:8001/health     # Visual Engine
+curl http://localhost:8004/health     # Attr Tagger
+curl http://localhost:8003/metrics    # MLops Exporter
 
-curl $BASE:8000/health       # Gateway        → {"status": "ok", ...}
-curl $BASE:8001/health       # Visual Engine  → {"status": "ok"}
-curl $BASE:8004/health       # Attr Tagger    → {"status": "ok"}
-curl $BASE:8003/metrics      # MLops Exporter → Prometheus text format
+# Azure VM (K8s NodePorts)
+curl http://20.240.203.22:30800/health    # Gateway
+curl http://20.240.203.22:30801/health    # Visual Engine
+curl http://20.240.203.22:30804/health    # Attr Tagger
+curl http://20.240.203.22:30803/metrics   # MLops Exporter
 ```
 
 ---
