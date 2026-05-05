@@ -45,6 +45,7 @@ CACHE_DIR         = Path(os.getenv("PAIRS_CACHE_DIR", "pairs_cache"))
 MAX_PRODUCTS      = int(os.getenv("MAX_PRODUCTS", 400))   # cap to keep training time <2h on CPU
 TARGET_SIZE       = (224, 224)
 GATEWAY_URL       = os.getenv("GATEWAY_URL", "http://localhost:8000").rstrip("/")
+GOLDEN_IMAGES_DIR = Path(__file__).parent / "golden_images"
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -55,10 +56,18 @@ def _get_qdrant_client():
     return QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
 
 
-def _fetch_image(url: str, timeout: int = 30, retries: int = 3) -> Optional[Image.Image]:
+def _fetch_image(url: str, timeout: int = 5, retries: int = 1) -> Optional[Image.Image]:
     """Download an image from URL. Returns None on failure."""
     if url.startswith("http://localhost:"):
         url = url.replace("http://localhost:8000", GATEWAY_URL, 1)
+
+    # Serve golden-dataset images from the git-tracked local copy (avoids gateway timeout in CI)
+    if "/golden-dataset/images/" in url:
+        image_id = url.split("/golden-dataset/images/")[-1].strip("/")
+        candidates = list(GOLDEN_IMAGES_DIR.glob(f"{image_id}*.jpeg"))
+        if candidates:
+            return Image.open(candidates[0]).convert("RGB")
+
     last_err = None
     for attempt in range(retries):
         try:
@@ -76,7 +85,7 @@ def _fetch_image(url: str, timeout: int = 30, retries: int = 3) -> Optional[Imag
         except Exception as e:
             last_err = e
             if attempt < retries - 1:
-                time.sleep(10 * (attempt + 1))  # 10s, 20s backoff
+                time.sleep(10 * (attempt + 1))
     print(f"  [SKIP] Could not fetch {url[:60]}: {last_err}")
     return None
 
