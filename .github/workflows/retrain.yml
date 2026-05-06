@@ -31,8 +31,8 @@ jobs:
           QDRANT_URL:          ${{ secrets.QDRANT_URL }}
           QDRANT_API_KEY:      ${{ secrets.QDRANT_API_KEY }}
           OPENROUTER_API_KEY:  ${{ secrets.OPENROUTER_API_KEY }}
-          GATEWAY_URL:         http://${{ secrets.VM_HOST }}:8000
-          VISUAL_HOST:         http://${{ secrets.VM_HOST }}:8001
+          GATEWAY_URL:         http://${{ secrets.VM_HOST }}:30800
+          VISUAL_HOST:         http://${{ secrets.VM_HOST }}:30801
           MLFLOW_TRACKING_URI: "http://20.240.203.22:5000"
           SKIP_PROMOTE:        "true"
           # 150 steps ≈ 35 min on a free-tier 2-core runner; keeps total job < 90 min.
@@ -75,11 +75,11 @@ jobs:
           "
 
           # Hot reload (no container restart needed)
-          $SSH $VM "curl -sf -X POST http://localhost:8001/reload-adapter \
+          $SSH $VM "curl -sf -X POST http://localhost:30801/reload-adapter \
             -H 'Content-Type: application/json' \
             -d '{\"adapter_path\": \"/app/models/lora_adapter\", \"visual_projection_path\": \"/app/models/visual_projection.pt\"}'"
 
           # Re-embed the catalog with new model
-          $SSH $VM "curl -sf -X POST http://localhost:8000/reindex" || true
+          $SSH $VM "curl -sf -X POST http://localhost:30800/reindex" || true
 
           echo "Adapter deployed and visual engine reloaded."
