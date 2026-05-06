@@ -49,7 +49,7 @@ jobs:
           GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           ADMIN_API_KEY=${{ secrets.ADMIN_API_KEY }}
-          GATEWAY_BASE_URL=http://localhost:8000
+          GATEWAY_BASE_URL=http://localhost:30800
           CORS_ORIGINS=*
           USERPROFILE=$HOME
           EOF
@@ -92,17 +92,14 @@ jobs:
           kubectl rollout status deployment/visual-engine --timeout=360s
           kubectl rollout status deployment/attribute-tagger --timeout=120s
 
-      - name: Port-forward all services
+      - name: Wait for services (NodePort)
         run: |
-          kubectl port-forward svc/gateway 8000:8000 &
-          kubectl port-forward svc/visual-engine 8001:8001 &
-          kubectl port-forward svc/attribute-tagger 8004:8004 &
           echo "Waiting for gateway..."
-          timeout 240 bash -c 'until curl -sf http://localhost:8000/health > /dev/null; do sleep 5; done'
+          timeout 240 bash -c 'until curl -sf http://localhost:30800/health > /dev/null; do sleep 5; done'
           echo "Waiting for visual engine (model loading takes ~60s)..."
-          timeout 360 bash -c 'until curl -sf http://localhost:8001/health > /dev/null; do sleep 10; done'
+          timeout 360 bash -c 'until curl -sf http://localhost:30801/health > /dev/null; do sleep 10; done'
           echo "Waiting for attribute tagger..."
-          timeout 60 bash -c 'until curl -sf http://localhost:8004/health > /dev/null; do sleep 5; done'
+          timeout 60 bash -c 'until curl -sf http://localhost:30804/health > /dev/null; do sleep 5; done'
           echo "All services ready."
 
       - name: Install test dependencies
@@ -113,32 +110,35 @@ jobs:
 
       - name: Run smoke tests
         run: pytest tests/test_smoke.py -v
+        env:
+          GATEWAY_URL: http://localhost:30800
+          VISUAL_URL:  http://localhost:30801
 
       - name: Run integration tests
         run: pytest tests/test_pipeline.py -v
         env:
-          GATEWAY_URL: http://localhost:8000
-          VISUAL_URL:  http://localhost:8001
-          TAGGER_URL:  http://localhost:8004
+          GATEWAY_URL: http://localhost:30800
+          VISUAL_URL:  http://localhost:30801
+          TAGGER_URL:  http://localhost:30804
 
       - name: Wait for rate-limit window to reset
         run: sleep 65
 
       - name: Run judge quality gate
-        run: python mlops/ci_eval.py --gateway-url http://localhost:8000
+        run: python mlops/ci_eval.py --gateway-url http://localhost:30800
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
       - name: Re-confirm gateway is up before E2E tests
         run: |
           echo "Re-confirming gateway is still reachable..."
-          timeout 120 bash -c 'until curl -sf http://localhost:8000/health > /dev/null; do sleep 5; done'
+          timeout 120 bash -c 'until curl -sf http://localhost:30800/health > /dev/null; do sleep 5; done'
           echo "Gateway confirmed."
 
       - name: Run E2E tests against deployed cloud system
         run: pytest tests/test_e2e.py -v
         env:
-          GATEWAY_URL: http://localhost:8000
+          GATEWAY_URL: http://localhost:30800
 
       - name: Show pod logs on failure
         if: failure()
@@ -147,6 +147,3 @@ jobs:
           kubectl logs deployment/visual-engine --tail=50 || true
           kubectl logs deployment/attribute-tagger --tail=50 || true
 
-      - name: Clean up port-forwards
-        if: always()
-        run: pkill -f "kubectl port-forward" || true
