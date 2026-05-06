@@ -130,6 +130,10 @@ def _refresh_retrain_metrics(client) -> None:
             max_results    = 1000,
         )
         if not all_runs:
+            lora_failed_runs.set(0)
+            lora_avg_duration.set(0)
+            lora_last_duration.set(0)
+            lora_data_points.set(0)
             return
 
         lora_runs.set(len(all_runs))

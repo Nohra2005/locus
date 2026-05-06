@@ -494,7 +494,7 @@ SKIPPED_COLLECTION  = "locus_skipped"
 FEEDBACK_COLLECTION = "locus_feedback"
 GOLDEN_DATASET_PATH      = os.getenv("GOLDEN_DATASET_PATH", "/mlops/golden_dataset.json")
 GOLDEN_IMAGES_DIR        = pathlib.Path(os.getenv("GOLDEN_IMAGES_DIR", "/mlops/golden_images"))
-LINK_HEALTH_REPORT       = pathlib.Path("/mlops/link_health_report.json")
+LINK_HEALTH_REPORT       = pathlib.Path("/app/link_health_report.json")
 LINK_MONITOR_INTERVAL    = 432000  # 5 days in seconds (matches docker-compose sleep)
 
 GOLDEN_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
@@ -596,6 +596,8 @@ def _compute_store_gauges():
         cursor = next_cursor
     for store, count in store_counts.items():
         locus_store_items.labels(store=store).set(count)
+        locus_store_website_clicks.labels(store=store)   # initialize time series at 0 if never clicked
+        locus_store_result_clicks.labels(store=store)    # initialize time series at 0 if never clicked
     for (store, cat), count in store_cat_counts.items():
         locus_store_category_items.labels(store=store, category=cat).set(count)
 
@@ -1807,7 +1809,7 @@ async def search_items(
                 "product_id": product_id,
             }
 
-    matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:50]
+    matches = sorted(best_per_product.values(), key=lambda x: x["score"], reverse=True)[:15]
 
     maps_urls = get_store_maps_urls()
     for m in matches:
@@ -3278,18 +3280,40 @@ async def trigger_link_check(background_tasks: BackgroundTasks):
 
 async def _run_link_check_subprocess():
     global _link_check_running
-    import sys
+    import sys, os as _os
     _link_check_running = True
     try:
         cmd = [sys.executable, "/app/repair_broken_links.py"]
+        env = _os.environ.copy()
+        env.setdefault("VISUAL_URL", _os.getenv("VISUAL_HOST", "http://visual-engine:8001"))
+        env.setdefault("GATEWAY_URL", _os.getenv("GATEWAY_BASE_URL", "http://gateway:8000"))
         print(f"[LINK CHECK] Triggering pipeline: {' '.join(cmd)}")
         proc = await asyncio.create_subprocess_exec(
             *cmd,
+            env=env,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
         stdout, _ = await proc.communicate()
         print(f"[LINK CHECK] Pipeline finished (exit={proc.returncode}):\n{stdout.decode()[-2000:]}")
+        # Immediately refresh link monitor metrics — don't wait for the 60s background loop
+        try:
+            if LINK_HEALTH_REPORT.exists():
+                import json as _jjson
+                from datetime import timezone as _tz
+                with open(LINK_HEALTH_REPORT) as _f:
+                    _rpt = _jjson.load(_f)
+                _run_at_str = _rpt.get("run_at")
+                if _run_at_str:
+                    _run_at = datetime.fromisoformat(_run_at_str)
+                    if _run_at.tzinfo is None:
+                        _run_at = _run_at.replace(tzinfo=_tz.utc)
+                    _last_ts = _run_at.timestamp()
+                    locus_link_monitor_last_run.set(_last_ts * 1000)
+                    locus_link_monitor_next_run.set((_last_ts + LINK_MONITOR_INTERVAL) * 1000)
+                locus_link_monitor_broken.set(_rpt.get("broken_found", 0))
+        except Exception as _me:
+            print(f"[LINK CHECK] Could not refresh metrics immediately: {_me}")
     finally:
         _link_check_running = False
 

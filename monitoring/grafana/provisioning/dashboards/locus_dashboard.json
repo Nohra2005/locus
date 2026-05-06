@@ -5022,6 +5022,73 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
+      "description": "Products with low_score_flag=True in Qdrant. Flagged items are hidden from search results and surfaced for admin review.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 96
+      },
+      "id": 9001,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "10.4.3",
+      "targets": [
+        {
+          "expr": "locus_low_score_flags_total",
+          "legendFormat": "Low Score Flagged",
+          "refId": "A"
+        }
+      ],
+      "title": "Low-Score Items Flagged",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "description": "Distinct store names with at least one product in locus_items (counted directly from Qdrant every 60s).",
       "fieldConfig": {
         "defaults": {

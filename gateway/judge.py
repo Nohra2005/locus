@@ -72,15 +72,17 @@ def _set_judge_cache_score(key: str, score: float) -> None:
 
 def _acquire_slot() -> bool:
     """Block until we can call OpenRouter. Returns False if inside a backoff window."""
-    with _provider_lock:
-        now = time.monotonic()
-        if now < _provider_state["backoff_until"]:
-            return False
-        wait = _provider_state["last_call"] + _provider_state["min_gap"] - now
-        if wait > 0:
-            time.sleep(wait)
-        _provider_state["last_call"] = time.monotonic()
-        return True
+    while True:
+        with _provider_lock:
+            now = time.monotonic()
+            if now < _provider_state["backoff_until"]:
+                return False
+            wait = _provider_state["last_call"] + _provider_state["min_gap"] - now
+            if wait <= 0:
+                _provider_state["last_call"] = time.monotonic()
+                return True
+        # Sleep outside the lock so other workers can check concurrently
+        time.sleep(wait)
 
 
 def _set_backoff(retry_after: float) -> None:

@@ -63,7 +63,7 @@ CONCURRENCY     = int(os.getenv("CONCURRENCY", "20"))
 # ── Paths ─────────────────────────────────────────────────────────────────────
 _BASE          = Path(__file__).parent
 _STORE_URLS    = _BASE / "store_urls.json"
-_REPORT_PATH   = _BASE.parent / "mlops" / "link_health_report.json"
+_REPORT_PATH   = _BASE / "link_health_report.json"
 
 # ── Store URL map ─────────────────────────────────────────────────────────────
 def _load_store_urls() -> dict:
