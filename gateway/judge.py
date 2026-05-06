@@ -36,7 +36,7 @@ GEMINI_API_URL = (
 # 2s minimum gap → ~30 RPM, well within OpenRouter's free-tier ceiling.
 
 _provider_lock  = threading.Lock()
-_provider_state: dict = {"last_call": 0.0, "backoff_until": 0.0, "min_gap": 2.0}
+_provider_state: dict = {"last_call": 0.0, "backoff_until": 0.0, "min_gap": 0.5}
 
 # ── Judge recency cache ────────────────────────────────────────────────────────
 # Prevents the same product being judged more than once per TTL window.
