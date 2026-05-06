@@ -164,9 +164,6 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
     # Create experiment if it doesn't exist
     mlflow.set_experiment(EXPERIMENT_NAME)
 
-    # Kill any zombie runs left by previous crashes before starting a new one
-    _cleanup_stale_runs()
-
     run_name = f"lora_run_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
     print(f"\n{'='*60}")
     print(f"  Locus LoRA Retraining Pipeline")
@@ -184,6 +181,11 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
     if not OPENROUTER_API_KEY:
         print("[RETRAIN] ERROR: OPENROUTER_API_KEY not set — cannot run judge evaluation.")
         return {"outcome": "error", "reason": "OPENROUTER_API_KEY missing"}
+
+    # Kill any zombie runs left by previous crashes, only now that we know we'll train.
+    # Moving this after the trigger check prevents the 48h scheduler from accidentally
+    # killing an in-progress GitHub Actions run when it wakes up and finds no trigger.
+    _cleanup_stale_runs()
 
     with mlflow.start_run(run_name=run_name) as run:
         mlflow_run_id = run.info.run_id
