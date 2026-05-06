@@ -36,7 +36,8 @@ jobs:
           MLFLOW_TRACKING_URI: "http://20.240.203.22:5000"
           SKIP_PROMOTE:        "true"
           # 150 steps ≈ 35 min on a free-tier 2-core runner; keeps total job < 90 min.
-          MAX_TRAIN_STEPS:     "150"
+          MAX_TRAIN_STEPS:     "100"
+          GRAD_ACCUM_STEPS:    "1"
           PYTHONUNBUFFERED:    "1"
         run: |
           cd mlops
