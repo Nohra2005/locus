@@ -5,6 +5,10 @@ on:
   schedule:
     - cron: "0 3 */2 * *" # every 2 days at 3am UTC
 
+concurrency:
+  group: locus-runner
+  cancel-in-progress: false
+
 jobs:
   retrain:
     runs-on: ubuntu-latest
