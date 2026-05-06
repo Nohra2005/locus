@@ -83,7 +83,20 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{\"adapter_path\": \"/app/models/lora_adapter\", \"visual_projection_path\": \"/app/models/visual_projection.pt\"}'"
 
-          # Re-embed the catalog with new model
+          # Re-embed the catalog with new model (async — starts background job)
           $SSH $VM "curl -sf -X POST http://localhost:30800/reindex" || true
 
-          echo "Adapter deployed and visual engine reloaded."
+          # Block until reindex finishes so the concurrency lock isn't released
+          # while the background embedding job is still hammering the visual engine.
+          echo "Waiting for catalog reindex to complete..."
+          for i in $(seq 1 120); do
+            STATUS=$($SSH $VM "curl -sf http://localhost:30800/reindex/status 2>/dev/null || echo '{\"running\":false}'")
+            if echo "$STATUS" | grep -q "false"; then
+              echo "Reindex complete (check $i/120)."
+              break
+            fi
+            echo "Still reindexing... (check $i/120, sleeping 30s)"
+            sleep 30
+          done
+
+          echo "Adapter deployed, visual engine reloaded, catalog reindexed."
