@@ -266,6 +266,12 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
         print("\n[RETRAIN] Step 5/5: Promote / rollback decision...")
         promoted = new_avg > old_avg + PROMOTION_DELTA
 
+        # Signal outcome to GitHub Actions so the deploy step can be gated on it
+        gha_output = os.getenv("GITHUB_OUTPUT")
+        if gha_output:
+            with open(gha_output, "a") as _f:
+                _f.write(f"promoted={'true' if promoted else 'false'}\n")
+
         if promoted and not skip_promote:
             from promote_model import promote_adapter
             promote_adapter(

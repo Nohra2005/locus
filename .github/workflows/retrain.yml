@@ -31,6 +31,7 @@ jobs:
             ultralytics openai-clip
 
       - name: Train LoRA adapter
+        id: train
         env:
           QDRANT_URL:          ${{ secrets.QDRANT_URL }}
           QDRANT_API_KEY:      ${{ secrets.QDRANT_API_KEY }}
@@ -56,6 +57,7 @@ jobs:
           echo "Found adapter at: $ADAPTER"
 
       - name: Deploy adapter to VM
+        if: steps.train.outputs.promoted == 'true'
         env:
           SSH_KEY: ${{ secrets.VM_SSH_KEY }}
         run: |

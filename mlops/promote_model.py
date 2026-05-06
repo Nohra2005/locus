@@ -428,6 +428,15 @@ def evaluate_with_judge(
     old_avg = _run_judge_eval(old_model, old_processor, queries, api_key, top_k)
     del old_model  # free memory before loading new model
 
+    # Wait out any rate-limit backoff carried over from old-model eval.
+    # _rate_state["backoff_until"] is module-level and shared across both runs;
+    # without this pause every new-model judge call returns None immediately.
+    with _rate_lock:
+        remaining = _rate_state["backoff_until"] - time.monotonic()
+    if remaining > 0:
+        print(f"[EVAL] Waiting {remaining:.0f}s for OpenRouter rate-limit backoff to clear...")
+        time.sleep(remaining + 2)
+
     # ── New model ─────────────────────────────────────────────────────────────
     print("\n[EVAL] === Evaluating NEW model ===")
     new_model, new_processor = _load_model(
