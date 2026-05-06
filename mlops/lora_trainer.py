@@ -48,6 +48,7 @@ GRAD_ACCUM_STEPS  = int(os.getenv("GRAD_ACCUM_STEPS", 4))  # effective batch = B
 MAX_STEPS         = int(os.getenv("MAX_TRAIN_STEPS", 300))
 LOG_EVERY         = int(os.getenv("LOG_EVERY_STEPS", 20))  # log loss to MLflow every N steps
 VAL_SPLIT         = float(os.getenv("VAL_SPLIT", 0.15))    # fraction of pairs held out for validation
+VAL_EMBED_BATCH   = 32                                      # chunk size for validation forward passes
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -119,7 +120,7 @@ def _compute_val_metrics(
     processor: CLIPProcessor,
     val_pairs: list[dict],
     k: int = 5,
-    max_pairs: int = 150,
+    max_pairs: int = 50,
 ) -> tuple[float, float]:
     """
     Compute validation loss and recall@k on the held-out val set.
@@ -152,9 +153,15 @@ def _compute_val_metrics(
         model.train()
         return 0.0, 0.0
 
-    # Embed in a single batch (val set is small — 15% of pairs, typically <30)
-    z_a = _embed_batch(model, processor, anchors_pil)
-    z_p = _embed_batch(model, processor, positives_pil)
+    # Embed in chunks to avoid a huge single-batch forward on CPU
+    def _embed_chunked(imgs):
+        return torch.cat([
+            _embed_batch(model, processor, imgs[i:i + VAL_EMBED_BATCH])
+            for i in range(0, len(imgs), VAL_EMBED_BATCH)
+        ])
+
+    z_a = _embed_chunked(anchors_pil)
+    z_p = _embed_chunked(positives_pil)
 
     val_loss = infonce_loss(z_a, z_p, TEMPERATURE).item()
 
@@ -305,13 +312,16 @@ def train(
             avg_loss = accum_loss / GRAD_ACCUM_STEPS
             accum_loss = 0.0
 
+            secs_per_step = (time.time() - start_time) / step
+            print(f"[TRAINER] step {step}/{MAX_STEPS}  loss={avg_loss:.4f}  ({secs_per_step:.1f}s/step)", flush=True)
+
             if step % LOG_EVERY == 0:
                 elapsed = time.time() - start_time
                 eta     = (elapsed / step) * (MAX_STEPS - step)
+                print(f"[TRAINER] --- step {step}/{MAX_STEPS} checkpoint  "
+                      f"elapsed={elapsed/60:.1f}m  eta={eta/60:.1f}m ---", flush=True)
                 val_loss, val_recall = _compute_val_metrics(model, processor, val_pairs)
-                print(f"[TRAINER] step={step}/{MAX_STEPS}  loss={avg_loss:.4f}  "
-                      f"val_loss={val_loss:.4f}  val_recall@5={val_recall:.3f}  "
-                      f"elapsed={elapsed/60:.1f}m  eta={eta/60:.1f}m")
+                print(f"[TRAINER] val_loss={val_loss:.4f}  val_recall@5={val_recall:.3f}")
                 if mlflow_run_id:
                     mlflow.log_metric("train_loss",   avg_loss,   step=step)
                     mlflow.log_metric("val_loss",     val_loss,   step=step)
