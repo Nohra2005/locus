@@ -122,6 +122,10 @@ def _refresh_retrain_metrics(client) -> None:
     try:
         exp = client.get_experiment_by_name("locus_lora_retraining")
         if exp is None:
+            lora_failed_runs.set(0)
+            lora_avg_duration.set(0)
+            lora_last_duration.set(0)
+            lora_data_points.set(0)
             return
 
         # All runs for aggregate counts
