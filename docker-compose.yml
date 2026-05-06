@@ -183,7 +183,7 @@ services:
       dockerfile: mlops/Dockerfile.exporter
     working_dir: /mlops
     ports:
-      - "8003:8003"
+      - "30803:8003"
     volumes:
       - ./mlops:/mlops
     environment:
