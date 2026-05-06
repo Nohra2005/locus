@@ -56,6 +56,15 @@ mlops/golden_dataset_report.html
 PLAN.md
 *.xlsx
 
+# ── LaTeX report (compiled locally, not tracked) ──────────────────────────────
+main.tex
+*.aux
+*.toc
+*.out
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+
 # ── Frontend build ────────────────────────────────────────────────────────────
 frontend/dist/
 frontend/node_modules/
