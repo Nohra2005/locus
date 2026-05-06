@@ -171,14 +171,27 @@ def _judge_pair(query_b64: str, result_url: str, api_key: str) -> float | None:
     import httpx
 
     result_bytes = None
-    try:
-        with httpx.Client(timeout=15.0) as c:
-            r = c.get(result_url)
-            r.raise_for_status()
-            result_bytes = r.content
-    except Exception as e:
-        print(f"  [JUDGE] Could not fetch result image {result_url[:60]}: {e}")
-        return None
+
+    # Serve golden-dataset images from the git-tracked local copy (avoids VM 404s in CI)
+    if "/golden-dataset/images/" in result_url:
+        filename = result_url.split("/golden-dataset/images/")[-1].strip("/")
+        stem = filename.rsplit(".", 1)[0] if "." in filename else filename
+        candidates = list(GOLDEN_IMAGES_DIR.glob(f"{stem}*.jpeg"))
+        if candidates:
+            try:
+                result_bytes = candidates[0].read_bytes()
+            except Exception:
+                pass
+
+    if result_bytes is None:
+        try:
+            with httpx.Client(timeout=15.0) as c:
+                r = c.get(result_url)
+                r.raise_for_status()
+                result_bytes = r.content
+        except Exception as e:
+            print(f"  [JUDGE] Could not fetch result image {result_url[:60]}: {e}")
+            return None
 
     result_b64 = base64.b64encode(result_bytes).decode("utf-8")
 

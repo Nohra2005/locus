@@ -119,6 +119,7 @@ def _compute_val_metrics(
     processor: CLIPProcessor,
     val_pairs: list[dict],
     k: int = 5,
+    max_pairs: int = 150,
 ) -> tuple[float, float]:
     """
     Compute validation loss and recall@k on the held-out val set.
@@ -130,6 +131,12 @@ def _compute_val_metrics(
     """
     if not val_pairs:
         return 0.0, 0.0
+
+    # Cap val set size to prevent slow single-batch forward passes on large datasets
+    if len(val_pairs) > max_pairs:
+        import random as _random
+        rng = _random.Random(42)
+        val_pairs = rng.sample(val_pairs, max_pairs)
 
     model.eval()
     anchors_pil   = []

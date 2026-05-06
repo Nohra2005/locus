@@ -42,6 +42,7 @@ jobs:
           # 150 steps ≈ 35 min on a free-tier 2-core runner; keeps total job < 90 min.
           MAX_TRAIN_STEPS:     "100"
           GRAD_ACCUM_STEPS:    "1"
+          LOG_EVERY_STEPS:     "40"
           PYTHONUNBUFFERED:    "1"
         run: |
           cd mlops
@@ -79,9 +80,18 @@ jobs:
           "
 
           # Hot reload (no container restart needed)
-          $SSH $VM "curl -sf -X POST http://localhost:30801/reload-adapter \
+          RELOAD_RESP=$($SSH $VM "curl -s -o /tmp/locus_reload.json \
+            -w '%{http_code}' \
+            -X POST http://localhost:30801/reload-adapter \
             -H 'Content-Type: application/json' \
-            -d '{\"adapter_path\": \"/app/models/lora_adapter\", \"visual_projection_path\": \"/app/models/visual_projection.pt\"}'"
+            -d '{\"adapter_path\": \"/app/models/lora_adapter\", \"visual_projection_path\": \"/app/models/visual_projection.pt\"}'")
+          RELOAD_BODY=$($SSH $VM "cat /tmp/locus_reload.json 2>/dev/null || echo '(no body)'")
+          echo "Reload HTTP status: $RELOAD_RESP"
+          echo "Reload response:    $RELOAD_BODY"
+          if [ "$RELOAD_RESP" != "200" ]; then
+            echo "ERROR: Adapter reload failed — see response above"
+            exit 1
+          fi
 
           # Re-embed the catalog with new model (async — starts background job)
           $SSH $VM "curl -sf -X POST http://localhost:30800/reindex" || true
