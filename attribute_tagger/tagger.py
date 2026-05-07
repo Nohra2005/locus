@@ -25,7 +25,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 # Bump when the prompt changes; log in MLflow so each run records which prompt was active.
-TAGGER_PROMPT_VERSION = "v4"
+TAGGER_PROMPT_VERSION = "v5"
 
 OPENROUTER_MODEL   = "google/gemini-2.0-flash-001"
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -212,19 +212,19 @@ Return ONLY a valid JSON object with exactly these keys:
 }}
 
 Guidelines:
-- colors: e.g. "navy blue", "ivory", "forest green", "hot pink", "camel"
-- style: one of casual, formal, streetwear, athletic, bohemian, minimalist, preppy, \
-romantic, quiet luxury, edgy, classic, resort
+- colors: be specific — "navy blue" not "blue", "forest green" not "green". List 1-3 dominant colors.
+- style: MUST be exactly one of: casual, formal, streetwear, athletic, bohemian, minimalist, \
+preppy, romantic, quiet luxury, edgy, classic, resort
 - silhouette: e.g. "fitted blazer", "flowy midi dress", "slim-fit jeans", \
 "oversized hoodie", "a-line skirt"
-- occasion: e.g. "office", "casual", "evening", "beach", "workout", "date night", \
-"weekend", "formal event"
-- pattern: one of solid, striped, floral, plaid, animal print, geometric, \
-abstract, polka dot, tie-dye, logo print
-- material_feel: one of cotton, silk, denim, knitwear, leather, chiffon, \
-linen, velvet, satin, wool, synthetic
-- trend_tags: e.g. "old money", "Y2K", "cottagecore", "quiet luxury", "dark academia", \
-"coastal grandmother", "clean girl", "gorpcore"
+- occasion: MUST be 1-2 values from: office, casual, evening, beach, workout, \
+date night, weekend, formal event
+- pattern: MUST be exactly one of: solid, striped, floral, plaid, animal print, \
+geometric, abstract, polka dot, tie-dye, logo print
+- material_feel: MUST be exactly one of: cotton, silk, denim, knitwear, leather, \
+chiffon, linen, velvet, satin, wool, synthetic
+- trend_tags: optional 0-2 values, e.g. "Y2K", "cottagecore", "dark academia", \
+"gorpcore", "clean girl", "coastal grandmother"
 
 {category_hint}
 Respond ONLY with valid JSON. No markdown. No explanation. No extra text."""

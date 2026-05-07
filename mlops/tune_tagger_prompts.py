@@ -502,7 +502,8 @@ def log_run(
 
         # ── artifact: full prompt text ─────────────────────────────────────────
         with tempfile.NamedTemporaryFile(
-            mode="w", suffix="_prompt.txt", delete=False, prefix=f"{variant_name}_"
+            mode="w", suffix="_prompt.txt", delete=False, prefix=f"{variant_name}_",
+            encoding="utf-8",
         ) as tf:
             tf.write(base_template)
             tf_path = tf.name
