@@ -5792,72 +5792,6 @@
                 "type": "prometheus",
                 "uid": "prometheus"
             },
-            "description": "Times a user clicked View on store website for each store.",
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "fillOpacity": 80,
-                        "gradientMode": "none",
-                        "hideFrom": {
-                            "legend": false,
-                            "tooltip": false,
-                            "viz": false
-                        },
-                        "lineWidth": 1
-                    },
-                    "mappings": []
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 173
-            },
-            "id": 1402,
-            "options": {
-                "barWidth": 0.7,
-                "fillOpacity": 80,
-                "gradientMode": "none",
-                "groupWidth": 0.7,
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom",
-                    "showLegend": true
-                },
-                "orientation": "auto",
-                "tooltip": {
-                    "mode": "single",
-                    "sort": "none"
-                },
-                "xTickLabelRotation": 0,
-                "xTickLabelSpacing": 0
-            },
-            "pluginVersion": "10.4.3",
-            "targets": [
-                {
-                    "datasource": {
-                        "type": "prometheus",
-                        "uid": "prometheus"
-                    },
-                    "expr": "locus_store_website_clicks_total",
-                    "instant": true,
-                    "legendFormat": "{{store}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Website Clicks per Store",
-            "type": "barchart"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-            },
             "description": "Website clicks divided by impressions per store.",
             "fieldConfig": {
                 "defaults": {
@@ -5928,13 +5862,13 @@
                         "type": "prometheus",
                         "uid": "prometheus"
                     },
-                    "expr": "locus_store_website_clicks_total / locus_store_impressions_total",
+                    "expr": "locus_store_result_clicks_total / locus_store_impressions_total",
                     "instant": true,
                     "legendFormat": "{{store}}",
                     "refId": "A"
                 }
             ],
-            "title": "Store Conversion Rate (clicks / impressions)",
+            "title": "Store Conversion Rate (result clicks / impressions)",
             "type": "barchart"
         },
         {
@@ -7130,6 +7064,6 @@
     "timezone": "browser",
     "title": "Locus \u00e2\u20ac\u201d Admin Dashboard",
     "uid": "locus-main",
-    "version": 8,
+    "version": 9,
     "weekStart": ""
 }
