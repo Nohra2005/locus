@@ -1254,81 +1254,6 @@
                 "type": "prometheus",
                 "uid": "prometheus"
             },
-            "description": "Individual Gemini score per golden query. Red below 0.50 = alert: that query needs attention.",
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "mappings": [],
-                    "max": 1,
-                    "min": 0,
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "red",
-                                "value": null
-                            },
-                            {
-                                "color": "orange",
-                                "value": 0.5
-                            },
-                            {
-                                "color": "yellow",
-                                "value": 0.7
-                            },
-                            {
-                                "color": "green",
-                                "value": 0.85
-                            }
-                        ]
-                    },
-                    "unit": "percentunit"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 8,
-                "x": 9,
-                "y": 11
-            },
-            "id": 204,
-            "options": {
-                "displayMode": "gradient",
-                "maxVizHeight": 300,
-                "minVizHeight": 16,
-                "minVizWidth": 8,
-                "namePlacement": "auto",
-                "orientation": "horizontal",
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "showUnfilled": true,
-                "sizing": "auto",
-                "valueMode": "color"
-            },
-            "pluginVersion": "10.4.3",
-            "targets": [
-                {
-                    "expr": "sort_desc(locus_gemini_query_vss5)",
-                    "legendFormat": "{{label}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "VSS@5 Per Golden Query",
-            "type": "bargauge"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-            },
             "description": "How many distinct golden queries exist in the dataset.",
             "fieldConfig": {
                 "defaults": {
@@ -4336,74 +4261,6 @@
                 "type": "prometheus",
                 "uid": "prometheus"
             },
-            "description": "Stores where products are missing store name, image URL, or coordinates. Requires backend endpoint \u00e2\u20ac\u201d noted for later.",
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "mappings": [],
-                    "noValue": "N/A",
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "yellow",
-                                "value": 1
-                            },
-                            {
-                                "color": "red",
-                                "value": 3
-                            }
-                        ]
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 5,
-                "w": 4,
-                "x": 20,
-                "y": 96
-            },
-            "id": 606,
-            "options": {
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "auto",
-                "wideLayout": true
-            },
-            "pluginVersion": "10.4.3",
-            "targets": [
-                {
-                    "expr": "locus_stores_missing_info_total",
-                    "legendFormat": "Missing",
-                    "refId": "A"
-                }
-            ],
-            "title": "Stores with Missing Info",
-            "type": "stat"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-            },
             "description": "Track catalog growth and feedback accumulation.",
             "fieldConfig": {
                 "defaults": {
@@ -5101,7 +4958,7 @@
             "pluginVersion": "10.4.3",
             "targets": [
                 {
-                    "expr": "clamp_min(locus_link_monitor_next_run_timestamp - time(), 0)",
+                    "expr": "clamp_min(locus_link_monitor_next_run_timestamp / 1000 - time(), 0)",
                     "legendFormat": "Seconds until next run",
                     "refId": "A"
                 }
@@ -6063,7 +5920,7 @@
             "pluginVersion": "10.4.3",
             "targets": [
                 {
-                    "expr": "locus_stores_registered_total - count(locus_store_items_total > 0) or locus_stores_registered_total",
+                    "expr": "locus_stores_registered_total - on() group_left() count(locus_store_items_total > 0)",
                     "instant": true,
                     "legendFormat": "Empty",
                     "refId": "A"
@@ -6141,74 +5998,6 @@
                 }
             ],
             "title": "Onboarding Rate",
-            "type": "stat"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "prometheus"
-            },
-            "description": "Stores where product data is incomplete \u00e2\u20ac\u201d missing name, image URL, or location.",
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "mappings": [],
-                    "noValue": "0",
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "yellow",
-                                "value": 1
-                            },
-                            {
-                                "color": "red",
-                                "value": 3
-                            }
-                        ]
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 5,
-                "w": 4,
-                "x": 16,
-                "y": 190
-            },
-            "id": 1231,
-            "options": {
-                "colorMode": "background",
-                "graphMode": "none",
-                "justifyMode": "auto",
-                "orientation": "auto",
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ],
-                    "fields": "",
-                    "values": false
-                },
-                "showPercentChange": false,
-                "textMode": "value_and_name",
-                "wideLayout": true
-            },
-            "pluginVersion": "10.4.3",
-            "targets": [
-                {
-                    "expr": "locus_stores_missing_info_total",
-                    "legendFormat": "Missing",
-                    "refId": "A"
-                }
-            ],
-            "title": "Missing Info",
             "type": "stat"
         },
         {
@@ -7064,6 +6853,6 @@
     "timezone": "browser",
     "title": "Locus \u00e2\u20ac\u201d Admin Dashboard",
     "uid": "locus-main",
-    "version": 9,
+    "version": 10,
     "weekStart": ""
 }
