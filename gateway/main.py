@@ -598,6 +598,7 @@ def _compute_store_gauges():
         locus_store_items.labels(store=store).set(count)
         locus_store_website_clicks.labels(store=store)   # initialize time series at 0 if never clicked
         locus_store_result_clicks.labels(store=store)    # initialize time series at 0 if never clicked
+        locus_store_impressions.labels(store=store)       # initialize so 0/0 = NaN (no data) not clicks/1
     for (store, cat), count in store_cat_counts.items():
         locus_store_category_items.labels(store=store, category=cat).set(count)
 
@@ -2240,7 +2241,7 @@ class BulkBatchRequest(BaseModel):
 
 @app.post("/add-bulk-batch")
 async def add_bulk_batch(batch: BulkBatchRequest):
-    semaphore = asyncio.Semaphore(5)
+    semaphore = asyncio.Semaphore(2)
 
     async def index_one(raw: dict):
         name   = raw.get("name", "Product")
