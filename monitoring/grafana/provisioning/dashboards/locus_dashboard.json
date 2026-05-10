@@ -269,7 +269,7 @@
             "pluginVersion": "10.4.3",
             "targets": [
                 {
-                    "expr": "up{job=attribute_tagger}",
+                    "expr": "up{job=\"attribute_tagger\"}",
                     "legendFormat": "OpenRouter",
                     "refId": "A"
                 }
