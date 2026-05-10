@@ -42,7 +42,7 @@ function authHeaders(token) {
 async function runBatchIndex(items, storeName, mallName, token, setProgress, setErrors, setStatus) {
   setStatus("indexing");
   setErrors([]);
-  const CHUNK = 50;
+  const CHUNK = 5;
   const total = items.length;
   let success = 0, failed = 0;
   const errs = [];
@@ -1143,6 +1143,20 @@ function ScrapeWebsitePanel({ auth }) {
           </button>
         </div>
       </div>
+
+      {scraping && (
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "24px 28px" }}>
+          <div style={{ fontSize: "0.68rem", color: T.accent, letterSpacing: "0.14em",
+            textTransform: "uppercase", marginBottom: 12 }}>Fetching products</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <Spinner />
+            <div style={{ fontSize: "0.82rem", color: T.text }}>Scraping product listings from store website…</div>
+          </div>
+          <div style={{ fontSize: "0.72rem", color: T.textMuted, marginTop: 8 }}>
+            This may take 15–60 seconds for large stores
+          </div>
+        </div>
+      )}
 
       {scrapeErr && <ErrorBanner msg={scrapeErr} />}
 

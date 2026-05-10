@@ -5928,7 +5928,7 @@
                         "type": "prometheus",
                         "uid": "prometheus"
                     },
-                    "expr": "locus_store_website_clicks_total / clamp_min(locus_store_impressions_total, 1)",
+                    "expr": "locus_store_website_clicks_total / locus_store_impressions_total",
                     "instant": true,
                     "legendFormat": "{{store}}",
                     "refId": "A"

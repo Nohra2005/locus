@@ -24,6 +24,12 @@ spec:
           volumeMounts:
             - name: frontend-dist
               mountPath: /app/frontend/dist
+            - name: users-data
+              mountPath: /app/users.json
+            - name: link-report
+              mountPath: /app/link_health_report.json
+            - name: whitelist-data
+              mountPath: /app/pending_whitelist.json
           envFrom:
             - configMapRef:
                 name: locus-config
@@ -71,6 +77,18 @@ spec:
           hostPath:
             path: /home/azureuser/locus/frontend/dist
             type: Directory
+        - name: users-data
+          hostPath:
+            path: /home/azureuser/locus/gateway/users.json
+            type: FileOrCreate
+        - name: link-report
+          hostPath:
+            path: /home/azureuser/locus/gateway/link_health_report.json
+            type: FileOrCreate
+        - name: whitelist-data
+          hostPath:
+            path: /home/azureuser/locus/pending_whitelist.json
+            type: FileOrCreate
 ---
 apiVersion: apps/v1
 kind: Deployment
