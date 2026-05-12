@@ -155,15 +155,16 @@ _rate_state: dict = {"last_call": 0.0, "backoff_until": 0.0, "min_gap": 2.0}
 
 
 def _acquire_slot() -> bool:
-    with _rate_lock:
-        now = time.monotonic()
-        if now < _rate_state["backoff_until"]:
-            return False
-        wait = _rate_state["last_call"] + _rate_state["min_gap"] - now
-        if wait > 0:
-            time.sleep(wait)
-        _rate_state["last_call"] = time.monotonic()
-        return True
+    while True:
+        with _rate_lock:
+            now = time.monotonic()
+            if now < _rate_state["backoff_until"]:
+                return False
+            wait = _rate_state["last_call"] + _rate_state["min_gap"] - now
+            if wait <= 0:
+                _rate_state["last_call"] = time.monotonic()
+                return True
+        time.sleep(wait)  # outside lock — parallel workers sleep concurrently
 
 
 def _judge_pair(query_b64: str, result_url: str, api_key: str) -> float | None:
@@ -243,6 +244,78 @@ def _judge_pair(query_b64: str, result_url: str, api_key: str) -> float | None:
     return None
 
 
+# ── Catalog index helpers ─────────────────────────────────────────────────────
+
+def _fetch_catalog_sample(n: int = 150, seed: int = 42) -> list[dict]:
+    """
+    Download up to n catalog items from Qdrant for offline evaluation.
+    Returns list of {"url": str, "category": str, "pil": Image} dicts.
+    Shared across both old/new model evaluations so both see the same items.
+    """
+    from PIL import Image
+    import random as _random
+    _random.seed(seed)
+
+    qdrant = _get_qdrant_client()
+    print(f"[EVAL] Fetching catalog sample ({n} items) for offline evaluation...")
+    raw: list[dict] = []
+    offset = None
+    while len(raw) < n * 4:  # over-fetch to account for download failures
+        batch, next_offset = qdrant.scroll(
+            collection_name=COLLECTION_NAME,
+            limit=250,
+            offset=offset,
+            with_payload=True,
+            with_vectors=False,
+        )
+        if not batch:
+            break
+        for pt in batch:
+            url = pt.payload.get("image_url", "")
+            cat = pt.payload.get("category_tag", "")
+            if url:
+                raw.append({"url": url, "category": cat})
+        if next_offset is None:
+            break
+        offset = next_offset
+
+    _random.shuffle(raw)
+    items: list[dict] = []
+    for entry in raw:
+        if len(items) >= n:
+            break
+        try:
+            img_bytes = _fetch_image_bytes(entry["url"])
+            pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+            items.append({"url": entry["url"], "category": entry["category"], "pil": pil_img})
+        except Exception:
+            continue
+
+    print(f"[EVAL] Catalog sample ready: {len(items)} items downloaded")
+    return items
+
+
+def _build_catalog_index(model, processor, catalog_items: list[dict]) -> tuple:
+    """
+    Embed catalog_items with model.  Returns (embeddings_tensor, catalog_items)
+    where embeddings_tensor is L2-normalised (N, 512) float32.
+    Items that fail to embed are dropped from both outputs.
+    """
+    embeddings: list[list[float]] = []
+    valid: list[dict] = []
+    for item in catalog_items:
+        try:
+            emb = _embed_with_model(model, processor, item["pil"])
+            embeddings.append(emb)
+            valid.append(item)
+        except Exception:
+            continue
+    emb_tensor = torch.tensor(embeddings, dtype=torch.float32)
+    emb_tensor = emb_tensor / emb_tensor.norm(p=2, dim=-1, keepdim=True)
+    print(f"[EVAL] Catalog index built: {len(valid)} embeddings")
+    return emb_tensor, valid
+
+
 # ── Evaluation helpers ────────────────────────────────────────────────────────
 
 def _load_eval_queries() -> list[dict]:
@@ -273,16 +346,29 @@ def _run_judge_eval(
     queries: list[dict],
     api_key: str,
     top_k: int = EVAL_TOP_K,
+    catalog_embeddings: "torch.Tensor | None" = None,
+    catalog_items: "list[dict] | None" = None,
 ) -> float:
     """
-    Embed each query with `model`, search Qdrant, judge top-k results.
+    Embed each query with `model`, retrieve top-k results, judge them.
+
+    When catalog_embeddings + catalog_items are provided (preferred), retrieval
+    is done by cosine similarity against an in-memory index built with the same
+    model — so each model competes in its own embedding space.
+
+    Falls back to Qdrant search when no catalog is provided (biased against new
+    models because Qdrant holds vectors from the previously deployed model).
+
     Returns the mean judge score across all (query, result) pairs.
     """
     from PIL import Image
-    from qdrant_client.http import models as qmodels
 
-    qdrant = _get_qdrant_client()
     all_scores: list[float] = []
+    use_memory_index = catalog_embeddings is not None and catalog_items is not None
+
+    if not use_memory_index:
+        from qdrant_client.http import models as qmodels
+        qdrant = _get_qdrant_client()
 
     for entry in queries:
         query_name = entry.get("query_name", "?")
@@ -306,37 +392,52 @@ def _run_judge_eval(
             print(f"  [EVAL] Skip '{query_name}': could not embed — {e}")
             continue
 
-        query_filter = None
-        if category:
-            query_filter = qmodels.Filter(must=[
-                qmodels.FieldCondition(
-                    key="category_tag",
-                    match=qmodels.MatchValue(value=category),
+        result_urls: list[str] = []
+
+        if use_memory_index:
+            # Filter catalog by category (mirrors the Qdrant category filter)
+            if category:
+                indices = [i for i, it in enumerate(catalog_items) if it["category"] == category]
+            else:
+                indices = list(range(len(catalog_items)))
+
+            if not indices:
+                # Category absent in the sample — fall back to unfiltered
+                indices = list(range(len(catalog_items)))
+
+            sub_emb = catalog_embeddings[indices]  # (M, 512)
+            q_tensor = torch.tensor(vector, dtype=torch.float32).unsqueeze(0)  # (1, 512)
+            sims = torch.mm(q_tensor, sub_emb.T).squeeze(0)  # (M,)
+            topk_local = sims.topk(min(top_k, len(indices))).indices.tolist()
+            result_urls = [catalog_items[indices[i]]["url"] for i in topk_local]
+        else:
+            query_filter = None
+            if category:
+                query_filter = qmodels.Filter(must=[
+                    qmodels.FieldCondition(
+                        key="category_tag",
+                        match=qmodels.MatchValue(value=category),
+                    )
+                ])
+            try:
+                result = qdrant.query_points(
+                    collection_name=COLLECTION_NAME,
+                    query=vector,
+                    query_filter=query_filter,
+                    limit=top_k,
+                    with_vectors=False,
+                    search_params=qmodels.SearchParams(hnsw_ef=256),
                 )
-            ])
-
-        try:
-            result = qdrant.query_points(
-                collection_name=COLLECTION_NAME,
-                query=vector,
-                query_filter=query_filter,
-                limit=top_k,
-                with_vectors=False,
-                search_params=qmodels.SearchParams(hnsw_ef=256),
-            )
-            hits = result.points
-        except Exception as e:
-            print(f"  [EVAL] Skip '{query_name}': Qdrant error — {e}")
-            continue
-
-        result_urls = []
-        for h in hits:
-            url = h.payload.get("image_url", "")
-            if not url:
+                for h in result.points:
+                    url = h.payload.get("image_url", "")
+                    if not url:
+                        continue
+                    if url.startswith("http://localhost:"):
+                        url = url.replace("http://localhost:8000", GATEWAY_URL.rstrip("/"), 1)
+                    result_urls.append(url)
+            except Exception as e:
+                print(f"  [EVAL] Skip '{query_name}': Qdrant error — {e}")
                 continue
-            if url.startswith("http://localhost:"):
-                url = url.replace("http://localhost:8000", GATEWAY_URL.rstrip("/"), 1)
-            result_urls.append(url)
 
         if not result_urls:
             print(f"  [EVAL] Skip '{query_name}': no result image URLs")
@@ -416,6 +517,10 @@ def evaluate_with_judge(
 
     queries = _load_eval_queries()
 
+    # Pre-fetch the catalog sample once — both models will be evaluated against
+    # the same 150 items, each embedded in their own space (fair comparison).
+    catalog_items = _fetch_catalog_sample(n=150)
+
     # ── Old model ─────────────────────────────────────────────────────────────
     deployed_adapter = VISUAL_ENGINE_MODELS / "lora_adapter"
     deployed_proj    = VISUAL_ENGINE_MODELS / "visual_projection.pt"
@@ -425,12 +530,12 @@ def evaluate_with_judge(
         adapter_dir            = str(deployed_adapter) if deployed_adapter.exists() else None,
         visual_projection_path = str(deployed_proj)    if deployed_proj.exists()    else None,
     )
-    old_avg = _run_judge_eval(old_model, old_processor, queries, api_key, top_k)
-    del old_model  # free memory before loading new model
+    old_emb, old_items = _build_catalog_index(old_model, old_processor, catalog_items)
+    old_avg = _run_judge_eval(old_model, old_processor, queries, api_key, top_k,
+                               catalog_embeddings=old_emb, catalog_items=old_items)
+    del old_model, old_emb
 
     # Wait out any rate-limit backoff carried over from old-model eval.
-    # _rate_state["backoff_until"] is module-level and shared across both runs;
-    # without this pause every new-model judge call returns None immediately.
     with _rate_lock:
         remaining = _rate_state["backoff_until"] - time.monotonic()
     if remaining > 0:
@@ -443,8 +548,10 @@ def evaluate_with_judge(
         adapter_dir            = new_adapter_dir,
         visual_projection_path = new_visual_projection_path,
     )
-    new_avg = _run_judge_eval(new_model, new_processor, queries, api_key, top_k)
-    del new_model
+    new_emb, new_items = _build_catalog_index(new_model, new_processor, catalog_items)
+    new_avg = _run_judge_eval(new_model, new_processor, queries, api_key, top_k,
+                               catalog_embeddings=new_emb, catalog_items=new_items)
+    del new_model, new_emb
 
     print(f"\n[EVAL] OLD avg={old_avg:.4f}  NEW avg={new_avg:.4f}  delta={new_avg - old_avg:+.4f}")
     return old_avg, new_avg
