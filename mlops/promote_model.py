@@ -246,52 +246,81 @@ def _judge_pair(query_b64: str, result_url: str, api_key: str) -> float | None:
 
 # ── Catalog index helpers ─────────────────────────────────────────────────────
 
-def _fetch_catalog_sample(n: int = 150, seed: int = 42) -> list[dict]:
+def _fetch_catalog_sample(n_per_category: int = 40, seed: int = 42) -> list[dict]:
     """
-    Download up to n catalog items from Qdrant for offline evaluation.
+    Stratified catalog sample: n_per_category items per eval category.
+
+    A flat random sample of N items across 11 categories leaves rare categories
+    (bag, hat, leggings, jumpsuit) with only 1-3 items — top-5 retrieval is
+    meaningless and judge scores crash to near zero.  Stratified sampling
+    guarantees each category has a proper retrieval pool.
+
     Returns list of {"url": str, "category": str, "pil": Image} dicts.
     Shared across both old/new model evaluations so both see the same items.
     """
     from PIL import Image
+    from qdrant_client.http import models as qmodels
     import random as _random
     _random.seed(seed)
 
+    # Derive the categories actually used in the eval query set
+    with open(GOLDEN_DATASET_PATH) as f:
+        golden = json.load(f)
+    name_to_entry = {e.get("query_name", ""): e for e in golden}
+    eval_categories = sorted({
+        name_to_entry[n].get("query_category_tag", "")
+        for n in EVAL_QUERY_NAMES
+        if n in name_to_entry and name_to_entry[n].get("query_category_tag")
+    })
+    print(f"[EVAL] Fetching stratified catalog sample "
+          f"({n_per_category}/category × {len(eval_categories)} categories)...")
+
     qdrant = _get_qdrant_client()
-    print(f"[EVAL] Fetching catalog sample ({n} items) for offline evaluation...")
-    raw: list[dict] = []
-    offset = None
-    while len(raw) < n * 4:  # over-fetch to account for download failures
-        batch, next_offset = qdrant.scroll(
-            collection_name=COLLECTION_NAME,
-            limit=250,
-            offset=offset,
-            with_payload=True,
-            with_vectors=False,
-        )
-        if not batch:
-            break
-        for pt in batch:
-            url = pt.payload.get("image_url", "")
-            cat = pt.payload.get("category_tag", "")
-            if url:
-                raw.append({"url": url, "category": cat})
-        if next_offset is None:
-            break
-        offset = next_offset
-
-    _random.shuffle(raw)
     items: list[dict] = []
-    for entry in raw:
-        if len(items) >= n:
-            break
-        try:
-            img_bytes = _fetch_image_bytes(entry["url"])
-            pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-            items.append({"url": entry["url"], "category": entry["category"], "pil": pil_img})
-        except Exception:
-            continue
 
-    print(f"[EVAL] Catalog sample ready: {len(items)} items downloaded")
+    for cat in eval_categories:
+        raw: list[dict] = []
+        offset = None
+        target = n_per_category * 4  # over-fetch to absorb broken image URLs
+        while len(raw) < target:
+            batch, next_offset = qdrant.scroll(
+                collection_name=COLLECTION_NAME,
+                scroll_filter=qmodels.Filter(must=[
+                    qmodels.FieldCondition(
+                        key="category_tag",
+                        match=qmodels.MatchValue(value=cat),
+                    )
+                ]),
+                limit=min(200, target - len(raw)),
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            if not batch:
+                break
+            for pt in batch:
+                url = pt.payload.get("image_url", "")
+                if url:
+                    raw.append({"url": url, "category": cat})
+            if next_offset is None:
+                break
+            offset = next_offset
+
+        _random.shuffle(raw)
+        downloaded = 0
+        for entry in raw:
+            if downloaded >= n_per_category:
+                break
+            try:
+                img_bytes = _fetch_image_bytes(entry["url"])
+                pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+                items.append({"url": entry["url"], "category": cat, "pil": pil_img})
+                downloaded += 1
+            except Exception:
+                continue
+        print(f"[EVAL]   {cat}: {downloaded} items")
+
+    print(f"[EVAL] Catalog sample ready: {len(items)} total items")
     return items
 
 
