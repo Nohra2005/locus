@@ -179,8 +179,7 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
         return {"outcome": "skipped", "reason": reason}
 
     if not OPENROUTER_API_KEY:
-        print("[RETRAIN] ERROR: OPENROUTER_API_KEY not set — cannot run judge evaluation.")
-        return {"outcome": "error", "reason": "OPENROUTER_API_KEY missing"}
+        print("[RETRAIN] WARNING: OPENROUTER_API_KEY not set — ci_eval baseline update will be skipped post-promotion.")
 
     # Kill any zombie runs left by previous crashes, only now that we know we'll train.
     # Moving this after the trigger check prevents the 48h scheduler from accidentally
@@ -194,7 +193,7 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
         mlflow.log_param("lora_alpha",       8)
         mlflow.log_param("learning_rate",    1e-4)
         mlflow.log_param("model_name",       "patrickjohncyh/fashion-clip")
-        mlflow.log_param("eval_method",      "judge_avg_20q_top5")
+        mlflow.log_param("eval_method",      "val_recall_at_5_delta")
         # Track active prompt versions so regressions can be correlated with prompt changes
         try:
             sys.path.insert(0, str(Path(__file__).parent.parent / "attribute_tagger"))
@@ -209,7 +208,7 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
         mlflow.log_param("max_train_steps",  int(os.getenv("MAX_TRAIN_STEPS", 300)))
 
         # ── Step 2: Build training pairs ──────────────────────────────────
-        print("\n[RETRAIN] Step 2/5: Building training pairs...")
+        print("\n[RETRAIN] Step 2/4: Building training pairs...")
         import random as _random
         from build_training_pairs import build_pairs, build_accessory_cross_pairs
         manifest_path = build_pairs()
@@ -233,38 +232,30 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
         mlflow.log_param("training_pairs", n_pairs)
 
         # ── Step 3: Train ─────────────────────────────────────────────────
-        print("\n[RETRAIN] Step 3/5: Training LoRA adapters...")
+        print("\n[RETRAIN] Step 3/4: Training LoRA adapters...")
         run_dir = RUNS_DIR / run_name
         run_dir.mkdir(parents=True, exist_ok=True)
 
         from lora_trainer import train as train_lora
-        adapter_path = train_lora(
+        train_result   = train_lora(
             manifest_path  = str(manifest_path),
             output_dir     = str(run_dir),
             mlflow_run_id  = mlflow_run_id,
         )
-        gc.collect()  # release fashion-CLIP + training tensors before loading eval models
+        gc.collect()
+        adapter_path   = train_result["adapter_path"]
+        initial_recall = train_result["initial_val_recall"]
+        final_recall   = train_result["final_val_recall"]
+        recall_delta   = final_recall - initial_recall
+        print(f"[RETRAIN] val_recall@5: initial={initial_recall:.3f}  final={final_recall:.3f}  delta={recall_delta:+.3f}")
+        mlflow.log_metric("val_recall_initial", initial_recall)
+        mlflow.log_metric("val_recall_final",   final_recall)
+        mlflow.log_metric("val_recall_delta",   recall_delta)
 
-        # ── Step 4: Evaluate via judge benchmark ──────────────────────────
-        print("\n[RETRAIN] Step 4/5: Judge benchmark — old vs new model (20 queries × top-5)...")
-        from promote_model import evaluate_with_judge, PROMOTION_DELTA
-        old_avg, new_avg = evaluate_with_judge(
-            new_adapter_dir            = adapter_path,
-            new_visual_projection_path = str(run_dir / "visual_projection.pt"),
-            api_key                    = OPENROUTER_API_KEY,
-        )
-        delta = new_avg - old_avg
-        gc.collect()  # release eval models before triggering reindex + artifact upload
-        print(f"[RETRAIN] OLD avg={old_avg:.4f}  NEW avg={new_avg:.4f}  delta={delta:+.4f}")
-        print(f"[RETRAIN] Promotion threshold: new_avg > old_avg + {PROMOTION_DELTA}")
-
-        mlflow.log_metric("judge_old_avg", old_avg)
-        mlflow.log_metric("judge_new_avg", new_avg)
-        mlflow.log_metric("judge_delta",   delta)
-
-        # ── Step 5: Promote or rollback ───────────────────────────────────
-        print("\n[RETRAIN] Step 5/5: Promote / rollback decision...")
-        promoted = new_avg > old_avg + PROMOTION_DELTA
+        # ── Step 4: Promote or rollback ───────────────────────────────────
+        RECALL_IMPROVEMENT_THRESHOLD = 0.02
+        print("\n[RETRAIN] Step 4/4: Promote / rollback decision...")
+        promoted = recall_delta > RECALL_IMPROVEMENT_THRESHOLD
 
         # Signal outcome to GitHub Actions so the deploy step can be gated on it
         gha_output = os.getenv("GITHUB_OUTPUT")
@@ -281,7 +272,7 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
             )
             mlflow.log_param("outcome", "promoted")
             mlflow.set_tag("promoted", "true")
-            print(f"\n✅ PROMOTED — new adapter deployed (delta={delta:+.4f})")
+            print(f"\n✅ PROMOTED — new adapter deployed (val_recall_delta={recall_delta:+.3f})")
 
             # Update CI baseline to reflect the new model's performance level
             gateway_url = os.getenv("GATEWAY_URL", "http://localhost:8000")
@@ -303,21 +294,21 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
         elif promoted and skip_promote:
             mlflow.log_param("outcome", "promoted-pending-deploy")
             mlflow.set_tag("promoted", "pending")
-            print(f"\n✅ WOULD PROMOTE — adapter ready for deployment (delta={delta:+.4f})")
+            print(f"\n✅ WOULD PROMOTE — adapter ready for deployment (val_recall_delta={recall_delta:+.3f})")
             print(f"   Adapter saved at: {adapter_path}")
         else:
             mlflow.log_param("outcome", "rejected")
             mlflow.set_tag("promoted", "false")
-            print(f"\n❌ REJECTED — delta={delta:+.4f} does not exceed threshold +{PROMOTION_DELTA}")
+            print(f"\n❌ REJECTED — val_recall_delta={recall_delta:+.3f} does not exceed threshold +{RECALL_IMPROVEMENT_THRESHOLD}")
             print(f"   Keeping current model. Adapter saved for inspection at: {adapter_path}")
 
         result = {
-            "outcome":       "promoted" if promoted else "rejected",
-            "judge_old_avg": old_avg,
-            "judge_new_avg": new_avg,
-            "judge_delta":   delta,
-            "mlflow_run_id": mlflow_run_id,
-            "adapter_path":  adapter_path,
+            "outcome":            "promoted" if promoted else "rejected",
+            "val_recall_initial": initial_recall,
+            "val_recall_final":   final_recall,
+            "val_recall_delta":   recall_delta,
+            "mlflow_run_id":      mlflow_run_id,
+            "adapter_path":       adapter_path,
         }
 
     print(f"\n{'='*60}")

@@ -268,6 +268,13 @@ def train(
 
     optimizer.zero_grad()
 
+    # Measure starting model recall before any training updates
+    print("[TRAINER] Computing initial validation metrics (step 0)...", flush=True)
+    initial_val_loss, initial_val_recall = _compute_val_metrics(model, processor, val_pairs)
+    print(f"[TRAINER] Initial val_recall@5={initial_val_recall:.3f}  val_loss={initial_val_loss:.4f}")
+    if mlflow_run_id:
+        mlflow.log_metric("initial_val_recall_at_5", initial_val_recall, step=0)
+
     while step < MAX_STEPS:
         # Build batch
         anchors   = []
@@ -347,4 +354,8 @@ def train(
         mlflow.log_metric("final_val_loss",     final_val_loss)
         mlflow.log_metric("final_val_recall_at_5", final_val_recall)
 
-    return str(adapter_dir)
+    return {
+        "adapter_path":       str(adapter_dir),
+        "initial_val_recall": initial_val_recall,
+        "final_val_recall":   final_val_recall,
+    }
