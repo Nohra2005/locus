@@ -206,6 +206,7 @@ services:
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
     extra_hosts:
       - "host.docker.internal:host-gateway"
     mem_limit: 512m
@@ -237,3 +238,4 @@ volumes:
   hf_cache:
   clip_cache:
   users_data:   # persists users.json across git wipes and container rebuilds
+  prometheus_data:  # persists Prometheus TSDB across container restarts
