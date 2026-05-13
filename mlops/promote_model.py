@@ -246,7 +246,7 @@ def _judge_pair(query_b64: str, result_url: str, api_key: str) -> float | None:
 
 # ── Catalog index helpers ─────────────────────────────────────────────────────
 
-def _fetch_catalog_sample(n_per_category: int = 40, seed: int = 42) -> list[dict]:
+def _fetch_catalog_sample(n_per_category: int = 100, seed: int = 42) -> list[dict]:
     """
     Stratified catalog sample: n_per_category items per eval category.
 
@@ -548,7 +548,7 @@ def evaluate_with_judge(
 
     # Pre-fetch the catalog sample once — both models will be evaluated against
     # the same 150 items, each embedded in their own space (fair comparison).
-    catalog_items = _fetch_catalog_sample(n_per_category=40)
+    catalog_items = _fetch_catalog_sample(n_per_category=100)
 
     # ── Old model ─────────────────────────────────────────────────────────────
     deployed_adapter = VISUAL_ENGINE_MODELS / "lora_adapter"
