@@ -1888,7 +1888,7 @@
                 "type": "prometheus",
                 "uid": "prometheus"
             },
-            "description": "Average Cosine Similarity of top-5 results from the new candidate model. Measures geometric closeness in embedding space.",
+            "description": "Average Cosine Similarity of top-3 results from the new candidate model. Measures geometric closeness in embedding space.",
             "fieldConfig": {
                 "defaults": {
                     "color": {

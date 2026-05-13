@@ -74,7 +74,7 @@ lora_train_loss   = Gauge("locus_lora_train_loss",    "Latest train_loss value l
 retrain_max_steps = Gauge("locus_retrain_max_steps",  "MAX_TRAIN_STEPS param of the active run")
 
 # Judge benchmark metrics from the latest completed retrain run
-judge_old_avg = Gauge("locus_judge_old_avg", "Old model avg judge score in latest retrain run (20q × top-5)")
+judge_old_avg = Gauge("locus_judge_old_avg", "Old model avg judge score in latest retrain run (20q × top-3)")
 judge_new_avg = Gauge("locus_judge_new_avg", "New model avg judge score in latest retrain run")
 judge_delta   = Gauge("locus_judge_delta",   "Judge score delta: new - old (positive = improvement)")
 

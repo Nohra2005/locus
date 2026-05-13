@@ -6,7 +6,7 @@ Evaluation uses a Gemini judge benchmark:
   2. Load new model (new LoRA adapter being evaluated)
   3. For each model, build an in-memory catalog index (stratified, 50 items/category)
      so both models search in their own embedding space — fair comparison.
-  4. Run 20 balanced golden queries → cosine-search in-memory index → judge top-5
+  4. Run 20 balanced golden queries → cosine-search in-memory index → judge top-3
   5. Promote if new_avg_score > old_avg_score + PROMOTION_DELTA
 
 Promotion:
@@ -57,7 +57,7 @@ VISUAL_ENGINE_MODELS_INTERNAL = os.getenv(
     str(VISUAL_ENGINE_MODELS),
 )
 MODEL_NAME      = "patrickjohncyh/fashion-clip"
-EVAL_TOP_K      = 5
+EVAL_TOP_K      = 3
 PROMOTION_DELTA = 0.02   # new_avg must exceed old_avg by this margin
 
 # ── 20 balanced evaluation queries (2 per major category, 1 for smaller ones) ─
@@ -253,7 +253,7 @@ def _fetch_catalog_sample(n_per_category: int = 50, seed: int = 42) -> list[dict
     Stratified catalog sample: n_per_category items per eval category.
 
     A flat random sample leaves rare categories (bag, hat, leggings, jumpsuit)
-    with only 1-3 items — top-5 retrieval is meaningless and judge scores crash.
+    with only 1-3 items — top-3 retrieval is meaningless and judge scores crash.
     Stratified sampling guarantees each category has a proper retrieval pool.
 
     Both models are evaluated against the same downloaded images, each

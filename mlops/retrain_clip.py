@@ -194,7 +194,7 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
         mlflow.log_param("lora_alpha",       8)
         mlflow.log_param("learning_rate",    1e-4)
         mlflow.log_param("model_name",       "patrickjohncyh/fashion-clip")
-        mlflow.log_param("eval_method",      "judge_avg_20q_top5")
+        mlflow.log_param("eval_method",      "judge_avg_20q_top3")
         # Track active prompt versions so regressions can be correlated with prompt changes
         try:
             sys.path.insert(0, str(Path(__file__).parent.parent / "attribute_tagger"))
@@ -254,7 +254,7 @@ def run_pipeline(force: bool = False, skip_promote: bool = False) -> dict:
         mlflow.log_metric("val_recall_delta",   recall_delta)
 
         # ── Step 4: Evaluate via judge benchmark ──────────────────────────
-        print("\n[RETRAIN] Step 4/5: Judge benchmark — old vs new model (20 queries × top-5)...")
+        print("\n[RETRAIN] Step 4/5: Judge benchmark — old vs new model (20 queries × top-3)...")
         from promote_model import evaluate_with_judge, PROMOTION_DELTA
         old_avg, new_avg = evaluate_with_judge(
             new_adapter_dir            = adapter_path,
