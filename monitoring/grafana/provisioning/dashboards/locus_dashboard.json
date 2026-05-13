@@ -6834,7 +6834,7 @@
             "type": "timeseries"
         }
     ],
-    "refresh": "",
+    "refresh": "30s",
     "schemaVersion": 39,
     "tags": [
         "locus",
@@ -6846,13 +6846,13 @@
         "list": []
     },
     "time": {
-        "from": "2026-05-04T11:33:44.973Z",
-        "to": "2026-05-04T13:59:24.665Z"
+        "from": "now-6h",
+        "to": "now"
     },
     "timepicker": {},
     "timezone": "browser",
     "title": "Locus \u00e2\u20ac\u201d Admin Dashboard",
     "uid": "locus-main",
-    "version": 10,
+    "version": 11,
     "weekStart": ""
 }
