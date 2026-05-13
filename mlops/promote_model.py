@@ -548,7 +548,7 @@ def evaluate_with_judge(
 
     # Pre-fetch the catalog sample once — both models will be evaluated against
     # the same 150 items, each embedded in their own space (fair comparison).
-    catalog_items = _fetch_catalog_sample(n=150)
+    catalog_items = _fetch_catalog_sample(n_per_category=40)
 
     # ── Old model ─────────────────────────────────────────────────────────────
     deployed_adapter = VISUAL_ENGINE_MODELS / "lora_adapter"
