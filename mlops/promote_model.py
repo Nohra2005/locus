@@ -153,20 +153,24 @@ _OPENROUTER_MODEL   = "google/gemini-2.0-flash-001"
 _OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 _rate_lock  = threading.Lock()
-_rate_state: dict = {"last_call": 0.0, "backoff_until": 0.0, "min_gap": 2.0}
+_rate_state: dict = {"last_call": 0.0, "backoff_until": 0.0, "min_gap": 7.0}
 
 
-def _acquire_slot() -> bool:
+def _acquire_slot() -> None:
+    """Block until a rate-limit slot is available, then claim it."""
     while True:
         with _rate_lock:
             now = time.monotonic()
-            if now < _rate_state["backoff_until"]:
-                return False
-            wait = _rate_state["last_call"] + _rate_state["min_gap"] - now
-            if wait <= 0:
-                _rate_state["last_call"] = time.monotonic()
-                return True
-        time.sleep(wait)  # outside lock — parallel workers sleep concurrently
+            backoff_wait = _rate_state["backoff_until"] - now
+            if backoff_wait > 0:
+                sleep_for = backoff_wait
+            else:
+                gap = _rate_state["last_call"] + _rate_state["min_gap"] - now
+                if gap <= 0:
+                    _rate_state["last_call"] = time.monotonic()
+                    return
+                sleep_for = gap
+        time.sleep(sleep_for)  # outside lock — parallel workers sleep concurrently
 
 
 def _judge_pair(query_b64: str, result_url: str, api_key: str) -> float | None:
@@ -213,8 +217,7 @@ def _judge_pair(query_b64: str, result_url: str, api_key: str) -> float | None:
     }
 
     for attempt in range(3):
-        if not _acquire_slot():
-            return None
+        _acquire_slot()
         try:
             import httpx as _httpx
             with _httpx.Client(timeout=60.0) as c:
@@ -230,7 +233,7 @@ def _judge_pair(query_b64: str, result_url: str, api_key: str) -> float | None:
                     wait = 60.0
                 with _rate_lock:
                     _rate_state["backoff_until"] = time.monotonic() + wait
-                return None
+                continue  # retry after backoff clears
             resp.raise_for_status()
             content = resp.json()["choices"][0]["message"]["content"].strip()
             match = re.search(r"\d+\.\d+|\d+", content)
@@ -378,7 +381,7 @@ def _run_judge_eval(
     top_k: int = EVAL_TOP_K,
     catalog_embeddings: "torch.Tensor | None" = None,
     catalog_items: "list[dict] | None" = None,
-) -> float:
+) -> dict[str, float]:
     """
     Embed each query with `model`, retrieve top-k, judge with Gemini.
 
@@ -389,7 +392,7 @@ def _run_judge_eval(
     """
     from PIL import Image
 
-    all_scores: list[float] = []
+    query_avgs: dict[str, float] = {}
     use_memory_index = catalog_embeddings is not None and catalog_items is not None
 
     if not use_memory_index:
@@ -479,19 +482,13 @@ def _run_judge_eval(
         if query_scores:
             avg = sum(query_scores) / len(query_scores)
             print(f"  [EVAL] '{query_name}' ({category}): {len(query_scores)} scores, avg={avg:.3f}")
-            all_scores.extend(query_scores)
+            query_avgs[query_name] = avg
         else:
             print(f"  [EVAL] '{query_name}': all judge calls failed — skipped")
 
         time.sleep(0.1)
 
-    if not all_scores:
-        print("[EVAL] WARNING: no scores collected — returning 0.0")
-        return 0.0
-
-    overall = sum(all_scores) / len(all_scores)
-    print(f"[EVAL] Overall: {len(all_scores)} judge scores, avg={overall:.4f}")
-    return overall
+    return query_avgs
 
 
 def _load_model(adapter_dir: Optional[str] = None, visual_projection_path: Optional[str] = None):
@@ -549,8 +546,8 @@ def evaluate_with_judge(
         visual_projection_path = str(deployed_proj)    if deployed_proj.exists()    else None,
     )
     old_emb, old_items = _build_catalog_index(old_model, old_processor, catalog_items)
-    old_avg = _run_judge_eval(old_model, old_processor, queries, api_key, top_k,
-                               catalog_embeddings=old_emb, catalog_items=old_items)
+    old_scores = _run_judge_eval(old_model, old_processor, queries, api_key, top_k,
+                                  catalog_embeddings=old_emb, catalog_items=old_items)
     del old_model, old_emb
 
     with _rate_lock:
@@ -565,10 +562,19 @@ def evaluate_with_judge(
         visual_projection_path = new_visual_projection_path,
     )
     new_emb, new_items = _build_catalog_index(new_model, new_processor, catalog_items)
-    new_avg = _run_judge_eval(new_model, new_processor, queries, api_key, top_k,
-                               catalog_embeddings=new_emb, catalog_items=new_items)
+    new_scores = _run_judge_eval(new_model, new_processor, queries, api_key, top_k,
+                                  catalog_embeddings=new_emb, catalog_items=new_items)
     del new_model, new_emb
 
+    # Only compare on queries where both models produced a score — prevents
+    # cherry-picked averages when the rate-limiter drops different query subsets.
+    shared = sorted(set(old_scores) & set(new_scores))
+    if not shared:
+        print("[EVAL] WARNING: no shared queries between old and new — returning (0.0, 0.0)")
+        return 0.0, 0.0
+    old_avg = sum(old_scores[q] for q in shared) / len(shared)
+    new_avg = sum(new_scores[q] for q in shared) / len(shared)
+    print(f"[EVAL] Comparison on {len(shared)}/20 shared queries")
     print(f"\n[EVAL] OLD avg={old_avg:.4f}  NEW avg={new_avg:.4f}  delta={new_avg - old_avg:+.4f}")
     return old_avg, new_avg
 

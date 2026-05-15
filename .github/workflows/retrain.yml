@@ -77,7 +77,8 @@ jobs:
           # Atomically swap old → new
           $SSH $VM "
             cd ~/locus/visual_engine/models
-            [ -d lora_adapter ] && mv lora_adapter lora_adapter_prev || true
+            rm -rf lora_adapter_prev
+            [ -d lora_adapter ] && mv lora_adapter lora_adapter_prev
             mv lora_adapter_new lora_adapter
           "
 
