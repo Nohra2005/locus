@@ -535,7 +535,7 @@ def evaluate_with_judge(
     queries = _load_eval_queries()
 
     # Download catalog images once — both models embed the same raw pixels
-    catalog_items = _fetch_catalog_sample(n_per_category=50)
+    catalog_items = _fetch_catalog_sample(n_per_category=500)
 
     deployed_adapter = VISUAL_ENGINE_MODELS / "lora_adapter"
     deployed_proj    = VISUAL_ENGINE_MODELS / "visual_projection.pt"
