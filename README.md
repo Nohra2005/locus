@@ -21,7 +21,7 @@ All services are accessible over HTTP on the public IP — no authentication is 
 |---------|-----|-------------|
 | Frontend | `http://20.240.203.22:30800` | — |
 | API | `http://20.240.203.22:30800` | — |
-| Grafana | `http://20.240.203.22:3000` | admin / moushou |
+| Grafana | `http://20.240.203.22:3000` | login on request |
 | Prometheus | `http://20.240.203.22:9090` | — |
 | MLflow | `http://20.240.203.22:5000` | — |
 
@@ -66,7 +66,7 @@ Supporting services on the same VM (accessible for demo/review):
 | Service | Port | URL |
 |---------|------|-----|
 | MLflow | 5000 | `http://20.240.203.22:5000` |
-| Grafana | 3000 | `http://20.240.203.22:3000` (admin / moushou) |
+| Grafana | 3000 | `http://20.240.203.22:3000` (login on request) |
 | Prometheus | 9090 | `http://20.240.203.22:9090` |
 
 ---
@@ -74,7 +74,7 @@ Supporting services on the same VM (accessible for demo/review):
 ## Running Locally (Docker Compose)
 
 ```bash
-git clone https://github.com/tatiananohra/locus.git
+git clone https://github.com/Nohra2005/locus.git
 cd locus
 cp .env.example .env        # fill in QDRANT_URL, QDRANT_API_KEY, OPENROUTER_API_KEY, JWT_SECRET, ADMIN_API_KEY
 docker compose up --build -d
@@ -201,7 +201,7 @@ Open `http://20.240.203.22:9090/alerts` — 10 alert rules should appear (all **
 
 ### 5. Grafana dashboard walkthrough
 
-Open `http://20.240.203.22:3000` → login `admin / moushou` → open **Locus — Admin Dashboard**.
+Open `http://20.240.203.22:3000` → log in → open **Locus — Admin Dashboard**.
 
 | Section | What to verify |
 |---------|----------------|
@@ -266,7 +266,7 @@ python mlops/migrate_local_runs.py  # 8 historical runs across 3 experiments
 
 ## Monitoring
 
-**Grafana dashboard:** `http://20.240.203.22:3000` — login: `admin` / `moushou`
+**Grafana dashboard:** `http://20.240.203.22:3000` — login on request
 
 The dashboard shows per-service latency (p50, p95), error rates, request throughput,
 CLIP confidence histogram, tagger failure rate, and MLflow recall metrics bridged via
