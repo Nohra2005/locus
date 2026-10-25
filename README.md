@@ -3,6 +3,10 @@
 AI in Industry — EECE503N / EECE798N
 **Team:** Marc El Nawar, Tatiana Nohra
 
+> **Status (Oct 2026):** the Azure deployment described below has been shut down to stop hosting costs, so the IP addresses in this README no longer respond.
+> - **Watch the demo (53 s):** [docs/demo/locus-demo.mp4](docs/demo/locus-demo.mp4)
+> - **Run it yourself for free:** [Nohra2005/locus-demo](https://github.com/Nohra2005/locus-demo), a one-container version with the catalog rebuilt from Forever21. On the same 35-photo test set it finds the right product in the top 5 for 34 of 35 queries (97%).
+
 ---
 
 ## Professor / Reviewer Access
